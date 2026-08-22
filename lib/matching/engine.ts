@@ -1,206 +1,228 @@
-// lib/matching/engine.ts
-// Deterministic, rule-based eligibility + scoring. No ML per PRD MVP scope.
-//
-// Eligibility: a scholarship is eligible for a profile only if every one
-// of its scholarship_rules evaluates true against the profile. Missing
-// profile data fails the rule (conservative — we don't guess).
-//
-// Score (0-100, only computed for eligible scholarships):
-//   70  base for being eligible at all
-//   +20 * (profile_completeness / 100)   — rewards fuller profiles
-//   +5  if scholarship.level exactly matches profile.academic_level
-//       (0 if scholarship.level is 'both', since it's not a real signal)
-//   +5  if scholarship.discipline is null (open to any) or matches exactly
-//   +up to 5, inversely proportional to days until deadline, capped at
-//       5 for deadlines <=14 days out — surfaces urgent-but-eligible
-//       matches without letting expired-soon items dominate ranking
-//
-// Ties broken by soonest deadline first.
+import type {
+  EvaluatedRequirement,
+  MatchTier,
+  MatchableProfile,
+  RuleOperator,
+  ScholarshipMatch,
+  ScholarshipRow,
+  ScholarshipRule,
+} from "./types";
 
-export type AcademicLevel = 'undergrad' | 'postgrad'
-export type ScholarshipLevel = 'undergrad' | 'postgrad' | 'both'
-export type RuleOperator = 'eq' | 'gte' | 'lte' | 'in' | 'exists'
+// Fields the engine can actually check against the profiles schema.
+// A rule targeting anything else can't be verified and is surfaced as such
+// rather than silently ignored or guessed.
+const SUPPORTED_FIELDS = new Set([
+  "academic_level",
+  "discipline",
+  "gpa",
+  "nationality",
+  "gender",
+  "financial_need",
+]);
 
-export interface Profile {
-  id: string
-  academic_level: AcademicLevel | null
-  discipline: string | null
-  gpa: number | null
-  nationality: string | null
-  gender: string | null
-  financial_need: boolean
-  career_goals: string | null
-  profile_completeness: number
+// Fields where NOT meeting the requirement means the student is categorically
+// ineligible (not just "less competitive") — citizenship, degree level,
+// gender-restricted awards, and discipline restrictions all behave this way.
+const GATING_FIELDS = new Set(["academic_level", "discipline", "nationality", "gender"]);
+
+const FIELD_LABELS: Record<string, string> = {
+  academic_level: "Academic level",
+  discipline: "Field of study",
+  gpa: "GPA / CGPA",
+  nationality: "Nationality",
+  gender: "Gender",
+  financial_need: "Financial need",
+};
+
+function label(field: string): string {
+  return FIELD_LABELS[field] ?? field;
 }
 
-export interface ScholarshipRule {
-  id: string
-  scholarship_id: string
-  field: string
-  operator: RuleOperator
-  value: unknown
-}
-
-export interface Scholarship {
-  id: string
-  title: string
-  provider_name: string
-  description: string | null
-  amount: string | null
-  deadline: string // ISO date
-  application_url: string | null
-  level: ScholarshipLevel
-  discipline: string | null
-  verified: boolean
-  scholarship_rules: ScholarshipRule[]
-}
-
-export interface MatchResult {
-  scholarship: Omit<Scholarship, 'scholarship_rules'>
-  eligible: boolean
-  score: number
-  failed_rules: { field: string; operator: RuleOperator; value: unknown }[]
-}
-
-// Map a rule's `field` string to the profile's actual value.
-function getProfileValue(profile: Profile, field: string): unknown {
-  switch (field) {
-    case 'gpa':
-      return profile.gpa
-    case 'nationality':
-      return profile.nationality
-    case 'gender':
-      return profile.gender
-    case 'financial_need':
-      return profile.financial_need
-    case 'academic_level':
-      return profile.academic_level
-    case 'discipline':
-      return profile.discipline
-    case 'career_goals':
-      return profile.career_goals
-    default:
-      return undefined
+function describeRequirement(field: string, operator: RuleOperator, value: unknown): string {
+  const l = label(field);
+  switch (operator) {
+    case "eq":
+      return `${l} must be ${value}`;
+    case "gte":
+      return `${l} of at least ${value}`;
+    case "lte":
+      return `${l} of at most ${value}`;
+    case "in": {
+      const arr = Array.isArray(value) ? value : [value];
+      return `${l} must be one of: ${arr.join(", ")}`;
+    }
+    case "exists":
+      return `${l} must be provided`;
   }
 }
 
-function evaluateRule(profile: Profile, rule: ScholarshipRule): boolean {
-  const actual = getProfileValue(profile, rule.field)
+function valuesMatch(a: unknown, b: unknown): boolean {
+  return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+}
 
-  switch (rule.operator) {
-    case 'exists':
-      return actual !== null && actual !== undefined && actual !== ''
-
-    case 'eq':
-      if (actual === null || actual === undefined) return false
-      // Case-insensitive compare for strings (nationality, discipline, etc.)
-      if (typeof actual === 'string' && typeof rule.value === 'string') {
-        return actual.toLowerCase() === rule.value.toLowerCase()
-      }
-      return actual === rule.value
-
-    case 'gte': {
-      if (actual === null || actual === undefined) return false
-      const a = Number(actual)
-      const b = Number(rule.value)
-      if (Number.isNaN(a) || Number.isNaN(b)) return false
-      return a >= b
+function evaluateOperator(
+  operator: RuleOperator,
+  profileValue: string | number | boolean,
+  ruleValue: unknown
+): boolean {
+  switch (operator) {
+    case "eq":
+      if (typeof profileValue === "boolean") return profileValue === Boolean(ruleValue);
+      return valuesMatch(profileValue, ruleValue);
+    case "gte":
+      return Number(profileValue) >= Number(ruleValue);
+    case "lte":
+      return Number(profileValue) <= Number(ruleValue);
+    case "in": {
+      const arr = Array.isArray(ruleValue) ? ruleValue : [ruleValue];
+      return arr.some((v) => valuesMatch(profileValue, v));
     }
-
-    case 'lte': {
-      if (actual === null || actual === undefined) return false
-      const a = Number(actual)
-      const b = Number(rule.value)
-      if (Number.isNaN(a) || Number.isNaN(b)) return false
-      return a <= b
-    }
-
-    case 'in': {
-      if (actual === null || actual === undefined) return false
-      if (!Array.isArray(rule.value)) return false
-      if (typeof actual === 'string') {
-        return rule.value.some(
-          (v) => typeof v === 'string' && v.toLowerCase() === actual.toLowerCase()
-        )
-      }
-      return rule.value.includes(actual)
-    }
-
-    default:
-      return false
+    case "exists":
+      return profileValue !== null && profileValue !== undefined && profileValue !== "";
   }
 }
 
-function levelMatches(profile: Profile, scholarship: Scholarship): boolean {
-  if (scholarship.level === 'both') return true
-  if (!profile.academic_level) return false
-  return scholarship.level === profile.academic_level
-}
+function evaluateRule(
+  field: string,
+  operator: RuleOperator,
+  value: unknown,
+  profile: MatchableProfile
+): EvaluatedRequirement {
+  const requirement = describeRequirement(field, operator, value);
+  const gating = GATING_FIELDS.has(field);
 
-function urgencyBonus(deadline: string): number {
-  const days = Math.ceil(
-    (new Date(deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-  )
-  if (days < 0) return 0 // already past — shouldn't normally be queried, but don't reward it
-  if (days <= 14) return 5
-  if (days >= 90) return 0
-  // linear falloff between 14 and 90 days
-  return Math.round(5 * (1 - (days - 14) / (90 - 14)))
-}
-
-export function computeMatches(
-  profile: Profile,
-  scholarships: Scholarship[],
-  opts: { includeIneligible?: boolean } = {}
-): MatchResult[] {
-  const results: MatchResult[] = []
-
-  for (const scholarship of scholarships) {
-    const { scholarship_rules, ...rest } = scholarship
-    const failed_rules: MatchResult['failed_rules'] = []
-
-    // Level is a structural gate, not a scholarship_rules row, evaluated separately.
-    const levelOk = levelMatches(profile, scholarship)
-    if (!levelOk) {
-      failed_rules.push({ field: 'academic_level', operator: 'eq', value: scholarship.level })
-    }
-
-    for (const rule of scholarship_rules) {
-      if (!evaluateRule(profile, rule)) {
-        failed_rules.push({ field: rule.field, operator: rule.operator, value: rule.value })
-      }
-    }
-
-    const eligible = failed_rules.length === 0
-
-    if (!eligible && !opts.includeIneligible) continue
-
-    let score = 0
-    if (eligible) {
-      score += 70
-      score += 20 * (profile.profile_completeness / 100)
-      if (scholarship.level !== 'both') score += 5
-      if (!scholarship.discipline) score += 5
-      else if (
-        profile.discipline &&
-        scholarship.discipline.toLowerCase() === profile.discipline.toLowerCase()
-      ) {
-        score += 5
-      }
-      score += urgencyBonus(scholarship.deadline)
-      score = Math.min(100, Math.round(score))
-    }
-
-    results.push({ scholarship: rest, eligible, score, failed_rules })
+  if (!SUPPORTED_FIELDS.has(field)) {
+    return {
+      field,
+      label: label(field),
+      operator,
+      status: "unverifiable",
+      requirement,
+      detail: "Not tracked in your profile yet — verify on the provider's page.",
+      gating: false,
+    };
   }
 
-  results.sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score
-    return (
-      new Date(a.scholarship.deadline).getTime() -
-      new Date(b.scholarship.deadline).getTime()
-    )
-  })
+  const profileValue = (profile as unknown as Record<string, string | number | boolean | null>)[
+    field
+  ];
 
-  return results
+  const isMissing =
+    profileValue === null ||
+    profileValue === undefined ||
+    (typeof profileValue === "string" && profileValue.trim() === "");
+
+  // financial_need is a boolean with a real default (false), so "missing"
+  // doesn't apply to it the way it does to nullable text/numeric fields.
+  if (isMissing && field !== "financial_need") {
+    return {
+      field,
+      label: label(field),
+      operator,
+      status: "missing_data",
+      requirement,
+      detail: `Add your ${label(field).toLowerCase()} to check this.`,
+      gating,
+    };
+  }
+
+  const met = evaluateOperator(operator, profileValue as string | number | boolean, value);
+
+  return {
+    field,
+    label: label(field),
+    operator,
+    status: met ? "met" : "not_met",
+    requirement,
+    detail: met
+      ? `Met${profileValue !== null && profileValue !== undefined ? ` (yours: ${profileValue})` : ""}`
+      : `Not met${profileValue !== null && profileValue !== undefined ? ` (yours: ${profileValue})` : ""}`,
+    gating,
+  };
+}
+
+// scholarships.level and scholarships.discipline are first-class columns
+// (coarse filters), separate from the finer-grained scholarship_rules table.
+// Fold them into the same evaluation so the UI shows one consistent list.
+function implicitRules(scholarship: ScholarshipRow): ScholarshipRule[] {
+  const rules: ScholarshipRule[] = [];
+
+  if (scholarship.level !== "both") {
+    rules.push({
+      id: `implicit-level-${scholarship.id}`,
+      scholarship_id: scholarship.id,
+      field: "academic_level",
+      operator: "eq",
+      value: scholarship.level,
+    });
+  }
+
+  if (scholarship.discipline) {
+    rules.push({
+      id: `implicit-discipline-${scholarship.id}`,
+      scholarship_id: scholarship.id,
+      field: "discipline",
+      operator: "eq",
+      value: scholarship.discipline,
+    });
+  }
+
+  return rules;
+}
+
+function tierFor(score: number, gatingFailed: boolean): MatchTier {
+  if (gatingFailed) return "unlikely";
+  if (score >= 85) return "excellent";
+  if (score >= 65) return "good";
+  if (score >= 40) return "possible";
+  return "unlikely";
+}
+
+export function evaluateScholarship(
+  profile: MatchableProfile,
+  scholarship: ScholarshipRow,
+  explicitRules: ScholarshipRule[]
+): ScholarshipMatch {
+  const allRules = [...implicitRules(scholarship), ...explicitRules];
+
+  const requirements = allRules.map((r) => evaluateRule(r.field, r.operator, r.value, profile));
+
+  const evaluable = requirements.filter((r) => r.status !== "unverifiable");
+  const gatingFailed = requirements.some((r) => r.gating && r.status === "not_met");
+
+  let score: number;
+  if (evaluable.length === 0) {
+    score = 50; // no rules defined yet to check against — neutral, not zero
+  } else {
+    const metCount = evaluable.filter((r) => r.status === "met").length;
+    score = Math.round((metCount / evaluable.length) * 100);
+  }
+  if (gatingFailed) score = Math.min(score, 15);
+
+  const rankScore = Math.round(score * 0.85 + profile.profile_completeness * 0.15);
+
+  return {
+    ...scholarship,
+    score,
+    rankScore,
+    tier: tierFor(score, gatingFailed),
+    requirements,
+    missingProfileFields: requirements.filter((r) => r.status === "missing_data"),
+    unverifiable: requirements.filter((r) => r.status === "unverifiable"),
+  };
+}
+
+export function rankScholarships(
+  profile: MatchableProfile,
+  scholarships: ScholarshipRow[],
+  rulesByScholarship: Map<string, ScholarshipRule[]>
+): ScholarshipMatch[] {
+  return scholarships
+    .map((s) => evaluateScholarship(profile, s, rulesByScholarship.get(s.id) ?? []))
+    .sort((a, b) => {
+      if (b.rankScore !== a.rankScore) return b.rankScore - a.rankScore;
+      if (!a.deadline) return 1;
+      if (!b.deadline) return -1;
+      return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+    });
 }
