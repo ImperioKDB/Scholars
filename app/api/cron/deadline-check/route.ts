@@ -9,21 +9,24 @@
 // deadline stays inside the window.
 //
 // AUTH: protected by CRON_SECRET, not by user session (there is no user
-// session in a cron trigger). Vercel automatically sends
-// `Authorization: Bearer ${CRON_SECRET}` on requests it makes to configured
-// cron paths — see https://vercel.com/docs/cron-jobs/manage-cron-jobs#securing-cron-jobs.
-// Set CRON_SECRET in Vercel's env vars (not committed) alongside the other
-// secrets in 05_CODING_WORKFLOW.md's env var list.
+// session in a cron trigger). Set CRON_SECRET as a normal env var in
+// Vercel's Project Settings > Environment Variables (NOT on the Cron Jobs
+// page — that page only shows status/logs/manual-run, nothing to configure
+// there). Vercel automatically attaches it as
+// `Authorization: Bearer ${CRON_SECRET}` on requests it makes to your
+// scheduled paths — see https://vercel.com/docs/cron-jobs/manage-cron-jobs#securing-cron-jobs.
 //
-// EMAIL PROVIDER: Brevo (formerly Sendinblue), not Resend — 300 emails/day
-// free forever, no card required, and no domain verification needed to
-// start sending from their default sender while testing. Verify a domain
-// later for production deliverability/reputation.
+// EMAIL PROVIDER: Brevo (formerly Sendinblue) — 300 emails/day free
+// forever, no card required. DRY-RUN MODE: if BREVO_API_KEY or
+// REMINDER_FROM_EMAIL aren't set (e.g. no sender domain yet), this route
+// still evaluates matches and logs what it would send, but sends nothing
+// and writes nothing to `notifications` — so turning on email later just
+// works, with no backfill or reconciliation needed.
 //
 // ENV VARS NEEDED (new, not in the original 05_CODING_WORKFLOW.md list):
-//   CRON_SECRET            — random string, also set in Vercel's Cron settings
-//   BREVO_API_KEY          — from app.brevo.com/settings/keys/api, "email provider API key" in the doc's list
-//   REMINDER_FROM_EMAIL    — sender address (verified domain recommended for production)
+//   CRON_SECRET            — random string (e.g. `secrets.token_hex(32)` in Python)
+//   BREVO_API_KEY          — optional for now, see dry-run note above
+//   REMINDER_FROM_EMAIL    — optional for now, see dry-run note above
 //   DEADLINE_REMINDER_DAYS — optional, defaults to 7 if unset
 
 import { NextResponse } from 'next/server'
@@ -105,6 +108,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // DRY RUN: if email isn't configured yet (e.g. Brevo sender domain not
+  // set up), evaluate and log what would be sent without actually sending
+  // or writing to `notifications`. This means nothing gets marked "sent"
+  // prematurely — once BREVO_API_KEY/REMINDER_FROM_EMAIL are added, the
+  // real reminders fire normally on the next run, exactly as if this had
+  // never run in dry-run mode.
+  const emailConfigured = Boolean(process.env.BREVO_API_KEY && process.env.REMINDER_FROM_EMAIL)
+
   const reminderDays = Number(process.env.DEADLINE_REMINDER_DAYS) || DEFAULT_REMINDER_DAYS
 
   const supabase = createServiceClient()
@@ -141,7 +152,11 @@ export async function GET(request: Request) {
   )
 
   if (candidates.length === 0) {
-    return NextResponse.json({ message: 'No upcoming deadlines in window', reminders_sent: 0 })
+    return NextResponse.json({
+      message: 'No upcoming deadlines in window',
+      reminders_sent: 0,
+      dry_run: !emailConfigured,
+    })
   }
 
   // Dedupe: skip any (profile_id, scholarship_id) pair that already has a
@@ -169,7 +184,27 @@ export async function GET(request: Request) {
   )
 
   if (toNotify.length === 0) {
-    return NextResponse.json({ message: 'All upcoming deadlines already notified', reminders_sent: 0 })
+    return NextResponse.json({
+      message: 'All upcoming deadlines already notified',
+      reminders_sent: 0,
+      dry_run: !emailConfigured,
+    })
+  }
+
+  if (!emailConfigured) {
+    // Dry run: report what would be sent, touch nothing in the DB.
+    return NextResponse.json({
+      dry_run: true,
+      message: 'BREVO_API_KEY / REMINDER_FROM_EMAIL not set — evaluated matches but sent nothing.',
+      reminder_window_days: reminderDays,
+      candidates_evaluated: candidates.length,
+      would_send: toNotify.map((row) => ({
+        profile_id: row.profile_id,
+        scholarship_id: row.scholarship_id,
+        title: row.scholarships!.title,
+        deadline: row.scholarships!.deadline,
+      })),
+    })
   }
 
   // Cache user emails so a profile with multiple upcoming deadlines doesn't
@@ -228,6 +263,7 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
+    dry_run: false,
     reminder_window_days: reminderDays,
     candidates_evaluated: candidates.length,
     reminders_sent: results.sent,
