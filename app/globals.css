@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    background-color: #F7F5EF;
+  }
+  body {
+    color: #10151F;
+    font-feature-settings: "ss01" on;
+  }
+  ::selection {
+    background-color: #1B8A6B;
+    color: white;
+  }
+  :focus-visible {
+    outline: 2px solid #1B8A6B;
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  .bg-grain {
+    background-image: radial-gradient(rgba(11, 30, 61, 0.035) 1px, transparent 1px);
+    background-size: 3px 3px;
+  }
+}
