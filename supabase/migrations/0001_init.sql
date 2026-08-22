@@ -1,28 +1,29 @@
--- Migration: 0001_init.sql
--- Scholarship Platform — initial schema (MVP)
--- Source of truth: 03_DATABASE_SCHEMA.md
--- SCHEMA DEVIATION FLAGGED: added profiles.is_admin (boolean) — the schema doc
--- references an "admin role" for write access to scholarships/scholarship_rules
--- but never defines how admin is determined. This is the smallest addition that
--- satisfies that requirement. Revisit if you want claims-based admin instead.
+-- ScholarSync — initial schema
+-- Run this once in the Supabase SQL editor (Project > SQL Editor > New query).
+-- Safe to re-run: uses IF NOT EXISTS / OR REPLACE throughout.
 
--- ============================================================
--- Extensions
--- ============================================================
+-- ── Extensions ──────────────────────────────────────────────
 create extension if not exists "pgcrypto";
 
--- ============================================================
--- Enums
--- ============================================================
-create type academic_level as enum ('undergrad', 'postgrad');
-create type scholarship_level as enum ('undergrad', 'postgrad', 'both');
-create type rule_operator as enum ('eq', 'gte', 'lte', 'in', 'exists');
-create type notification_type as enum ('deadline_reminder', 'new_match');
+-- ── Enums ───────────────────────────────────────────────────
+do $$ begin
+  create type academic_level as enum ('undergrad', 'postgrad');
+exception when duplicate_object then null; end $$;
 
--- ============================================================
--- profiles
--- ============================================================
-create table profiles (
+do $$ begin
+  create type scholarship_level as enum ('undergrad', 'postgrad', 'both');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type rule_operator as enum ('eq', 'gte', 'lte', 'in', 'exists');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type notification_type as enum ('deadline_reminder', 'new_match');
+exception when duplicate_object then null; end $$;
+
+-- ── profiles ────────────────────────────────────────────────
+create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text,
   academic_level academic_level,
@@ -32,22 +33,19 @@ create table profiles (
   gender text,
   financial_need boolean not null default false,
   career_goals text,
-  is_admin boolean not null default false, -- SCHEMA ADDITION, see note above
   profile_completeness int not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
--- ============================================================
--- scholarships
--- ============================================================
-create table scholarships (
+-- ── scholarships ────────────────────────────────────────────
+create table if not exists scholarships (
   id uuid primary key default gen_random_uuid(),
   title text not null,
   provider_name text not null,
   description text,
   amount text,
-  deadline date not null,
+  deadline date,
   application_url text,
   level scholarship_level not null default 'both',
   discipline text,
@@ -57,27 +55,17 @@ create table scholarships (
   updated_at timestamptz not null default now()
 );
 
-create index idx_scholarships_deadline on scholarships(deadline);
-create index idx_scholarships_verified on scholarships(verified);
-
--- ============================================================
--- scholarship_rules
--- ============================================================
-create table scholarship_rules (
+-- ── scholarship_rules ───────────────────────────────────────
+create table if not exists scholarship_rules (
   id uuid primary key default gen_random_uuid(),
   scholarship_id uuid not null references scholarships(id) on delete cascade,
   field text not null,
   operator rule_operator not null,
-  value jsonb not null,
-  created_at timestamptz not null default now()
+  value jsonb not null
 );
 
-create index idx_scholarship_rules_scholarship_id on scholarship_rules(scholarship_id);
-
--- ============================================================
--- saved_scholarships
--- ============================================================
-create table saved_scholarships (
+-- ── saved_scholarships ──────────────────────────────────────
+create table if not exists saved_scholarships (
   id uuid primary key default gen_random_uuid(),
   profile_id uuid not null references profiles(id) on delete cascade,
   scholarship_id uuid not null references scholarships(id) on delete cascade,
@@ -85,12 +73,8 @@ create table saved_scholarships (
   unique (profile_id, scholarship_id)
 );
 
-create index idx_saved_scholarships_profile_id on saved_scholarships(profile_id);
-
--- ============================================================
--- notifications
--- ============================================================
-create table notifications (
+-- ── notifications ───────────────────────────────────────────
+create table if not exists notifications (
   id uuid primary key default gen_random_uuid(),
   profile_id uuid not null references profiles(id) on delete cascade,
   scholarship_id uuid references scholarships(id) on delete set null,
@@ -99,51 +83,23 @@ create table notifications (
   created_at timestamptz not null default now()
 );
 
-create index idx_notifications_profile_id on notifications(profile_id);
-
--- ============================================================
--- updated_at trigger helper
--- ============================================================
-create or replace function set_updated_at()
-returns trigger
-language plpgsql
-as $$
-begin
-  new.updated_at = now();
-  return new;
-end;
-$$;
-
-create trigger trg_profiles_updated_at
-  before update on profiles
-  for each row execute function set_updated_at();
-
-create trigger trg_scholarships_updated_at
-  before update on scholarships
-  for each row execute function set_updated_at();
-
--- ============================================================
--- profile_completeness trigger
--- Computed from 7 core fields. Each filled field = ~14.3%, rounded.
--- ============================================================
-create or replace function calculate_profile_completeness(p profiles)
+-- ── profile_completeness trigger ───────────────────────────
+-- Weighted so the fields that matter most for matching count for more.
+create or replace function compute_profile_completeness(p profiles)
 returns int
 language plpgsql
 immutable
 as $$
 declare
-  filled int := 0;
-  total int := 7;
+  score int := 0;
 begin
-  if p.full_name is not null and p.full_name <> '' then filled := filled + 1; end if;
-  if p.academic_level is not null then filled := filled + 1; end if;
-  if p.discipline is not null and p.discipline <> '' then filled := filled + 1; end if;
-  if p.gpa is not null then filled := filled + 1; end if;
-  if p.nationality is not null and p.nationality <> '' then filled := filled + 1; end if;
-  if p.financial_need is not null then filled := filled + 1; end if;
-  if p.career_goals is not null and p.career_goals <> '' then filled := filled + 1; end if;
-
-  return round((filled::numeric / total::numeric) * 100)::int;
+  if p.full_name is not null and length(trim(p.full_name)) > 0 then score := score + 15; end if;
+  if p.academic_level is not null then score := score + 20; end if;
+  if p.discipline is not null and length(trim(p.discipline)) > 0 then score := score + 20; end if;
+  if p.gpa is not null then score := score + 15; end if;
+  if p.nationality is not null and length(trim(p.nationality)) > 0 then score := score + 15; end if;
+  if p.career_goals is not null and length(trim(p.career_goals)) > 0 then score := score + 15; end if;
+  return score;
 end;
 $$;
 
@@ -152,96 +108,73 @@ returns trigger
 language plpgsql
 as $$
 begin
-  new.profile_completeness := calculate_profile_completeness(new);
+  new.profile_completeness := compute_profile_completeness(new);
+  new.updated_at := now();
   return new;
 end;
 $$;
 
-create trigger trg_profiles_completeness
+drop trigger if exists trg_set_profile_completeness on profiles;
+create trigger trg_set_profile_completeness
   before insert or update on profiles
   for each row execute function set_profile_completeness();
 
--- ============================================================
--- is_admin() helper — SECURITY DEFINER to avoid RLS recursion
--- when scholarship/rule policies need to check admin status.
--- ============================================================
-create or replace function is_admin(uid uuid)
-returns boolean
-language sql
-security definer
-stable
+-- ── auth.users -> profiles bootstrap ───────────────────────
+-- Creates a bare profile row the moment someone signs up, so the
+-- onboarding wizard only ever needs to UPDATE, never INSERT.
+create or replace function handle_new_user()
+returns trigger
+language plpgsql
+security definer set search_path = public
 as $$
-  select coalesce(
-    (select p.is_admin from profiles p where p.id = uid),
-    false
-  );
+begin
+  insert into public.profiles (id, full_name)
+  values (new.id, new.raw_user_meta_data ->> 'full_name')
+  on conflict (id) do nothing;
+  return new;
+end;
 $$;
 
--- ============================================================
--- Row Level Security
--- ============================================================
+drop trigger if exists trg_handle_new_user on auth.users;
+create trigger trg_handle_new_user
+  after insert on auth.users
+  for each row execute function handle_new_user();
+
+-- ── Row Level Security ──────────────────────────────────────
 alter table profiles enable row level security;
 alter table scholarships enable row level security;
 alter table scholarship_rules enable row level security;
 alter table saved_scholarships enable row level security;
 alter table notifications enable row level security;
 
--- profiles: owner-only read/write
-create policy "profiles_select_own" on profiles
-  for select using (auth.uid() = id);
+-- profiles: owner-only
+drop policy if exists "profiles_select_own" on profiles;
+create policy "profiles_select_own" on profiles for select using (auth.uid() = id);
+drop policy if exists "profiles_update_own" on profiles;
+create policy "profiles_update_own" on profiles for update using (auth.uid() = id);
 
-create policy "profiles_insert_own" on profiles
-  for insert with check (auth.uid() = id);
+-- scholarships: readable by any authenticated user, writes via service role only (admin API routes)
+drop policy if exists "scholarships_select_authenticated" on scholarships;
+create policy "scholarships_select_authenticated" on scholarships for select
+  using (auth.role() = 'authenticated');
 
-create policy "profiles_update_own" on profiles
-  for update using (auth.uid() = id);
+-- scholarship_rules: readable by any authenticated user (needed client-side for the "Your Eligibility" checklist)
+drop policy if exists "scholarship_rules_select_authenticated" on scholarship_rules;
+create policy "scholarship_rules_select_authenticated" on scholarship_rules for select
+  using (auth.role() = 'authenticated');
 
--- scholarships: any authenticated user reads verified listings; admins read all + write
-create policy "scholarships_select_verified" on scholarships
-  for select using (
-    verified = true or is_admin(auth.uid())
-  );
+-- saved_scholarships: owner-only, full CRUD
+drop policy if exists "saved_select_own" on saved_scholarships;
+create policy "saved_select_own" on saved_scholarships for select using (auth.uid() = profile_id);
+drop policy if exists "saved_insert_own" on saved_scholarships;
+create policy "saved_insert_own" on saved_scholarships for insert with check (auth.uid() = profile_id);
+drop policy if exists "saved_delete_own" on saved_scholarships;
+create policy "saved_delete_own" on saved_scholarships for delete using (auth.uid() = profile_id);
 
-create policy "scholarships_insert_admin" on scholarships
-  for insert with check (is_admin(auth.uid()));
+-- notifications: owner-only read
+drop policy if exists "notifications_select_own" on notifications;
+create policy "notifications_select_own" on notifications for select using (auth.uid() = profile_id);
 
-create policy "scholarships_update_admin" on scholarships
-  for update using (is_admin(auth.uid()));
-
-create policy "scholarships_delete_admin" on scholarships
-  for delete using (is_admin(auth.uid()));
-
--- scholarship_rules: readable if parent scholarship is readable; admin write
-create policy "scholarship_rules_select" on scholarship_rules
-  for select using (
-    exists (
-      select 1 from scholarships s
-      where s.id = scholarship_rules.scholarship_id
-      and (s.verified = true or is_admin(auth.uid()))
-    )
-  );
-
-create policy "scholarship_rules_insert_admin" on scholarship_rules
-  for insert with check (is_admin(auth.uid()));
-
-create policy "scholarship_rules_update_admin" on scholarship_rules
-  for update using (is_admin(auth.uid()));
-
-create policy "scholarship_rules_delete_admin" on scholarship_rules
-  for delete using (is_admin(auth.uid()));
-
--- saved_scholarships: owner-only, matched via profile_id = auth.uid()
-create policy "saved_select_own" on saved_scholarships
-  for select using (auth.uid() = profile_id);
-
-create policy "saved_insert_own" on saved_scholarships
-  for insert with check (auth.uid() = profile_id);
-
-create policy "saved_delete_own" on saved_scholarships
-  for delete using (auth.uid() = profile_id);
-
--- notifications: owner-only read. No client-side insert/update policy —
--- these rows are written by the deadline-check cron job using the
--- service role key, which bypasses RLS by design.
-create policy "notifications_select_own" on notifications
-  for select using (auth.uid() = profile_id);
+-- Note: admin write access to scholarships/scholarship_rules is handled via
+-- API routes using the service-role key (see lib/supabase/server.ts ->
+-- createAdminClient), not via RLS policies, per 03_DATABASE_SCHEMA.md.
