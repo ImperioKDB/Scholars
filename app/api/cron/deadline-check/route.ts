@@ -216,13 +216,15 @@ export async function GET(request: Request) {
   for (const row of toNotify) {
     const scholarship = row.scholarships!
 
-    let email = emailCache.get(row.profile_id)
-    if (email === undefined) {
+    let email: string | null
+    if (!emailCache.has(row.profile_id)) {
       const { data: userData, error: userError } = await supabase.auth.admin.getUserById(
         row.profile_id
       )
       email = userError ? null : userData.user?.email ?? null
       emailCache.set(row.profile_id, email)
+    } else {
+      email = emailCache.get(row.profile_id) ?? null
     }
 
     if (!email) {
