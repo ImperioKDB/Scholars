@@ -7,11 +7,19 @@
 // ever reads their own profile and publicly-verified scholarships,
 // which their own RLS policies already permit, so no elevated access
 // is needed here.
+//
+// NOTE: this route originally called a computeMatches(profile, scholarships,
+// options) function with its own Profile/Scholarship types. That
+// implementation was unintentionally overwritten by a later push to the
+// same lib/matching/engine.ts path and can't be recovered, so this route
+// has been rewritten against the engine that actually exists today
+// (lib/matching/getMatches.ts -> lib/matching/engine.ts). The response
+// shape (profile_completeness, total_evaluated, total_eligible, matches)
+// is preserved for any existing caller.
 
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
-import { computeMatches, type Profile, type Scholarship } from '@/lib/matching/engine'
+import { getMatchesForCurrentUser } from '@/lib/matching/getMatches'
 
 const bodySchema = z
   .object({
@@ -20,17 +28,6 @@ const bodySchema = z
   .optional()
 
 export async function POST(request: Request) {
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-  }
-
   let includeIneligible = false
   try {
     const raw = await request.json().catch(() => undefined)
@@ -46,47 +43,30 @@ export async function POST(request: Request) {
     // no body sent — fine, use defaults
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select(
-      'id, academic_level, discipline, gpa, nationality, gender, financial_need, career_goals, profile_completeness'
-    )
-    .eq('id', user.id)
-    .single()
+  const { matches: allMatches, profileCompleteness, error } = await getMatchesForCurrentUser()
 
-  if (profileError || !profile) {
+  if (error === 'not_authenticated') {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  }
+  if (error === 'profile_not_found') {
     return NextResponse.json(
       { error: 'Profile not found. Complete your profile before matching.' },
       { status: 404 }
     )
   }
-
-  const { data: scholarships, error: scholarshipsError } = await supabase
-    .from('scholarships')
-    .select(
-      \`id, title, provider_name, description, amount, deadline, application_url,
-       level, discipline, verified,
-       scholarship_rules ( id, scholarship_id, field, operator, value )\`
-    )
-    .eq('verified', true)
-
-  if (scholarshipsError) {
-    return NextResponse.json(
-      { error: 'Failed to load scholarships', details: scholarshipsError.message },
-      { status: 500 }
-    )
+  if (error) {
+    return NextResponse.json({ error: 'Failed to load scholarships' }, { status: 500 })
   }
 
-  const matches = computeMatches(
-    profile as Profile,
-    (scholarships ?? []) as unknown as Scholarship[],
-    { includeIneligible }
-  )
+  // "eligible" maps to the engine's tier: anything above the "unlikely"
+  // floor (gating failure or very low score) counts as eligible.
+  const eligible = allMatches.filter((m) => m.tier !== 'unlikely')
+  const matches = includeIneligible ? allMatches : eligible
 
   return NextResponse.json({
-    profile_completeness: profile.profile_completeness,
-    total_evaluated: scholarships?.length ?? 0,
-    total_eligible: matches.filter((m) => m.eligible).length,
+    profile_completeness: profileCompleteness,
+    total_evaluated: allMatches.length,
+    total_eligible: eligible.length,
     matches,
   })
 }
