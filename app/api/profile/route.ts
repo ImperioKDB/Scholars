@@ -14,7 +14,7 @@ const profileSchema = z.object({
   full_name: z.string().trim().min(1).max(200).nullable().optional(),
   academic_level: z.enum(['undergrad', 'postgrad']).nullable().optional(),
   discipline: z.string().trim().min(1).max(200).nullable().optional(),
-  gpa: z.number().min(0).max(4.0).nullable().optional(),
+  gpa: z.number().min(0).max(5.0).nullable().optional(), // was capped at 4.0 — Nigerian CGPA is commonly /5.0 (see onboarding UI, mockups)
   nationality: z.string().trim().min(1).max(100).nullable().optional(),
   gender: z.string().trim().min(1).max(50).nullable().optional(),
   financial_need: z.boolean().optional(),
