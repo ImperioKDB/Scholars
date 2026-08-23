@@ -1,6 +1,15 @@
 -- ScholarSync — initial schema
--- Run this once in the Supabase SQL editor (Project > SQL Editor > New query).
--- Safe to re-run: uses IF NOT EXISTS / OR REPLACE throughout.
+--
+-- SUPERSEDED — kept for reference only. The live Supabase project
+-- (scholarship-platform, cmdglabohpttgfofcmqc) already has a schema applied
+-- directly via its own migrations (0001_init, 0002_harden_functions) that
+-- differs from this file in real ways: it adds a profiles.is_admin column,
+-- gates admin writes to scholarships/scholarship_rules via an
+-- is_admin(auth.uid()) RLS check (no service-role key needed from API
+-- routes), and includes a profiles_insert_own policy this file doesn't have.
+-- Do NOT run this file against that project — it would fight the real
+-- policies. If you spin up a fresh Supabase project later, treat this as a
+-- starting point to adapt, not a drop-in script.
 
 -- ── Extensions ──────────────────────────────────────────────
 create extension if not exists "pgcrypto";
