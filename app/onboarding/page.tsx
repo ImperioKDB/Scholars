@@ -37,13 +37,15 @@ export default function OnboardingPage() {
         return;
       }
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("full_name, nationality, gender, academic_level, discipline, gpa, financial_need, career_goals")
-        .eq("id", user.id)
-        .single();
+      const res = await fetch("/api/profile");
 
-      if (profile) {
+      if (res.status === 401) {
+        router.replace("/login");
+        return;
+      }
+
+      if (res.ok) {
+        const { profile } = await res.json();
         setForm({
           full_name: profile.full_name ?? "",
           nationality: profile.nationality ?? "",
@@ -55,6 +57,7 @@ export default function OnboardingPage() {
           career_goals: profile.career_goals ?? "",
         });
       }
+      // 404 just means no profile row saved yet — keep the empty form, not an error.
       setLoading(false);
     }
     loadExistingProfile();
@@ -96,18 +99,10 @@ export default function OnboardingPage() {
     setSaving(true);
     setError(null);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      router.replace("/login");
-      return;
-    }
-
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update({
+    const res = await fetch("/api/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         full_name: form.full_name.trim(),
         nationality: form.nationality.trim() || null,
         gender: form.gender || null,
@@ -116,12 +111,17 @@ export default function OnboardingPage() {
         gpa: form.gpa ? Number(form.gpa) : null,
         financial_need: form.financial_need,
         career_goals: form.career_goals.trim() || null,
-      })
-      .eq("id", user.id);
+      }),
+    });
 
     setSaving(false);
 
-    if (updateError) {
+    if (res.status === 401) {
+      router.replace("/login");
+      return;
+    }
+
+    if (!res.ok) {
       setError("Couldn't save your profile. Please try again.");
       return;
     }
