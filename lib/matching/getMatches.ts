@@ -24,9 +24,14 @@ export async function getMatchesForCurrentUser(): Promise<{
     .from("profiles")
     .select("academic_level, discipline, gpa, nationality, gender, financial_need, profile_completeness")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
-  if (profileError || !profileRow) {
+  // No row yet is the normal state for a user who hasn't completed
+  // onboarding — not a server error.
+  if (profileError) {
+    return { matches: [], profileCompleteness: 0, error: "fetch_failed" };
+  }
+  if (!profileRow) {
     return { matches: [], profileCompleteness: 0, error: "profile_not_found" };
   }
 
