@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
-import { DashboardNav } from "@/components/DashboardNav";
+import { Sidebar } from "@/components/Sidebar";
 
 // middleware.ts already redirects unauthenticated requests to /login for
 // everything under /dashboard, so `user` here is expected to be present.
 // A missing profile row is still a normal state (user hit "Skip for now"
-// during onboarding) — the nav just falls back to no name / non-admin.
+// during onboarding) -- the sidebar just falls back to no name / non-admin.
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
 
@@ -28,8 +28,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="min-h-screen bg-parchment">
-      <DashboardNav fullName={fullName} isAdmin={isAdmin} />
-      <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>
+      <Sidebar fullName={fullName} isAdmin={isAdmin} />
+      {/* pt-20 clears the fixed mobile top bar; md:pl-60 clears the fixed desktop rail */}
+      <main className="md:pl-60">
+        <div className="mx-auto max-w-5xl px-6 pt-20 pb-10 md:pt-10">{children}</div>
+      </main>
     </div>
   );
 }
