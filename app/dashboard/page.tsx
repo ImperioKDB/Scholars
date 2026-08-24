@@ -27,6 +27,24 @@ const TABS: { value: "all" | MatchTier; label: string }[] = [
   { value: "possible", label: "Possible" },
 ];
 
+function StatTile({
+  value,
+  label,
+  tone = "navy",
+}: {
+  value: string | number;
+  label: string;
+  tone?: "navy" | "amber" | "emerald";
+}) {
+  const toneClass = tone === "amber" ? "text-amber" : tone === "emerald" ? "text-emerald" : "text-navy";
+  return (
+    <div className="bg-white rounded-xl border border-hairline p-4">
+      <p className={`font-mono text-2xl font-semibold ${toneClass}`}>{value}</p>
+      <p className="text-xs text-navy-light mt-1">{label}</p>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
@@ -102,6 +120,19 @@ export default function DashboardPage() {
       .slice(0, 5);
   }, [matches, saved]);
 
+  const closingSoonCount = useMemo(() => {
+    const ids = new Set<string>();
+    for (const m of matches) {
+      const days = daysUntil(m.deadline);
+      if (days !== null && days >= 0 && days <= 30) ids.add(m.id);
+    }
+    for (const s of saved) {
+      const days = daysUntil(s.scholarship.deadline);
+      if (days !== null && days >= 0 && days <= 30) ids.add(s.scholarship.id);
+    }
+    return ids.size;
+  }, [matches, saved]);
+
   async function toggleSave(scholarshipId: string) {
     const wasSaved = savedIds.has(scholarshipId);
 
@@ -165,17 +196,27 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div className="flex items-start justify-between gap-6 mb-8 flex-wrap">
-        <div>
-          <h1 className="font-display text-2xl font-semibold text-navy">Your matches</h1>
-          <p className="text-sm text-navy-light mt-1">
-            {matches.length} eligible scholarship{matches.length === 1 ? "" : "s"} found.
-          </p>
+      <div className="mb-8">
+        <h1 className="font-display text-2xl font-semibold text-navy">Your matches</h1>
+        <p className="text-sm text-navy-light mt-1 mb-6">
+          {matches.length} eligible scholarship{matches.length === 1 ? "" : "s"} found.
+        </p>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StatTile value={matches.length} label="Matches found" />
+          <StatTile value={closingSoonCount} label="Closing within 30 days" tone={closingSoonCount > 0 ? "amber" : "navy"} />
+          <StatTile value={saved.length} label="Saved" />
+          <StatTile
+            value={`${profileCompleteness}%`}
+            label="Profile complete"
+            tone={profileCompleteness === 100 ? "emerald" : "amber"}
+          />
         </div>
+
         {profileCompleteness < 100 && (
           <Link
             href="/onboarding"
-            className="text-sm font-medium text-amber bg-amber-light px-4 py-2 rounded-full hover:opacity-80 transition-opacity"
+            className="inline-block mt-4 text-sm font-medium text-amber bg-amber-light px-4 py-2 rounded-full hover:opacity-80 transition-opacity"
           >
             Profile {profileCompleteness}% complete — finish it →
           </Link>
@@ -247,7 +288,9 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <h2 className="font-display text-lg font-semibold text-navy mb-5">Saved ({saved.length})</h2>
+      <h2 id="saved" className="font-display text-lg font-semibold text-navy mb-5 scroll-mt-20">
+        Saved ({saved.length})
+      </h2>
 
       {saved.length === 0 ? (
         <div className="bg-white rounded-xl border border-hairline p-8 text-center">
