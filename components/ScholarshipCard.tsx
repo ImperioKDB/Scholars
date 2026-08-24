@@ -1,6 +1,7 @@
 "use client";
 
 import { MatchSeal } from "@/components/MatchSeal";
+import { ProviderMonogram } from "@/components/ProviderMonogram";
 import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
 
 // Deliberately narrow: this is the subset of a scholarship both
@@ -86,7 +87,11 @@ export function ScholarshipCard({
 }) {
   return (
     <div className="bg-white rounded-xl border border-hairline p-5 flex gap-4 shadow-card">
-      {score !== undefined && <MatchSeal score={score} size={52} />}
+      {score !== undefined ? (
+        <MatchSeal score={score} size={52} />
+      ) : (
+        <ProviderMonogram name={scholarship.provider_name} size={52} />
+      )}
 
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
