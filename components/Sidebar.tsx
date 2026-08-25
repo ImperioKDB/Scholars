@@ -17,6 +17,16 @@ function DashboardIcon() {
   );
 }
 
+function ApplicationsIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <rect x="5" y="3.5" width="14" height="17" rx="2" />
+      <path d="M9 3.5V3a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v.5" />
+      <path d="M8.5 11h7M8.5 14.5h7M8.5 8h4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function AdminIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -41,9 +51,9 @@ function CloseIcon() {
   );
 }
 
-// Only links to pages that actually exist today (Dashboard, and Admin for
-// admins). Discover and Saved are planned as separate pages later -- add
-// their links here once they're built rather than shipping dead links now.
+// Only links to pages that actually exist today. Discover/Saved are
+// planned as separate pages later -- add their links here once they're
+// built rather than shipping dead links now.
 export function Sidebar({
   fullName,
   isAdmin,
@@ -59,6 +69,7 @@ export function Sidebar({
 
   const navItems = [
     { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
+    { href: "/applications", label: "Applications", Icon: ApplicationsIcon },
     ...(isAdmin ? [{ href: "/admin", label: "Admin", Icon: AdminIcon }] : []),
   ];
 
