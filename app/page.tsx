@@ -40,9 +40,9 @@ export default function LandingPage() {
               Apply to the scholarships you can actually win.
             </h1>
             <p className="mt-6 text-lg text-navy-light max-w-md">
-              One profile. A ranked list scored against each scholarship&apos;s real
-              eligibility rules. No more digging through PDFs to find out you
-              didn&apos;t qualify.
+              Create one profile. Discover the scholarships you&apos;re actually
+              eligible for. Stop wasting hours on opportunities you can&apos;t
+              apply for.
             </p>
             <div className="mt-8">
               <Link
