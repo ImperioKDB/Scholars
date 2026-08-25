@@ -1,17 +1,12 @@
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { MatchSeal } from "@/components/MatchSeal";
+import { HowItWorksRotator } from "@/components/HowItWorksRotator";
 
 const SAMPLE_MATCHES = [
   { name: "MTN Foundation Science & Technology Scholarship", tag: "Undergraduate · STEM", amount: "₦300,000 + Mentorship", score: 94 },
   { name: "Dangote Postgraduate Scholarship", tag: "Postgraduate · Business", amount: "₦750,000", score: 88 },
   { name: "Chevron Scholarship for African Women", tag: "Undergraduate · STEM", amount: "₦350,000", score: 72 },
-];
-
-const STEPS = [
-  { name: "Build your profile", detail: "Academic level, discipline, GPA, and the details providers actually screen for." },
-  { name: "See your matches", detail: "A ranked list, scored against real eligibility rules — not a keyword search." },
-  { name: "Keep every deadline", detail: "Save the ones you want, and get reminded before they close." },
 ];
 
 export default function LandingPage() {
@@ -37,9 +32,10 @@ export default function LandingPage() {
         {/* Hero */}
         <section className="mx-auto max-w-6xl px-6 pt-16 pb-20 grid md:grid-cols-[1.1fr_0.9fr] gap-14 items-center">
           <div>
-            <p className="font-mono text-xs tracking-widest uppercase text-emerald mb-5">
+            <span className="inline-flex items-center gap-2 rounded-full border border-emerald/20 bg-emerald-light px-3.5 py-1.5 text-xs font-medium text-emerald mb-5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald" />
               Eligibility-matched, not keyword-matched
-            </p>
+            </span>
             <h1 className="font-display text-[2.75rem] leading-[1.08] md:text-6xl md:leading-[1.05] font-semibold text-navy text-balance">
               Apply to the scholarships you can actually win.
             </h1>
@@ -48,14 +44,22 @@ export default function LandingPage() {
               eligibility rules. No more digging through PDFs to find out you
               didn&apos;t qualify.
             </p>
-            <div className="mt-8 flex items-center gap-4">
+            <div className="mt-8">
               <Link
                 href="/signup"
-                className="rounded-seal bg-navy text-white font-medium px-6 py-3.5 hover:bg-navy-light transition-colors"
+                className="inline-flex items-center gap-2 rounded-seal bg-navy text-white font-medium px-6 py-3.5 hover:bg-navy-light transition-colors"
               >
                 Build your profile
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </Link>
-              <span className="text-sm text-navy-light font-mono">Free · 5 minutes</span>
+              <p className="mt-3 flex items-center gap-1.5 text-sm text-navy-light">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-emerald shrink-0">
+                  <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Free to join — takes about 5 minutes
+              </p>
             </div>
           </div>
 
@@ -84,17 +88,7 @@ export default function LandingPage() {
             <h2 className="font-display text-2xl font-semibold text-navy mb-10">
               How ScholarSync works
             </h2>
-            <div className="grid md:grid-cols-3 gap-10">
-              {STEPS.map((step, i) => (
-                <div key={step.name} className="border-t-2 border-navy pt-4">
-                  <p className="font-mono text-xs text-emerald mb-2">0{i + 1}</p>
-                  <h3 className="font-display text-lg font-semibold text-navy mb-2">
-                    {step.name}
-                  </h3>
-                  <p className="text-sm text-navy-light leading-relaxed">{step.detail}</p>
-                </div>
-              ))}
-            </div>
+            <HowItWorksRotator />
           </div>
         </section>
       </main>
