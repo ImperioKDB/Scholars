@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { MatchSeal } from "@/components/MatchSeal";
 import { HowItWorksRotator } from "@/components/HowItWorksRotator";
+import { Footer } from "@/components/Footer";
 
 const SAMPLE_MATCHES = [
   { name: "MTN Foundation Science & Technology Scholarship", tag: "Undergraduate · STEM", amount: "₦300,000 + Mentorship", score: 94 },
@@ -93,12 +94,7 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <footer className="border-t border-hairline">
-        <div className="mx-auto max-w-6xl px-6 py-10 flex items-center justify-between text-sm text-navy-light">
-          <Logo className="text-navy" />
-          <p>&copy; {new Date().getFullYear()} ScholarSync</p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }
