@@ -87,7 +87,7 @@ export default function LandingPage() {
         <section id="how-it-works" className="border-t border-hairline bg-white">
           <div className="mx-auto max-w-6xl px-6 py-16">
             <h2 className="font-display text-2xl font-semibold text-navy mb-10">
-              How ScholarSync works
+              How Scholars works
             </h2>
             <HowItWorksRotator />
           </div>
