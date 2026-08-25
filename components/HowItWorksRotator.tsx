@@ -30,6 +30,15 @@ function BellIcon() {
   );
 }
 
+function ChecklistIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <rect x="5" y="3.5" width="14" height="17" rx="2" />
+      <path d="M8.5 11l1.5 1.5 3-3M8.5 16.5h7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 const STEPS = [
   {
     name: "Build your profile",
@@ -46,15 +55,18 @@ const STEPS = [
     detail: "Save the ones you want, and get reminded before they close.",
     Icon: BellIcon,
   },
+  {
+    name: "Track your applications",
+    detail: "See status at a glance — in progress, submitted, accepted, or rejected.",
+    Icon: ChecklistIcon,
+  },
 ];
 
 // Mobile: horizontal scroll-snap carousel, user-driven only (no autoplay,
 // no opacity/fade animation -- just native browser scrolling). Progress is
-// shown as a filled 3-segment track rather than plain dots: research on
-// stepper/carousel UX (UXPin, Smashing Magazine, Foundey) flags two dot
-// weaknesses this fixes -- dots have tiny, hard-to-hit tap targets, and
-// isolated dots don't communicate "how far along" the way a filled
-// connecting bar does. Desktop keeps the plain 3-column row.
+// shown as a filled segment track rather than plain dots (dots have small
+// tap targets and don't communicate "how far along" the way a filled
+// connecting bar does). Desktop keeps a static row.
 export function HowItWorksRotator() {
   const trackRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -88,7 +100,7 @@ export function HowItWorksRotator() {
     <div>
       <div
         ref={trackRef}
-        className="flex md:grid md:grid-cols-3 gap-6 md:gap-10 overflow-x-auto md:overflow-visible snap-x snap-mandatory scroll-px-6 -mx-6 px-6 md:mx-0 md:px-0 pb-2 md:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex md:grid md:grid-cols-4 gap-6 md:gap-8 overflow-x-auto md:overflow-visible snap-x snap-mandatory scroll-px-6 -mx-6 px-6 md:mx-0 md:px-0 pb-2 md:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {STEPS.map((step, i) => (
           <div
