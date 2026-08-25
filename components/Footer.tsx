@@ -63,14 +63,15 @@ export function Footer() {
 
       <div className="border-t border-hairline">
         <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between text-xs text-navy-light">
-          <p>&copy; {new Date().getFullYear()} ScholarSync</p>
+          <p>&copy; {new Date().getFullYear()} Scholars</p>
           <p>Made for students in Nigeria</p>
         </div>
       </div>
 
-      {/* the large-type signature: an oversized wordmark closing the page */}
+      {/* the large-type signature: an oversized wordmark closing the page,
+          centered so it can never bleed off just one edge on narrow screens */}
       <div className="border-t border-hairline">
-        <div className="mx-auto max-w-6xl px-6 py-8 md:py-10 flex items-center gap-3 md:gap-6">
+        <div className="mx-auto max-w-6xl px-6 py-8 md:py-10 flex items-center justify-center gap-3 md:gap-6">
           <Image
             src="/logo.png"
             alt=""
@@ -82,7 +83,7 @@ export function Footer() {
             className="font-display font-semibold text-navy leading-none whitespace-nowrap"
             style={{ fontSize: "clamp(1.75rem, 13vw, 8rem)" }}
           >
-            ScholarSync
+            Scholars
           </span>
         </div>
       </div>
