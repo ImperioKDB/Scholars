@@ -22,9 +22,9 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ScholarSync — Find scholarships you're actually eligible for",
+  title: "Scholars — Find scholarships you're actually eligible for",
   description:
-    "ScholarSync matches your academic profile with scholarships you can realistically win, and keeps every deadline in one place.",
+    "Scholars matches your academic profile with scholarships you can realistically win, and keeps every deadline in one place.",
 };
 
 export default function RootLayout({
