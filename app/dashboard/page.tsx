@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ScholarshipCard, type CardScholarship } from "@/components/ScholarshipCard";
 import { daysUntil, formatDeadlineLabel } from "@/lib/dates";
+import { Skeleton, SkeletonCard, SkeletonStatTile } from "@/components/Skeleton";
 
 type MatchTier = "excellent" | "good" | "possible" | "unlikely";
 
@@ -27,6 +28,13 @@ const TABS: { value: "all" | MatchTier; label: string }[] = [
   { value: "possible", label: "Possible" },
 ];
 
+function timeGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
 function StatTile({
   value,
   label,
@@ -47,9 +55,9 @@ function StatTile({
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
-  const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  const [fullName, setFullName] = useState<string | null>(null);
   const [matches, setMatches] = useState<MatchApiItem[]>([]);
   const [profileCompleteness, setProfileCompleteness] = useState(0);
   const [saved, setSaved] = useState<SavedApiItem[]>([]);
@@ -69,16 +77,27 @@ export default function DashboardPage() {
   async function load() {
     setLoading(true);
     setLoadError(null);
-    setNeedsOnboarding(false);
 
-    const matchRes = await fetch("/api/scholarships/match", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
+    const [profileRes, matchRes] = await Promise.all([
+      fetch("/api/profile"),
+      fetch("/api/scholarships/match", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      }),
+    ]);
+
+    if (profileRes.ok) {
+      const profileData = await profileRes.json();
+      setFullName(profileData.profile?.full_name ?? null);
+    }
 
     if (matchRes.status === 404) {
-      setNeedsOnboarding(true);
+      // No profile row at all -- shouldn't happen now that signup
+      // auto-provisions one, but degrade gracefully instead of blocking.
+      setMatches([]);
+      setProfileCompleteness(0);
+      await refreshSaved();
       setLoading(false);
       return;
     }
@@ -153,7 +172,6 @@ export default function DashboardPage() {
         });
 
     if (!res.ok) {
-      // Revert the optimistic flip.
       setSavedIds((prev) => {
         const next = new Set(prev);
         if (wasSaved) next.add(scholarshipId);
@@ -172,35 +190,53 @@ export default function DashboardPage() {
   }
 
   if (loading) {
-    return <p className="text-sm text-navy-light font-mono">Loading your matches…</p>;
-  }
-
-  if (needsOnboarding) {
     return (
-      <div className="bg-white rounded-xl border border-hairline p-8 text-center max-w-md mx-auto">
-        <h1 className="font-display text-xl font-semibold text-navy mb-2">
-          Finish your profile to see matches
-        </h1>
-        <p className="text-sm text-navy-light mb-6">
-          We need a few academic details to score scholarships against your eligibility.
-        </p>
-        <Link
-          href="/onboarding"
-          className="inline-block rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors"
-        >
-          Complete your profile
-        </Link>
+      <div>
+        <Skeleton className="h-8 w-56 mb-2" />
+        <Skeleton className="h-4 w-72 mb-6" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonStatTile key={i} />
+          ))}
+        </div>
+        <div className="grid md:grid-cols-2 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
       </div>
     );
   }
 
+  const firstName = fullName?.trim().split(/\s+/)[0];
+
   return (
     <div>
       <div className="mb-8">
-        <h1 className="font-display text-2xl font-semibold text-navy">Your matches</h1>
+        <h1 className="font-display text-2xl font-semibold text-navy">
+          {timeGreeting()}
+          {firstName ? `, ${firstName}` : ""}
+        </h1>
         <p className="text-sm text-navy-light mt-1 mb-6">
           {matches.length} eligible scholarship{matches.length === 1 ? "" : "s"} found.
         </p>
+
+        {profileCompleteness < 100 && (
+          <div className="bg-white rounded-xl border border-hairline p-5 mb-6">
+            <div className="flex items-center justify-between mb-2 gap-3">
+              <p className="text-sm font-medium text-ink">Your profile is {profileCompleteness}% complete</p>
+              <Link href="/onboarding" className="text-sm font-medium text-navy hover:underline shrink-0">
+                Finish it →
+              </Link>
+            </div>
+            <div className="h-2 rounded-full bg-hairline overflow-hidden">
+              <div className="h-full rounded-full bg-amber" style={{ width: `${profileCompleteness}%` }} />
+            </div>
+            <p className="text-xs text-navy-light mt-2">
+              A fuller profile means more accurate match scores — you can browse now and finish it anytime.
+            </p>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatTile value={matches.length} label="Matches found" />
@@ -212,15 +248,6 @@ export default function DashboardPage() {
             tone={profileCompleteness === 100 ? "emerald" : "amber"}
           />
         </div>
-
-        {profileCompleteness < 100 && (
-          <Link
-            href="/onboarding"
-            className="inline-block mt-4 text-sm font-medium text-amber bg-amber-light px-4 py-2 rounded-full hover:opacity-80 transition-opacity"
-          >
-            Profile {profileCompleteness}% complete — finish it →
-          </Link>
-        )}
       </div>
 
       {loadError && <p className="text-sm text-rose mb-6">{loadError}</p>}
@@ -263,7 +290,7 @@ export default function DashboardPage() {
         <div className="bg-white rounded-xl border border-hairline p-8 text-center mb-12">
           <p className="text-sm text-navy-light">
             {matches.length === 0
-              ? "No eligible matches yet. As more scholarships are added, or as your profile fills out, matches will appear here."
+              ? "No eligible matches yet. Fill in a few more profile details, or check back as new scholarships are added."
               : "No matches in this category."}
           </p>
         </div>
