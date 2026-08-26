@@ -51,15 +51,25 @@ function CloseIcon() {
   );
 }
 
+function initialsFor(name: string | null): string {
+  if (!name) return "?";
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+
 // Only links to pages that actually exist today. Discover/Saved are
 // planned as separate pages later -- add their links here once they're
 // built rather than shipping dead links now.
 export function Sidebar({
   fullName,
   isAdmin,
+  profileCompleteness,
 }: {
   fullName: string | null;
   isAdmin: boolean;
+  profileCompleteness: number;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -79,6 +89,26 @@ export function Sidebar({
     router.push("/login");
     router.refresh();
   }
+
+  const profileBlock = (
+    <div className="px-4 py-4 border-b border-hairline">
+      <div className="flex items-center gap-3 mb-2.5">
+        <span className="w-9 h-9 rounded-full bg-navy text-white flex items-center justify-center font-display font-semibold text-sm shrink-0">
+          {initialsFor(fullName)}
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-ink truncate">{fullName || "Welcome"}</p>
+          <p className="text-xs text-navy-light">{profileCompleteness}% profile complete</p>
+        </div>
+      </div>
+      <div className="h-1.5 rounded-full bg-hairline overflow-hidden">
+        <div
+          className={`h-full rounded-full ${profileCompleteness === 100 ? "bg-emerald" : "bg-navy"}`}
+          style={{ width: `${profileCompleteness}%` }}
+        />
+      </div>
+    </div>
+  );
 
   const navList = (
     <nav className="flex flex-col gap-1">
@@ -104,7 +134,6 @@ export function Sidebar({
 
   const accountBlock = (
     <div className="px-3 py-4 border-t border-hairline">
-      {fullName && <p className="px-3 text-sm text-navy-light mb-2 truncate">{fullName}</p>}
       <button
         type="button"
         onClick={handleLogout}
@@ -123,16 +152,17 @@ export function Sidebar({
         <div className="px-5 py-5 border-b border-hairline">
           <Logo className="text-navy" />
         </div>
+        {profileBlock}
         <div className="flex-1 px-3 py-4">{navList}</div>
         {accountBlock}
       </aside>
 
-      {/* Mobile top bar */}
-      <header className="md:hidden fixed top-0 inset-x-0 z-40 h-14 bg-white border-b border-hairline flex items-center justify-between px-4">
-        <Logo className="text-navy" />
-        <button type="button" onClick={() => setMobileOpen(true)} aria-label="Open menu" className="text-navy p-1.5">
+      {/* Mobile top bar -- hamburger on the left, same side the drawer opens from */}
+      <header className="md:hidden fixed top-0 inset-x-0 z-40 h-14 bg-white border-b border-hairline flex items-center gap-3 px-4">
+        <button type="button" onClick={() => setMobileOpen(true)} aria-label="Open menu" className="text-navy p-1.5 -ml-1.5">
           <MenuIcon />
         </button>
+        <Logo className="text-navy" />
       </header>
 
       {/* Mobile drawer */}
@@ -155,6 +185,7 @@ export function Sidebar({
               <CloseIcon />
             </button>
           </div>
+          {profileBlock}
           <div className="flex-1 px-3 py-4">{navList}</div>
           {accountBlock}
         </div>
