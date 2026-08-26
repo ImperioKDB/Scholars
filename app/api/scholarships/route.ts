@@ -1,13 +1,17 @@
 // app/api/scholarships/route.ts
-// GET /api/scholarships — list verified scholarships.
+// GET /api/scholarships -- list verified scholarships.
 //
 // Optional query params:
-//   level        'undergrad' | 'postgrad' | 'both'  (filters, doesn't fold 'both' logic — that's the matching engine's job)
+//   level        'undergrad' | 'both'  (filters within the undergrad-eligible set)
 //   discipline   string, case-insensitive partial match
 //   limit        default 50, max 100
 //   offset       default 0
 //
-// This route is deliberately dumb (no eligibility logic) — it's for
+// Undergrad-only pivot: postgrad-only listings are excluded unconditionally,
+// not just when a caller happens to filter by level -- this platform no
+// longer serves postgrad students at all.
+//
+// This route is deliberately dumb (no eligibility logic) -- it's for
 // browsing/search, not matching. Use POST /api/scholarships/match for
 // personalized ranked results.
 
@@ -16,7 +20,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 
 const querySchema = z.object({
-  level: z.enum(['undergrad', 'postgrad', 'both']).optional(),
+  level: z.enum(['undergrad', 'both']).optional(),
   discipline: z.string().trim().min(1).max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0),
@@ -58,6 +62,7 @@ export async function GET(request: Request) {
       { count: 'exact' }
     )
     .eq('verified', true)
+    .in('level', ['undergrad', 'both'])
     .order('deadline', { ascending: true })
     .range(offset, offset + limit - 1)
 
