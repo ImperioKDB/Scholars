@@ -6,17 +6,18 @@ import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/Logo";
 import { StepIndicator } from "@/components/StepIndicator";
 import { FormField, inputClass, selectClass, textareaClass } from "@/components/FormField";
-import { Skeleton } from "@/components/Skeleton";
-import { Confetti } from "@/components/Confetti";
 import {
   DISCIPLINE_OPTIONS,
   GENDER_OPTIONS,
   NATIONALITY_SUGGESTIONS,
+  NIGERIAN_STATES,
+  INSTITUTION_TYPE_OPTIONS,
+  YEAR_OF_STUDY_OPTIONS,
   EMPTY_PROFILE_FORM,
   type ProfileForm,
 } from "@/lib/profile";
 
-const STEPS = ["Personal", "Academic", "Goals & Preferences"];
+const STEPS = ["Personal", "Academic", "Eligibility", "Documents"];
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -27,7 +28,6 @@ export default function OnboardingPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
     async function loadExistingProfile() {
@@ -51,16 +51,30 @@ export default function OnboardingPage() {
         const { profile } = await res.json();
         setForm({
           full_name: profile.full_name ?? "",
-          nationality: profile.nationality ?? "",
+          nationality: profile.nationality ?? "Nigerian",
           gender: profile.gender ?? "",
-          academic_level: (profile.academic_level as ProfileForm["academic_level"]) ?? "",
           discipline: profile.discipline ?? "",
           gpa: profile.gpa != null ? String(profile.gpa) : "",
           financial_need: profile.financial_need ?? false,
           career_goals: profile.career_goals ?? "",
+          date_of_birth: profile.date_of_birth ?? "",
+          state_of_origin: profile.state_of_origin ?? "",
+          lga_of_origin: profile.lga_of_origin ?? "",
+          year_of_study: profile.year_of_study != null ? String(profile.year_of_study) : "",
+          institution_name: profile.institution_name ?? "",
+          institution_type: profile.institution_type ?? "",
+          jamb_score: profile.jamb_score != null ? String(profile.jamb_score) : "",
+          waec_credit_count: profile.waec_credit_count != null ? String(profile.waec_credit_count) : "",
+          has_english_maths_credit: profile.has_english_maths_credit ?? false,
+          disability_status: profile.disability_status ?? false,
+          has_valid_id: profile.has_valid_id ?? false,
+          has_transcript: profile.has_transcript ?? false,
+          has_recommendation_letter: profile.has_recommendation_letter ?? false,
+          has_personal_statement: profile.has_personal_statement ?? false,
+          has_lga_certificate: profile.has_lga_certificate ?? false,
         });
       }
-      // 404 just means no profile row saved yet — keep the empty form, not an error.
+      // 404 just means no profile row saved yet -- keep the empty form, not an error.
       setLoading(false);
     }
     loadExistingProfile();
@@ -73,48 +87,16 @@ export default function OnboardingPage() {
 
   function validateStep(): string | null {
     if (step === 0 && !form.full_name.trim()) return "We need your name to personalize matches.";
-    if (step === 1 && !form.academic_level) return "Select your current academic level.";
     return null;
   }
 
-  // Saves whatever's been filled in so far. Called after every step
-  // transition (not just at the very end) so a student who abandons
-  // onboarding partway still has a usable, partially-scored profile —
-  // matching still works with gaps, it just scores lower.
-  async function persistProfile(): Promise<{ ok: boolean; completeness?: number }> {
-    const res = await fetch("/api/profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        full_name: form.full_name.trim() || null,
-        nationality: form.nationality.trim() || null,
-        gender: form.gender || null,
-        academic_level: form.academic_level || null,
-        discipline: form.discipline || null,
-        gpa: form.gpa ? Number(form.gpa) : null,
-        financial_need: form.financial_need,
-        career_goals: form.career_goals.trim() || null,
-      }),
-    });
-
-    if (res.status === 401) {
-      router.replace("/login");
-      return { ok: false };
-    }
-    if (!res.ok) return { ok: false };
-
-    const data = await res.json();
-    return { ok: true, completeness: data.profile?.profile_completeness };
-  }
-
-  async function goNext() {
+  function goNext() {
     const err = validateStep();
     if (err) {
       setError(err);
       return;
     }
     setError(null);
-    await persistProfile(); // best-effort autosave; final save still happens at finish
     setStep((s) => Math.min(s + 1, STEPS.length - 1));
   }
 
@@ -133,21 +115,44 @@ export default function OnboardingPage() {
     setSaving(true);
     setError(null);
 
-    const result = await persistProfile();
+    const res = await fetch("/api/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        full_name: form.full_name.trim(),
+        nationality: form.nationality.trim() || null,
+        gender: form.gender || null,
+        discipline: form.discipline || null,
+        gpa: form.gpa ? Number(form.gpa) : null,
+        financial_need: form.financial_need,
+        career_goals: form.career_goals.trim() || null,
+        date_of_birth: form.date_of_birth || null,
+        state_of_origin: form.state_of_origin || null,
+        lga_of_origin: form.lga_of_origin.trim() || null,
+        year_of_study: form.year_of_study ? Number(form.year_of_study) : null,
+        institution_name: form.institution_name.trim() || null,
+        institution_type: form.institution_type || null,
+        jamb_score: form.jamb_score ? Number(form.jamb_score) : null,
+        waec_credit_count: form.waec_credit_count ? Number(form.waec_credit_count) : null,
+        has_english_maths_credit: form.has_english_maths_credit,
+        disability_status: form.disability_status,
+        has_valid_id: form.has_valid_id,
+        has_transcript: form.has_transcript,
+        has_recommendation_letter: form.has_recommendation_letter,
+        has_personal_statement: form.has_personal_statement,
+        has_lga_certificate: form.has_lga_certificate,
+      }),
+    });
 
     setSaving(false);
 
-    if (!result.ok) {
-      setError("Couldn't save your profile. Please try again.");
+    if (res.status === 401) {
+      router.replace("/login");
       return;
     }
 
-    if (result.completeness === 100) {
-      setShowSuccess(true);
-      setTimeout(() => {
-        router.push("/dashboard");
-        router.refresh();
-      }, 2200);
+    if (!res.ok) {
+      setError("Couldn't save your profile. Please try again.");
       return;
     }
 
@@ -156,45 +161,13 @@ export default function OnboardingPage() {
   }
 
   async function handleSkip() {
-    await persistProfile(); // save whatever's there before leaving
     router.push("/dashboard");
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-parchment">
-        <header className="border-b border-hairline bg-white">
-          <div className="mx-auto max-w-2xl px-6 py-5 flex items-center justify-between">
-            <Logo className="text-navy" />
-          </div>
-        </header>
-        <main className="mx-auto max-w-2xl px-6 py-12">
-          <Skeleton className="h-2 w-full rounded-full mb-10" />
-          <div className="bg-white rounded-2xl border border-hairline shadow-card p-8">
-            <Skeleton className="h-6 w-48 mb-3" />
-            <Skeleton className="h-4 w-64 mb-8" />
-            <Skeleton className="h-11 w-full rounded-lg mb-4" />
-            <Skeleton className="h-11 w-full rounded-lg mb-4" />
-            <Skeleton className="h-11 w-full rounded-lg" />
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  if (showSuccess) {
-    return (
-      <div className="min-h-screen bg-parchment flex items-center justify-center relative overflow-hidden">
-        <Confetti />
-        <div className="text-center relative z-10 px-6">
-          <div className="w-16 h-16 rounded-full bg-emerald-light text-emerald flex items-center justify-center mx-auto mb-4">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
-          <h1 className="font-display text-2xl font-semibold text-navy mb-2">Profile complete!</h1>
-          <p className="text-sm text-navy-light">Taking you to your matches…</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-parchment">
+        <p className="text-sm text-navy-light font-mono">Loading your profile…</p>
       </div>
     );
   }
@@ -220,12 +193,14 @@ export default function OnboardingPage() {
           <h1 className="font-display text-2xl font-semibold text-navy mb-1">
             {step === 0 && "Personal information"}
             {step === 1 && "Academic background"}
-            {step === 2 && "Goals & preferences"}
+            {step === 2 && "Eligibility details"}
+            {step === 3 && "Documents & goals"}
           </h1>
           <p className="text-sm text-navy-light mb-8">
             {step === 0 && "Tell us who you are so we can personalize your matches."}
-            {step === 1 && "This drives most of your eligibility scoring — take your time here."}
-            {step === 2 && "Helps us prioritize need-based awards and tailor recommendations."}
+            {step === 1 && "Your institution and field of study -- this drives most of your matches."}
+            {step === 2 && "State/LGA of origin, JAMB and WAEC results -- most Nigerian scholarships gate on these directly."}
+            {step === 3 && "Tell us which documents you already have ready to submit."}
           </p>
 
           {step === 0 && (
@@ -240,7 +215,16 @@ export default function OnboardingPage() {
                 />
               </FormField>
 
-              <FormField label="Nationality" hint="Used to check citizenship-based eligibility rules.">
+              <FormField label="Date of birth" hint="Used to check age-based eligibility rules.">
+                <input
+                  className={inputClass}
+                  type="date"
+                  value={form.date_of_birth}
+                  onChange={(e) => update("date_of_birth", e.target.value)}
+                />
+              </FormField>
+
+              <FormField label="Nationality">
                 <input
                   className={inputClass}
                   list="nationality-suggestions"
@@ -253,6 +237,31 @@ export default function OnboardingPage() {
                     <option key={n} value={n} />
                   ))}
                 </datalist>
+              </FormField>
+
+              <FormField label="State of origin" hint="Many state government scholarships require an exact match.">
+                <select
+                  className={selectClass}
+                  value={form.state_of_origin}
+                  onChange={(e) => update("state_of_origin", e.target.value)}
+                >
+                  <option value="">Select a state</option>
+                  {NIGERIAN_STATES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+
+              <FormField label="LGA of origin">
+                <input
+                  className={inputClass}
+                  type="text"
+                  value={form.lga_of_origin}
+                  onChange={(e) => update("lga_of_origin", e.target.value)}
+                  placeholder="e.g. Ikeja"
+                />
               </FormField>
 
               <FormField label="Gender (optional)">
@@ -274,26 +283,6 @@ export default function OnboardingPage() {
 
           {step === 1 && (
             <>
-              <FormField label="Academic level">
-                <div className="grid grid-cols-2 gap-3">
-                  {(["undergrad", "postgrad"] as const).map((level) => (
-                    <button
-                      key={level}
-                      type="button"
-                      onClick={() => update("academic_level", level)}
-                      className={[
-                        "rounded-lg border px-4 py-3 text-sm font-medium text-left transition-colors",
-                        form.academic_level === level
-                          ? "border-navy bg-navy-50 text-navy"
-                          : "border-hairline text-navy-light hover:border-navy/40",
-                      ].join(" ")}
-                    >
-                      {level === "undergrad" ? "Undergraduate" : "Postgraduate"}
-                    </button>
-                  ))}
-                </div>
-              </FormField>
-
               <FormField label="Field of study / discipline">
                 <select
                   className={selectClass}
@@ -304,6 +293,46 @@ export default function OnboardingPage() {
                   {DISCIPLINE_OPTIONS.map((d) => (
                     <option key={d} value={d}>
                       {d}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+
+              <FormField label="Institution name">
+                <input
+                  className={inputClass}
+                  type="text"
+                  value={form.institution_name}
+                  onChange={(e) => update("institution_name", e.target.value)}
+                  placeholder="e.g. University of Lagos"
+                />
+              </FormField>
+
+              <FormField label="Institution type">
+                <select
+                  className={selectClass}
+                  value={form.institution_type}
+                  onChange={(e) => update("institution_type", e.target.value as ProfileForm["institution_type"])}
+                >
+                  <option value="">Select</option>
+                  {INSTITUTION_TYPE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+
+              <FormField label="Year of study" hint="Some scholarships only cover early or final years.">
+                <select
+                  className={selectClass}
+                  value={form.year_of_study}
+                  onChange={(e) => update("year_of_study", e.target.value)}
+                >
+                  <option value="">Select</option>
+                  {YEAR_OF_STUDY_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
                     </option>
                   ))}
                 </select>
@@ -326,6 +355,53 @@ export default function OnboardingPage() {
 
           {step === 2 && (
             <>
+              <FormField label="JAMB / UTME score (optional)">
+                <input
+                  className={inputClass}
+                  type="number"
+                  min="0"
+                  max="400"
+                  value={form.jamb_score}
+                  onChange={(e) => update("jamb_score", e.target.value)}
+                  placeholder="e.g. 280"
+                />
+              </FormField>
+
+              <FormField label="WAEC / NECO credits (optional)" hint="Total number of credit passes.">
+                <input
+                  className={inputClass}
+                  type="number"
+                  min="0"
+                  max="9"
+                  value={form.waec_credit_count}
+                  onChange={(e) => update("waec_credit_count", e.target.value)}
+                  placeholder="e.g. 8"
+                />
+              </FormField>
+
+              <FormField label="Do you have credits in English & Maths?">
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: "Yes", value: true },
+                    { label: "No", value: false },
+                  ].map((opt) => (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => update("has_english_maths_credit", opt.value)}
+                      className={[
+                        "rounded-lg border px-4 py-3 text-sm font-medium transition-colors",
+                        form.has_english_maths_credit === opt.value
+                          ? "border-navy bg-navy-50 text-navy"
+                          : "border-hairline text-navy-light hover:border-navy/40",
+                      ].join(" ")}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </FormField>
+
               <FormField label="Do you have significant financial need?">
                 <div className="grid grid-cols-2 gap-3">
                   {[
@@ -349,7 +425,58 @@ export default function OnboardingPage() {
                 </div>
               </FormField>
 
-              <FormField label="Career goals (optional)" hint="A sentence or two — helps us surface relevant awards.">
+              <FormField label="Do you live with a disability?">
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: "Yes", value: true },
+                    { label: "No", value: false },
+                  ].map((opt) => (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => update("disability_status", opt.value)}
+                      className={[
+                        "rounded-lg border px-4 py-3 text-sm font-medium transition-colors",
+                        form.disability_status === opt.value
+                          ? "border-navy bg-navy-50 text-navy"
+                          : "border-hairline text-navy-light hover:border-navy/40",
+                      ].join(" ")}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </FormField>
+            </>
+          )}
+
+          {step === 3 && (
+            <>
+              <p className="text-sm font-medium text-ink mb-3">Documents ready to submit</p>
+              <div className="space-y-3 mb-6">
+                {[
+                  { key: "has_valid_id" as const, label: "Valid means of identification (NIN, voter's card, passport)" },
+                  { key: "has_transcript" as const, label: "Academic transcript / statement of results" },
+                  { key: "has_recommendation_letter" as const, label: "Recommendation letter" },
+                  { key: "has_personal_statement" as const, label: "Personal statement / letter of motivation" },
+                  { key: "has_lga_certificate" as const, label: "LGA / state of origin certificate" },
+                ].map((item) => (
+                  <label
+                    key={item.key}
+                    className="flex items-center gap-3 rounded-lg border border-hairline px-4 py-3 cursor-pointer hover:border-navy/40"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={form[item.key]}
+                      onChange={(e) => update(item.key, e.target.checked)}
+                      className="rounded border-hairline"
+                    />
+                    <span className="text-sm text-ink">{item.label}</span>
+                  </label>
+                ))}
+              </div>
+
+              <FormField label="Career goals (optional)" hint="A sentence or two -- helps us surface relevant awards.">
                 <textarea
                   className={textareaClass}
                   value={form.career_goals}
