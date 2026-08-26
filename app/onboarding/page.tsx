@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/Logo";
 import { StepIndicator } from "@/components/StepIndicator";
 import { FormField, inputClass, selectClass, textareaClass } from "@/components/FormField";
+import { Skeleton } from "@/components/Skeleton";
+import { Confetti } from "@/components/Confetti";
 import {
   DISCIPLINE_OPTIONS,
   GENDER_OPTIONS,
@@ -25,6 +27,7 @@ export default function OnboardingPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
     async function loadExistingProfile() {
@@ -74,13 +77,44 @@ export default function OnboardingPage() {
     return null;
   }
 
-  function goNext() {
+  // Saves whatever's been filled in so far. Called after every step
+  // transition (not just at the very end) so a student who abandons
+  // onboarding partway still has a usable, partially-scored profile —
+  // matching still works with gaps, it just scores lower.
+  async function persistProfile(): Promise<{ ok: boolean; completeness?: number }> {
+    const res = await fetch("/api/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        full_name: form.full_name.trim() || null,
+        nationality: form.nationality.trim() || null,
+        gender: form.gender || null,
+        academic_level: form.academic_level || null,
+        discipline: form.discipline || null,
+        gpa: form.gpa ? Number(form.gpa) : null,
+        financial_need: form.financial_need,
+        career_goals: form.career_goals.trim() || null,
+      }),
+    });
+
+    if (res.status === 401) {
+      router.replace("/login");
+      return { ok: false };
+    }
+    if (!res.ok) return { ok: false };
+
+    const data = await res.json();
+    return { ok: true, completeness: data.profile?.profile_completeness };
+  }
+
+  async function goNext() {
     const err = validateStep();
     if (err) {
       setError(err);
       return;
     }
     setError(null);
+    await persistProfile(); // best-effort autosave; final save still happens at finish
     setStep((s) => Math.min(s + 1, STEPS.length - 1));
   }
 
@@ -99,30 +133,21 @@ export default function OnboardingPage() {
     setSaving(true);
     setError(null);
 
-    const res = await fetch("/api/profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        full_name: form.full_name.trim(),
-        nationality: form.nationality.trim() || null,
-        gender: form.gender || null,
-        academic_level: form.academic_level || null,
-        discipline: form.discipline || null,
-        gpa: form.gpa ? Number(form.gpa) : null,
-        financial_need: form.financial_need,
-        career_goals: form.career_goals.trim() || null,
-      }),
-    });
+    const result = await persistProfile();
 
     setSaving(false);
 
-    if (res.status === 401) {
-      router.replace("/login");
+    if (!result.ok) {
+      setError("Couldn't save your profile. Please try again.");
       return;
     }
 
-    if (!res.ok) {
-      setError("Couldn't save your profile. Please try again.");
+    if (result.completeness === 100) {
+      setShowSuccess(true);
+      setTimeout(() => {
+        router.push("/dashboard");
+        router.refresh();
+      }, 2200);
       return;
     }
 
@@ -131,13 +156,45 @@ export default function OnboardingPage() {
   }
 
   async function handleSkip() {
+    await persistProfile(); // save whatever's there before leaving
     router.push("/dashboard");
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-parchment">
-        <p className="text-sm text-navy-light font-mono">Loading your profile…</p>
+      <div className="min-h-screen bg-parchment">
+        <header className="border-b border-hairline bg-white">
+          <div className="mx-auto max-w-2xl px-6 py-5 flex items-center justify-between">
+            <Logo className="text-navy" />
+          </div>
+        </header>
+        <main className="mx-auto max-w-2xl px-6 py-12">
+          <Skeleton className="h-2 w-full rounded-full mb-10" />
+          <div className="bg-white rounded-2xl border border-hairline shadow-card p-8">
+            <Skeleton className="h-6 w-48 mb-3" />
+            <Skeleton className="h-4 w-64 mb-8" />
+            <Skeleton className="h-11 w-full rounded-lg mb-4" />
+            <Skeleton className="h-11 w-full rounded-lg mb-4" />
+            <Skeleton className="h-11 w-full rounded-lg" />
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (showSuccess) {
+    return (
+      <div className="min-h-screen bg-parchment flex items-center justify-center relative overflow-hidden">
+        <Confetti />
+        <div className="text-center relative z-10 px-6">
+          <div className="w-16 h-16 rounded-full bg-emerald-light text-emerald flex items-center justify-center mx-auto mb-4">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <h1 className="font-display text-2xl font-semibold text-navy mb-2">Profile complete!</h1>
+          <p className="text-sm text-navy-light">Taking you to your matches…</p>
+        </div>
       </div>
     );
   }
