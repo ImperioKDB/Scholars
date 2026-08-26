@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { ProviderMonogram } from "@/components/ProviderMonogram";
 import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
 import type { CardScholarship } from "@/components/ScholarshipCard";
+import { Skeleton, SkeletonCard } from "@/components/Skeleton";
+import { StatusDonut } from "@/components/StatusDonut";
 
 type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected";
 
@@ -148,7 +150,25 @@ export default function ApplicationsPage() {
   }
 
   if (loading) {
-    return <p className="text-sm text-navy-light font-mono">Loading your applications…</p>;
+    return (
+      <div>
+        <Skeleton className="h-8 w-40 mb-2" />
+        <Skeleton className="h-4 w-56 mb-6" />
+        <div className="bg-white rounded-xl border border-hairline p-5 mb-8 flex items-center gap-6">
+          <Skeleton className="w-24 h-24 rounded-full shrink-0" />
+          <div className="space-y-2 flex-1">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-4 w-32" />
+            ))}
+          </div>
+        </div>
+        <div className="grid md:grid-cols-2 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -159,23 +179,8 @@ export default function ApplicationsPage() {
           {applications.length} scholarship{applications.length === 1 ? "" : "s"} you&apos;re tracking.
         </p>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-xl border border-hairline p-4">
-            <p className="font-mono text-2xl font-semibold text-amber">{counts.in_progress}</p>
-            <p className="text-xs text-navy-light mt-1">In progress</p>
-          </div>
-          <div className="bg-white rounded-xl border border-hairline p-4">
-            <p className="font-mono text-2xl font-semibold text-navy">{counts.submitted}</p>
-            <p className="text-xs text-navy-light mt-1">Submitted</p>
-          </div>
-          <div className="bg-white rounded-xl border border-hairline p-4">
-            <p className="font-mono text-2xl font-semibold text-emerald">{counts.accepted}</p>
-            <p className="text-xs text-navy-light mt-1">Accepted</p>
-          </div>
-          <div className="bg-white rounded-xl border border-hairline p-4">
-            <p className="font-mono text-2xl font-semibold text-rose">{counts.rejected}</p>
-            <p className="text-xs text-navy-light mt-1">Rejected</p>
-          </div>
+        <div className="bg-white rounded-xl border border-hairline p-5">
+          <StatusDonut counts={counts} />
         </div>
       </div>
 
