@@ -1,0 +1,72 @@
+export const WAEC_SUBJECTS: string[] = [
+  "English Language",
+  "Mathematics",
+  "Biology",
+  "Chemistry",
+  "Physics",
+  "Agricultural Science",
+  "Economics",
+  "Government",
+  "Literature in English",
+  "Geography",
+  "Christian Religious Studies",
+  "Islamic Religious Studies",
+  "History",
+  "Civic Education",
+  "Further Mathematics",
+  "Financial Accounting",
+  "Commerce",
+  "Marketing",
+  "Book Keeping",
+  "Insurance",
+  "Office Practice",
+  "Store Management",
+  "Computer Studies",
+  "Data Processing",
+  "Technical Drawing",
+  "Building Construction",
+  "Woodwork",
+  "Metalwork",
+  "Auto Mechanics",
+  "Electrical Installation",
+  "Basic Electricity",
+  "Food and Nutrition",
+  "Home Management",
+  "Clothing and Textiles",
+  "Fine Art",
+  "Music",
+  "French",
+  "Arabic",
+  "Hausa",
+  "Igbo",
+  "Yoruba",
+  "Physical Education",
+  "Visual Art",
+  "Catering Craft Practice",
+];
+
+export const WAEC_GRADES = [
+  { value: "A1", label: "A1 (Excellent)" },
+  { value: "B2", label: "B2 (Very Good)" },
+  { value: "B3", label: "B3 (Good)" },
+  { value: "C4", label: "C4 (Credit)" },
+  { value: "C5", label: "C5 (Credit)" },
+  { value: "C6", label: "C6 (Credit)" },
+  { value: "D7", label: "D7 (Pass)" },
+  { value: "E8", label: "E8 (Pass)" },
+  { value: "F9", label: "F9 (Fail)" },
+] as const;
+
+export type WaecGrade = (typeof WAEC_GRADES)[number]["value"];
+
+// Mirrors the grade set the `sync_waec_summary_fields()` Postgres trigger
+// (migration: add_waec_results_table) treats as a credit, so the UI and the
+// DB never disagree about what counts.
+export const CREDIT_GRADES: ReadonlySet<string> = new Set([
+  "A1",
+  "B2",
+  "B3",
+  "C4",
+  "C5",
+  "C6",
+]);
