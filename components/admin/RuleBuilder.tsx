@@ -4,6 +4,8 @@ import {
   ADMIN_RULE_FIELDS,
   DISCIPLINE_OPTIONS,
   GENDER_OPTIONS,
+  NIGERIAN_STATES,
+  INSTITUTION_TYPE_OPTIONS,
   MATCHABLE_RULE_FIELDS,
   OPERATOR_LABELS,
   emptyRule,
@@ -15,6 +17,9 @@ import { inputClass, selectClass } from "@/components/FormField";
 
 const FIELD_OPTIONS = ADMIN_RULE_FIELDS;
 
+const YES_NO_FIELDS = new Set(["financial_need", "has_english_maths_credit", "disability_status"]);
+const NUMERIC_FIELDS = new Set(["gpa", "age", "year_of_study", "jamb_score", "waec_credit_count"]);
+
 function ValueInput({
   row,
   onChange,
@@ -23,40 +28,30 @@ function ValueInput({
   onChange: (value: string) => void;
 }) {
   if (row.operator === "exists") {
-    return <p className="text-xs text-navy-light py-2.5">No value needed — just checks the field is filled in.</p>;
+    return <p className="text-xs text-navy-light py-2.5">No value needed -- just checks the field is filled in.</p>;
   }
 
-  if (row.field === "gpa") {
+  if (NUMERIC_FIELDS.has(row.field)) {
     return (
       <input
         className={inputClass}
         type="number"
-        step="0.01"
+        step={row.field === "gpa" ? "0.01" : "1"}
         min="0"
-        max="5"
+        max={row.field === "gpa" ? "5" : row.field === "jamb_score" ? "400" : undefined}
         value={row.value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="3.5"
+        placeholder={row.field === "gpa" ? "3.5" : row.field === "age" ? "25" : ""}
       />
     );
   }
 
-  if (row.field === "financial_need") {
+  if (YES_NO_FIELDS.has(row.field)) {
     return (
       <select className={selectClass} value={row.value} onChange={(e) => onChange(e.target.value)}>
         <option value="">Select</option>
         <option value="true">Yes</option>
         <option value="false">No</option>
-      </select>
-    );
-  }
-
-  if (row.field === "academic_level" && row.operator === "eq") {
-    return (
-      <select className={selectClass} value={row.value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">Select</option>
-        <option value="undergrad">Undergraduate</option>
-        <option value="postgrad">Postgraduate</option>
       </select>
     );
   }
@@ -87,6 +82,32 @@ function ValueInput({
     );
   }
 
+  if (row.field === "state_of_origin" && row.operator === "eq") {
+    return (
+      <select className={selectClass} value={row.value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">Select</option>
+        {NIGERIAN_STATES.map((s) => (
+          <option key={s} value={s}>
+            {s}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (row.field === "institution_type" && row.operator === "eq") {
+    return (
+      <select className={selectClass} value={row.value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">Select</option>
+        {INSTITUTION_TYPE_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
   if (row.operator === "in") {
     return (
       <input
@@ -94,7 +115,7 @@ function ValueInput({
         type="text"
         value={row.value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Comma-separated, e.g. STEM, Engineering"
+        placeholder="Comma-separated, e.g. Lagos, Ogun, Oyo"
       />
     );
   }
@@ -139,7 +160,7 @@ export function RuleBuilder({
       {rules.length === 0 && (
         <p className="text-sm text-navy-light mb-4">
           No eligibility rules yet. Without rules, this scholarship gets a neutral 50% match
-          score for everyone — add at least one to make matching meaningful.
+          score for everyone -- add at least one to make matching meaningful.
         </p>
       )}
 
@@ -184,7 +205,7 @@ export function RuleBuilder({
 
               {!isMatchable && (
                 <p className="col-span-4 text-xs text-amber -mt-2">
-                  Not tracked in student profiles, so this won&apos;t affect the match score —
+                  Not tracked in student profiles, so this won&apos;t affect the match score --
                   it&apos;ll show as a requirement students must verify manually.
                 </p>
               )}
