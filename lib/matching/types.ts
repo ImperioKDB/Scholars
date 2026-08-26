@@ -8,16 +8,31 @@ export type ScholarshipRule = {
   value: unknown;
 };
 
-// The subset of profiles columns the engine knows how to evaluate.
-// Anything outside this set is flagged as "unverifiable" rather than
-// silently guessed at.
+export type InstitutionType =
+  | "federal_uni"
+  | "state_uni"
+  | "private_uni"
+  | "polytechnic"
+  | "college_of_education";
+
+// The subset of profiles columns (plus the derived `age` field) the engine
+// knows how to evaluate. Anything outside this set is flagged as
+// "unverifiable" rather than silently guessed at.
 export type MatchableProfile = {
-  academic_level: "undergrad" | "postgrad" | null;
   discipline: string | null;
   gpa: number | null;
   nationality: string | null;
   gender: string | null;
   financial_need: boolean;
+  date_of_birth: string | null; // ISO date; engine derives `age` from this
+  state_of_origin: string | null;
+  lga_of_origin: string | null;
+  year_of_study: number | null;
+  institution_type: InstitutionType | null;
+  jamb_score: number | null;
+  waec_credit_count: number | null;
+  has_english_maths_credit: boolean;
+  disability_status: boolean;
   profile_completeness: number;
 };
 
