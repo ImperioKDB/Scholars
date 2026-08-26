@@ -26,3 +26,22 @@
     background-size: 3px 3px;
   }
 }
+
+/* One-shot celebratory confetti burst (components/Confetti.tsx) -- not a
+   general-purpose animation utility, used only on profile completion. */
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(-10px) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+.confetti-piece {
+  animation-name: confetti-fall;
+  animation-timing-function: ease-in;
+  animation-fill-mode: forwards;
+}
