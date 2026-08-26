@@ -34,7 +34,7 @@ export function ScholarshipFields({
         />
       </FormField>
 
-      <FormField label="Award amount" hint="Free text — amounts vary too much for a fixed format.">
+      <FormField label="Award amount" hint="Free text -- amounts vary too much for a fixed format.">
         <input
           className={inputClass}
           value={values.amount ?? ""}
@@ -62,15 +62,14 @@ export function ScholarshipFields({
         />
       </FormField>
 
-      <FormField label="Academic level">
+      <FormField label="Academic level" hint="Platform is undergrad-only -- postgrad listings won't be matched or shown.">
         <select
           className={selectClass}
           value={values.level}
           onChange={(e) => onChange("level", e.target.value as ScholarshipFormValues["level"])}
         >
-          <option value="both">Both undergrad & postgrad</option>
+          <option value="both">Both / not level-specific</option>
           <option value="undergrad">Undergraduate only</option>
-          <option value="postgrad">Postgraduate only</option>
         </select>
       </FormField>
 
@@ -108,7 +107,7 @@ export function ScholarshipFields({
             onChange={(e) => onChange("verified", e.target.checked)}
             className="rounded border-hairline"
           />
-          Verified — visible to students immediately
+          Verified -- visible to students immediately
         </label>
       </div>
     </div>
