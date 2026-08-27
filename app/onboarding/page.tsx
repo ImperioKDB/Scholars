@@ -6,18 +6,22 @@ import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/Logo";
 import { StepIndicator } from "@/components/StepIndicator";
 import { FormField, inputClass, selectClass, textareaClass } from "@/components/FormField";
+import { Combobox } from "@/components/Combobox";
+import { WaecResultsEditor, type WaecRow } from "@/components/WaecResultsEditor";
 import {
   DISCIPLINE_OPTIONS,
   GENDER_OPTIONS,
   NATIONALITY_SUGGESTIONS,
   NIGERIAN_STATES,
-  INSTITUTION_TYPE_OPTIONS,
   YEAR_OF_STUDY_OPTIONS,
   EMPTY_PROFILE_FORM,
   type ProfileForm,
 } from "@/lib/profile";
+import { INSTITUTION_OPTIONS, institutionTypeFor } from "@/lib/data/institutions";
 
 const STEPS = ["Personal", "Academic", "Eligibility", "Documents"];
+
+const DISCIPLINE_COMBO_OPTIONS = DISCIPLINE_OPTIONS.map((d) => ({ value: d, label: d }));
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -25,6 +29,7 @@ export default function OnboardingPage() {
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<ProfileForm>(EMPTY_PROFILE_FORM);
+  const [waecRows, setWaecRows] = useState<WaecRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,15 +45,18 @@ export default function OnboardingPage() {
         return;
       }
 
-      const res = await fetch("/api/profile");
+      const [profileRes, waecRes] = await Promise.all([
+        fetch("/api/profile"),
+        fetch("/api/profile/waec"),
+      ]);
 
-      if (res.status === 401) {
+      if (profileRes.status === 401) {
         router.replace("/login");
         return;
       }
 
-      if (res.ok) {
-        const { profile } = await res.json();
+      if (profileRes.ok) {
+        const { profile } = await profileRes.json();
         setForm({
           full_name: profile.full_name ?? "",
           nationality: profile.nationality ?? "Nigerian",
@@ -75,6 +83,18 @@ export default function OnboardingPage() {
         });
       }
       // 404 just means no profile row saved yet -- keep the empty form, not an error.
+
+      if (waecRes.ok) {
+        const { results } = await waecRes.json();
+        setWaecRows(
+          (results ?? []).map((r: { subject: string; grade: string }) => ({
+            key: crypto.randomUUID(),
+            subject: r.subject,
+            grade: r.grade,
+          }))
+        );
+      }
+
       setLoading(false);
     }
     loadExistingProfile();
@@ -83,6 +103,18 @@ export default function OnboardingPage() {
 
   function update<K extends keyof ProfileForm>(key: K, value: ProfileForm[K]) {
     setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  // Selecting an institution from the Combobox sets both the name and the
+  // type in one step -- there's no separate "institution type" question
+  // anymore, since the type comes from the matched institution record.
+  function selectInstitution(name: string) {
+    const type = institutionTypeFor(name);
+    setForm((f) => ({
+      ...f,
+      institution_name: name,
+      institution_type: (type ?? "") as ProfileForm["institution_type"],
+    }));
   }
 
   function validateStep(): string | null {
@@ -133,8 +165,12 @@ export default function OnboardingPage() {
         institution_name: form.institution_name.trim() || null,
         institution_type: form.institution_type || null,
         jamb_score: form.jamb_score ? Number(form.jamb_score) : null,
-        waec_credit_count: form.waec_credit_count ? Number(form.waec_credit_count) : null,
-        has_english_maths_credit: form.has_english_maths_credit,
+        // waec_credit_count / has_english_maths_credit are intentionally
+        // omitted here -- they're derived automatically by the
+        // sync_waec_summary_fields() Postgres trigger from whatever gets
+        // saved to /api/profile/waec just below, so sending a manually
+        // tracked value from this form would only be overwritten a moment
+        // later anyway.
         disability_status: form.disability_status,
         has_valid_id: form.has_valid_id,
         has_transcript: form.has_transcript,
@@ -144,15 +180,31 @@ export default function OnboardingPage() {
       }),
     });
 
-    setSaving(false);
-
     if (res.status === 401) {
+      setSaving(false);
       router.replace("/login");
       return;
     }
 
     if (!res.ok) {
+      setSaving(false);
       setError("Couldn't save your profile. Please try again.");
+      return;
+    }
+
+    const validWaecRows = waecRows.filter((r) => r.subject && r.grade);
+    const waecRes = await fetch("/api/profile/waec", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        results: validWaecRows.map((r) => ({ subject: r.subject, grade: r.grade })),
+      }),
+    });
+
+    setSaving(false);
+
+    if (!waecRes.ok) {
+      setError("Your profile saved, but your WAEC results didn't. You can retry from this page.");
       return;
     }
 
@@ -167,7 +219,7 @@ export default function OnboardingPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-parchment">
-        <p className="text-sm text-navy-light font-mono">Loading your profile…</p>
+        <p className="text-sm text-navy-light font-mono">Loading your profile...</p>
       </div>
     );
   }
@@ -199,7 +251,7 @@ export default function OnboardingPage() {
           <p className="text-sm text-navy-light mb-8">
             {step === 0 && "Tell us who you are so we can personalize your matches."}
             {step === 1 && "Your institution and field of study -- this drives most of your matches."}
-            {step === 2 && "State/LGA of origin, JAMB and WAEC results -- most Nigerian scholarships gate on these directly."}
+            {step === 2 && "JAMB and WAEC results -- most Nigerian scholarships gate on these directly."}
             {step === 3 && "Tell us which documents you already have ready to submit."}
           </p>
 
@@ -283,44 +335,22 @@ export default function OnboardingPage() {
 
           {step === 1 && (
             <>
-              <FormField label="Field of study / discipline">
-                <select
-                  className={selectClass}
+              <FormField label="Field of study / discipline" hint="Search and select -- typing alone won't set it.">
+                <Combobox
+                  options={DISCIPLINE_COMBO_OPTIONS}
                   value={form.discipline}
-                  onChange={(e) => update("discipline", e.target.value)}
-                >
-                  <option value="">Select a field</option>
-                  {DISCIPLINE_OPTIONS.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
-
-              <FormField label="Institution name">
-                <input
-                  className={inputClass}
-                  type="text"
-                  value={form.institution_name}
-                  onChange={(e) => update("institution_name", e.target.value)}
-                  placeholder="e.g. University of Lagos"
+                  onChange={(value) => update("discipline", value)}
+                  placeholder="Search a course, e.g. Computer Science"
                 />
               </FormField>
 
-              <FormField label="Institution type">
-                <select
-                  className={selectClass}
-                  value={form.institution_type}
-                  onChange={(e) => update("institution_type", e.target.value as ProfileForm["institution_type"])}
-                >
-                  <option value="">Select</option>
-                  {INSTITUTION_TYPE_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+              <FormField label="Institution" hint="Search and select -- this sets your institution type automatically, so there's nothing else to fill in here.">
+                <Combobox
+                  options={INSTITUTION_OPTIONS}
+                  value={form.institution_name}
+                  onChange={selectInstitution}
+                  placeholder="Search your university, polytechnic, or college"
+                />
               </FormField>
 
               <FormField label="Year of study" hint="Some scholarships only cover early or final years.">
@@ -367,39 +397,11 @@ export default function OnboardingPage() {
                 />
               </FormField>
 
-              <FormField label="WAEC / NECO credits (optional)" hint="Total number of credit passes.">
-                <input
-                  className={inputClass}
-                  type="number"
-                  min="0"
-                  max="9"
-                  value={form.waec_credit_count}
-                  onChange={(e) => update("waec_credit_count", e.target.value)}
-                  placeholder="e.g. 8"
-                />
-              </FormField>
-
-              <FormField label="Do you have credits in English & Maths?">
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { label: "Yes", value: true },
-                    { label: "No", value: false },
-                  ].map((opt) => (
-                    <button
-                      key={opt.label}
-                      type="button"
-                      onClick={() => update("has_english_maths_credit", opt.value)}
-                      className={[
-                        "rounded-lg border px-4 py-3 text-sm font-medium transition-colors",
-                        form.has_english_maths_credit === opt.value
-                          ? "border-navy bg-navy-50 text-navy"
-                          : "border-hairline text-navy-light hover:border-navy/40",
-                      ].join(" ")}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
+              <FormField
+                label="WAEC / NECO / NABTEB results"
+                hint="Add each subject and the grade you got -- your credit count and English/Maths status are worked out from this automatically."
+              >
+                <WaecResultsEditor rows={waecRows} onChange={setWaecRows} />
               </FormField>
 
               <FormField label="Do you have significant financial need?">
@@ -493,7 +495,7 @@ export default function OnboardingPage() {
             <button
               type="button"
               onClick={goBack}
-              disabled={step === 0}
+              disabled={step === 0 || saving}
               className="text-sm font-medium text-navy-light hover:text-navy disabled:opacity-0 disabled:pointer-events-none"
             >
               Back
@@ -512,9 +514,15 @@ export default function OnboardingPage() {
                 type="button"
                 onClick={handleFinish}
                 disabled={saving}
-                className="rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60"
               >
-                {saving ? "Saving…" : "Finish & see matches"}
+                {saving && (
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                )}
+                {saving ? "Saving..." : "Finish & see matches"}
               </button>
             )}
           </div>
