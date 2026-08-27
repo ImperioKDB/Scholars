@@ -1,9 +1,9 @@
 // Curated list of common Nigerian degree/ND/NCE course titles, grouped
 // loosely by faculty the way JAMB's own brochure groups them. Not a scraped
-// official export -- see the note at the top of the push script that added
-// this file. Extend this array as you discover gaps; nothing else in the
-// app needs to change to support a new course, since discipline is stored
-// as free text on both profiles and scholarships.
+// official export -- there is no single clean machine-readable source for
+// this, and it changes yearly. Extend this array as you discover gaps;
+// nothing else in the app needs to change to support a new course, since
+// discipline is stored as free text on both profiles and scholarships.
 
 export const COURSES: string[] = [
   // Administration & Management
