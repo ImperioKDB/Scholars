@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ProviderMonogram } from "@/components/ProviderMonogram";
 import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
 import type { CardScholarship } from "@/components/ScholarshipCard";
-import { Skeleton, SkeletonCard } from "@/components/Skeleton";
+import { Skeleton, SkeletonCard, SkeletonDonut } from "@/components/Skeleton";
 import { StatusDonut } from "@/components/StatusDonut";
 
 type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected";
@@ -150,18 +150,18 @@ export default function ApplicationsPage() {
   }
 
   if (loading) {
+    // Matches app/applications/loading.tsx's shape -- a StatusDonut-shaped
+    // card (see components/Skeleton.tsx#SkeletonDonut), not the old
+    // circular-avatar-plus-lines placeholder that never matched what this
+    // page actually renders.
     return (
       <div>
         <Skeleton className="h-8 w-40 mb-2" />
         <Skeleton className="h-4 w-56 mb-6" />
-        <div className="bg-white rounded-xl border border-hairline p-5 mb-8 flex items-center gap-6">
-          <Skeleton className="w-24 h-24 rounded-full shrink-0" />
-          <div className="space-y-2 flex-1">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-4 w-32" />
-            ))}
-          </div>
+        <div className="bg-white rounded-xl border border-hairline p-5 mb-8">
+          <SkeletonDonut />
         </div>
+        <Skeleton className="h-6 w-44 mb-5" />
         <div className="grid md:grid-cols-2 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <SkeletonCard key={i} />
