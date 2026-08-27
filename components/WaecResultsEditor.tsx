@@ -16,6 +16,13 @@ const SUBJECT_OPTIONS = WAEC_SUBJECTS.map((s) => ({ value: s, label: s }));
 // not ask a separate "do you have credit in English and Maths" question --
 // that's derived automatically by the sync_waec_summary_fields() Postgres
 // trigger from whatever's entered here (see migration: add_waec_results_table).
+//
+// Layout note: each row stacks vertically on mobile (full-width subject
+// Combobox, then grade + Remove below it) and only becomes a single
+// 3-column row at the sm: breakpoint. A fixed 3-column grid on a narrow
+// phone squeezes the Combobox into a sliver, and its dropdown -- sized to
+// match that sliver -- ends up narrow and overlapping the other columns
+// with truncated option text.
 export function WaecResultsEditor({
   rows,
   onChange,
@@ -54,7 +61,7 @@ export function WaecResultsEditor({
           return (
             <div
               key={row.key}
-              className="grid grid-cols-[1fr_140px_auto] gap-2 items-start bg-navy-50 rounded-lg p-3"
+              className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_140px_auto] items-start bg-navy-50 rounded-lg p-3"
             >
               <Combobox
                 options={availableForThisRow}
@@ -62,25 +69,27 @@ export function WaecResultsEditor({
                 onChange={(value) => update(row.key, { subject: value })}
                 placeholder="Search subject..."
               />
-              <select
-                className={selectClass}
-                value={row.grade}
-                onChange={(e) => update(row.key, { grade: e.target.value })}
-              >
-                <option value="">Grade</option>
-                {WAEC_GRADES.map((g) => (
-                  <option key={g.value} value={g.value}>
-                    {g.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => remove(row.key)}
-                className="text-rose text-sm font-medium px-2 py-2.5 hover:underline"
-              >
-                Remove
-              </button>
+              <div className="grid grid-cols-[1fr_auto] gap-2 sm:contents">
+                <select
+                  className={selectClass}
+                  value={row.grade}
+                  onChange={(e) => update(row.key, { grade: e.target.value })}
+                >
+                  <option value="">Grade</option>
+                  {WAEC_GRADES.map((g) => (
+                    <option key={g.value} value={g.value}>
+                      {g.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => remove(row.key)}
+                  className="text-rose text-sm font-medium px-2 py-2.5 hover:underline whitespace-nowrap"
+                >
+                  Remove
+                </button>
+              </div>
             </div>
           );
         })}
