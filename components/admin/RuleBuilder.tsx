@@ -174,7 +174,10 @@ export function RuleBuilder({
         {rules.map((row) => {
           const isMatchable = MATCHABLE_RULE_FIELDS.some((f) => f.value === row.field);
           return (
-            <div key={row.key} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-start bg-navy-50 rounded-lg p-3">
+            <div
+              key={row.key}
+              className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_1fr_auto] items-start bg-navy-50 rounded-lg p-3"
+            >
               <select
                 className={selectClass}
                 value={row.field}
@@ -204,13 +207,13 @@ export function RuleBuilder({
               <button
                 type="button"
                 onClick={() => remove(row.key)}
-                className="text-rose text-sm font-medium px-2 py-2.5 hover:underline"
+                className="text-rose text-sm font-medium px-2 py-2.5 hover:underline sm:justify-self-start justify-self-end"
               >
                 Remove
               </button>
 
               {!isMatchable && (
-                <p className="col-span-4 text-xs text-amber -mt-2">
+                <p className="col-span-1 sm:col-span-4 text-xs text-amber -mt-2">
                   Not tracked in student profiles, so this won&apos;t affect the match score --
                   it&apos;ll show as a requirement students must verify manually.
                 </p>
