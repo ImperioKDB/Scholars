@@ -8,6 +8,7 @@ import { StepIndicator } from "@/components/StepIndicator";
 import { FormField, inputClass, selectClass, textareaClass } from "@/components/FormField";
 import { Combobox } from "@/components/Combobox";
 import { WaecResultsEditor, type WaecRow } from "@/components/WaecResultsEditor";
+import { Skeleton } from "@/components/Skeleton";
 import {
   DISCIPLINE_OPTIONS,
   GENDER_OPTIONS,
@@ -217,9 +218,47 @@ export default function OnboardingPage() {
   }
 
   if (loading) {
+    // Mirrors the real layout below (header, StepIndicator, card with
+    // heading/subtext/fields) instead of a plain "Loading your profile..."
+    // line, so the page doesn't visibly re-lay-out once data arrives.
     return (
-      <div className="min-h-screen flex items-center justify-center bg-parchment">
-        <p className="text-sm text-navy-light font-mono">Loading your profile...</p>
+      <div className="min-h-screen bg-parchment">
+        <header className="border-b border-hairline bg-white">
+          <div className="mx-auto max-w-2xl px-6 py-5 flex items-center justify-between">
+            <Skeleton className="h-6 w-24" />
+            <Skeleton className="h-4 w-20" />
+          </div>
+        </header>
+
+        <main className="mx-auto max-w-2xl px-6 py-12">
+          <div className="flex items-center w-full mb-10">
+            {STEPS.map((_, i) => (
+              <div key={i} className="flex items-center flex-1 last:flex-none">
+                <Skeleton className="w-8 h-8 rounded-seal shrink-0" />
+                {i < STEPS.length - 1 && <div className="h-px flex-1 mx-3 bg-hairline" />}
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-white rounded-2xl border border-hairline shadow-card p-8">
+            <Skeleton className="h-7 w-48 mb-2" />
+            <Skeleton className="h-4 w-64 mb-8" />
+
+            <div className="space-y-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i}>
+                  <Skeleton className="h-3.5 w-28 mb-1.5" />
+                  <Skeleton className="h-10 w-full rounded-lg" />
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between mt-6 pt-6 border-t border-hairline">
+              <Skeleton className="h-4 w-10" />
+              <Skeleton className="h-10 w-28 rounded-seal" />
+            </div>
+          </div>
+        </main>
       </div>
     );
   }
