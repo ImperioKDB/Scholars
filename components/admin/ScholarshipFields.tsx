@@ -1,7 +1,10 @@
 "use client";
 
 import { FormField, inputClass, selectClass, textareaClass } from "@/components/FormField";
+import { Combobox } from "@/components/Combobox";
 import { DISCIPLINE_OPTIONS, type ScholarshipFormValues } from "@/lib/admin/scholarship";
+
+const DISCIPLINE_COMBO_OPTIONS = DISCIPLINE_OPTIONS.map((d) => ({ value: d, label: d }));
 
 export function ScholarshipFields({
   values,
@@ -73,19 +76,13 @@ export function ScholarshipFields({
         </select>
       </FormField>
 
-      <FormField label="Field of study" hint="Leave blank if open to any discipline.">
-        <select
-          className={selectClass}
+      <FormField label="Field of study" hint="Leave blank if open to any discipline. Search and select -- typing alone won't set it.">
+        <Combobox
+          options={DISCIPLINE_COMBO_OPTIONS}
           value={values.discipline ?? ""}
-          onChange={(e) => onChange("discipline", e.target.value)}
-        >
-          <option value="">Any discipline</option>
-          {DISCIPLINE_OPTIONS.map((d) => (
-            <option key={d} value={d}>
-              {d}
-            </option>
-          ))}
-        </select>
+          onChange={(value) => onChange("discipline", value)}
+          placeholder="Search a course, or leave blank for any"
+        />
       </FormField>
 
       <div className="md:col-span-2">
