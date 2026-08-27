@@ -55,18 +55,13 @@ export const EMPTY_PROFILE_FORM: ProfileForm = {
   has_lga_certificate: false,
 };
 
-export const DISCIPLINE_OPTIONS = [
-  "STEM",
-  "Engineering",
-  "Business",
-  "Law",
-  "Medicine & Health Sciences",
-  "Arts & Humanities",
-  "Social Sciences",
-  "Education",
-  "Agriculture",
-  "Other",
-];
+// Sourced from the shared Nigerian course catalog (lib/data/courses.ts) so
+// student discipline selections and admin scholarship/rule discipline
+// values always draw from the exact same list. Replaces the old 10-item
+// coarse category list ("STEM", "Engineering", etc.) -- keeps the
+// DISCIPLINE_OPTIONS export name so nothing importing it elsewhere needs
+// to change.
+export { COURSES as DISCIPLINE_OPTIONS } from "@/lib/data/courses";
 
 export const GENDER_OPTIONS = ["Female", "Male", "Non-binary", "Prefer not to say"];
 
