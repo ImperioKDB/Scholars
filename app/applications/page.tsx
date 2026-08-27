@@ -1,11 +1,7 @@
-"use client";
-
-import { useEffect, useMemo, useState } from "react";
-import { ProviderMonogram } from "@/components/ProviderMonogram";
-import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
+import { getCurrentUserAndProfile } from "@/lib/supabase/currentUser";
+import { createClient } from "@/lib/supabase/server";
+import { ApplicationsClient } from "./ApplicationsClient";
 import type { CardScholarship } from "@/components/ScholarshipCard";
-import { Skeleton, SkeletonCard, SkeletonDonut } from "@/components/Skeleton";
-import { StatusDonut } from "@/components/StatusDonut";
 
 type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected";
 
@@ -24,268 +20,47 @@ type SavedApiItem = {
   scholarship: CardScholarship;
 };
 
-const STATUS_LABELS: Record<ApplicationStatus, string> = {
-  in_progress: "In progress",
-  submitted: "Submitted",
-  accepted: "Accepted",
-  rejected: "Rejected",
-};
+const SCHOLARSHIP_COLUMNS =
+  "id, title, provider_name, description, amount, deadline, application_url, level, discipline, verified";
 
-const STATUS_TONE: Record<ApplicationStatus, string> = {
-  in_progress: "bg-amber-light text-amber",
-  submitted: "bg-navy-50 text-navy",
-  accepted: "bg-emerald-light text-emerald",
-  rejected: "bg-rose-light text-rose",
-};
+// Server Component: fetches tracked applications and saved scholarships
+// in parallel and hands them to ApplicationsClient as initial props.
+// Previously this was a "use client" page that only started fetching
+// after hydration. app/applications/loading.tsx now renders as the real
+// Suspense fallback for exactly as long as this fetch takes.
+export default async function ApplicationsPage() {
+  const { user } = await getCurrentUserAndProfile();
 
-const DEADLINE_TONE_CLASSES: Record<ReturnType<typeof deadlineTone>, string> = {
-  closed: "bg-hairline text-navy-light",
-  urgent: "bg-rose-light text-rose",
-  soon: "bg-amber-light text-amber",
-  later: "bg-navy-50 text-navy-light",
-};
-
-export default function ApplicationsPage() {
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [applications, setApplications] = useState<ApplicationApiItem[]>([]);
-  const [saved, setSaved] = useState<SavedApiItem[]>([]);
-  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
-
-  async function load() {
-    setLoading(true);
-    setLoadError(null);
-
-    const [appsRes, savedRes] = await Promise.all([
-      fetch("/api/applications"),
-      fetch("/api/scholarships/save"),
-    ]);
-
-    if (!appsRes.ok) {
-      setLoadError("Couldn't load your applications. Try refreshing.");
-      setLoading(false);
-      return;
-    }
-
-    const appsData = await appsRes.json();
-    setApplications(appsData.applications ?? []);
-
-    if (savedRes.ok) {
-      const savedData = await savedRes.json();
-      setSaved(savedData.saved ?? []);
-    }
-
-    setLoading(false);
+  // middleware.ts already gates everything under /applications to
+  // authenticated users; this is a defensive fallback.
+  if (!user) {
+    return null;
   }
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const supabase = createClient();
 
-  const trackedScholarshipIds = useMemo(
-    () => new Set(applications.map((a) => a.scholarship.id)),
-    [applications]
-  );
+  const [appsResult, savedResult] = await Promise.all([
+    supabase
+      .from("applications")
+      .select(`id, status, notes, created_at, updated_at, scholarship:scholarships ( ${SCHOLARSHIP_COLUMNS} )`)
+      .eq("profile_id", user.id)
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("saved_scholarships")
+      .select(`id, saved_at, scholarship:scholarships ( ${SCHOLARSHIP_COLUMNS} )`)
+      .eq("profile_id", user.id)
+      .order("saved_at", { ascending: false }),
+  ]);
 
-  const untrackedSaved = useMemo(
-    () => saved.filter((s) => !trackedScholarshipIds.has(s.scholarship.id)),
-    [saved, trackedScholarshipIds]
-  );
-
-  const counts = useMemo(() => {
-    const c: Record<ApplicationStatus, number> = { in_progress: 0, submitted: 0, accepted: 0, rejected: 0 };
-    for (const a of applications) c[a.status] += 1;
-    return c;
-  }, [applications]);
-
-  async function startTracking(scholarshipId: string) {
-    setPendingIds((p) => new Set(p).add(scholarshipId));
-    const res = await fetch("/api/applications", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scholarship_id: scholarshipId }),
-    });
-    if (res.ok) await load();
-    setPendingIds((p) => {
-      const next = new Set(p);
-      next.delete(scholarshipId);
-      return next;
-    });
-  }
-
-  async function updateStatus(applicationId: string, status: ApplicationStatus) {
-    setPendingIds((p) => new Set(p).add(applicationId));
-    setApplications((prev) => prev.map((a) => (a.id === applicationId ? { ...a, status } : a)));
-
-    const res = await fetch(`/api/applications/${applicationId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-
-    if (!res.ok) await load(); // fall back to a full reload on failure
-
-    setPendingIds((p) => {
-      const next = new Set(p);
-      next.delete(applicationId);
-      return next;
-    });
-  }
-
-  async function stopTracking(applicationId: string) {
-    if (!confirm("Stop tracking this application?")) return;
-    setPendingIds((p) => new Set(p).add(applicationId));
-    const prev = applications;
-    setApplications((cur) => cur.filter((a) => a.id !== applicationId));
-
-    const res = await fetch(`/api/applications/${applicationId}`, { method: "DELETE" });
-    if (!res.ok) setApplications(prev);
-
-    setPendingIds((p) => {
-      const next = new Set(p);
-      next.delete(applicationId);
-      return next;
-    });
-  }
-
-  if (loading) {
-    // Matches app/applications/loading.tsx's shape -- a StatusDonut-shaped
-    // card (see components/Skeleton.tsx#SkeletonDonut), not the old
-    // circular-avatar-plus-lines placeholder that never matched what this
-    // page actually renders.
-    return (
-      <div>
-        <Skeleton className="h-8 w-40 mb-2" />
-        <Skeleton className="h-4 w-56 mb-6" />
-        <div className="bg-white rounded-xl border border-hairline p-5 mb-8">
-          <SkeletonDonut />
-        </div>
-        <Skeleton className="h-6 w-44 mb-5" />
-        <div className="grid md:grid-cols-2 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <SkeletonCard key={i} />
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const applications = (appsResult.data ?? []) as unknown as ApplicationApiItem[];
+  const saved = (savedResult.data ?? []) as unknown as SavedApiItem[];
+  const loadError = appsResult.error ? "Couldn't load your applications. Try refreshing." : null;
 
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="font-display text-2xl font-semibold text-navy">Applications</h1>
-        <p className="text-sm text-navy-light mt-1 mb-6">
-          {applications.length} scholarship{applications.length === 1 ? "" : "s"} you&apos;re tracking.
-        </p>
-
-        <div className="bg-white rounded-xl border border-hairline p-5">
-          <StatusDonut counts={counts} />
-        </div>
-      </div>
-
-      {loadError && <p className="text-sm text-rose mb-6">{loadError}</p>}
-
-      {untrackedSaved.length > 0 && (
-        <div className="mb-10">
-          <h2 className="font-display text-lg font-semibold text-navy mb-3">Start tracking</h2>
-          <p className="text-sm text-navy-light mb-4">Scholarships you&apos;ve saved but aren&apos;t tracking yet.</p>
-          <div className="grid md:grid-cols-2 gap-4">
-            {untrackedSaved.map((s) => (
-              <div key={s.scholarship.id} className="bg-white rounded-xl border border-hairline p-4 flex items-center gap-3">
-                <ProviderMonogram name={s.scholarship.provider_name} size={40} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-ink truncate">{s.scholarship.title}</p>
-                  <p className="text-xs text-navy-light">{s.scholarship.provider_name}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => startTracking(s.scholarship.id)}
-                  disabled={pendingIds.has(s.scholarship.id)}
-                  className="shrink-0 text-xs font-medium text-white bg-navy rounded-full px-3 py-1.5 hover:bg-navy-light transition-colors disabled:opacity-50"
-                >
-                  + Track
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <h2 className="font-display text-lg font-semibold text-navy mb-5">Tracked applications</h2>
-
-      {applications.length === 0 ? (
-        <div className="bg-white rounded-xl border border-hairline p-8 text-center">
-          <p className="text-sm text-navy-light">
-            Nothing tracked yet. Save a scholarship from your matches, then start tracking it here.
-          </p>
-        </div>
-      ) : (
-        <div className="grid md:grid-cols-2 gap-4">
-          {applications.map((a) => {
-            const days = daysUntil(a.scholarship.deadline);
-            return (
-              <div key={a.id} className="bg-white rounded-xl border border-hairline p-5 flex gap-4 shadow-card">
-                <ProviderMonogram name={a.scholarship.provider_name} size={52} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-medium text-ink leading-snug">{a.scholarship.title}</p>
-                      <p className="text-xs text-navy-light mt-0.5">{a.scholarship.provider_name}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => stopTracking(a.id)}
-                      disabled={pendingIds.has(a.id)}
-                      className="shrink-0 text-xs text-navy-light hover:text-rose disabled:opacity-50"
-                    >
-                      Remove
-                    </button>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2 mt-3">
-                    {days !== null && (
-                      <span className={`text-xs font-mono font-medium px-2 py-1 rounded-full ${DEADLINE_TONE_CLASSES[deadlineTone(days)]}`}>
-                        {formatDeadlineLabel(days)}
-                      </span>
-                    )}
-                    <span className={`text-xs font-medium px-2 py-1 rounded-full ${STATUS_TONE[a.status]}`}>
-                      {STATUS_LABELS[a.status]}
-                    </span>
-                  </div>
-
-                  <label className="block mt-3">
-                    <span className="sr-only">Status</span>
-                    <select
-                      value={a.status}
-                      onChange={(e) => updateStatus(a.id, e.target.value as ApplicationStatus)}
-                      disabled={pendingIds.has(a.id)}
-                      className="text-sm rounded-lg border border-hairline bg-white px-3 py-2 disabled:opacity-50"
-                    >
-                      {(Object.keys(STATUS_LABELS) as ApplicationStatus[]).map((s) => (
-                        <option key={s} value={s}>
-                          {STATUS_LABELS[s]}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  {a.scholarship.application_url && (
-                    <a
-                      href={a.scholarship.application_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-block text-xs font-medium text-navy hover:underline mt-3"
-                    >
-                      Open application →
-                    </a>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
+    <ApplicationsClient
+      initialApplications={applications}
+      initialSaved={saved}
+      initialError={loadError}
+    />
   );
 }
