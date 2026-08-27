@@ -31,3 +31,27 @@ export function SkeletonCard() {
     </div>
   );
 }
+
+// Matches the shape of components/StatusDonut.tsx: a ~96px ring on the
+// left, a short legend list (dot + label + count) on the right. Used on
+// the Applications page loading states -- previously both loading.tsx and
+// the inline loading branch showed a generic circular-avatar-plus-lines
+// skeleton (borrowed from the dashboard's profile-completion card), which
+// doesn't match what actually renders there and caused a visible shape
+// jump once the real StatusDonut mounted.
+export function SkeletonDonut() {
+  return (
+    <div className="flex items-center gap-6 flex-wrap">
+      <Skeleton className="w-24 h-24 rounded-full shrink-0" />
+      <div className="space-y-2.5 min-w-[160px]">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <Skeleton className="w-2.5 h-2.5 rounded-full shrink-0" />
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-3 w-6 ml-auto" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
