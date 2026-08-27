@@ -14,11 +14,19 @@ import {
   type RuleOperator,
 } from "@/lib/admin/scholarship";
 import { inputClass, selectClass } from "@/components/FormField";
+import { Combobox } from "@/components/Combobox";
 
 const FIELD_OPTIONS = ADMIN_RULE_FIELDS;
 
 const YES_NO_FIELDS = new Set(["financial_need", "has_english_maths_credit", "disability_status"]);
 const NUMERIC_FIELDS = new Set(["gpa", "age", "year_of_study", "jamb_score", "waec_credit_count"]);
+
+// Same source list as the student-facing discipline field (lib/profile.ts,
+// sourced from lib/data/courses.ts) -- keeping both in sync matters because
+// discipline is a gating field in the matching engine, so a typo'd or
+// differently-cased scholarship discipline could silently exclude every
+// otherwise-eligible student.
+const DISCIPLINE_COMBO_OPTIONS = DISCIPLINE_OPTIONS.map((d) => ({ value: d, label: d }));
 
 function ValueInput({
   row,
@@ -58,14 +66,12 @@ function ValueInput({
 
   if (row.field === "discipline" && row.operator === "eq") {
     return (
-      <select className={selectClass} value={row.value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">Select</option>
-        {DISCIPLINE_OPTIONS.map((d) => (
-          <option key={d} value={d}>
-            {d}
-          </option>
-        ))}
-      </select>
+      <Combobox
+        options={DISCIPLINE_COMBO_OPTIONS}
+        value={row.value}
+        onChange={onChange}
+        placeholder="Search a course"
+      />
     );
   }
 
