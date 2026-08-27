@@ -1,32 +1,20 @@
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUserAndProfile } from "@/lib/supabase/currentUser";
 import { Sidebar } from "@/components/Sidebar";
 
 // middleware.ts already redirects unauthenticated requests to /login for
 // everything under /dashboard, so `user` here is expected to be present.
 // A missing profile row should no longer happen post signup-trigger, but
 // the fallback (0%, no name) is kept defensively.
+//
+// Uses the shared React cache()-wrapped helper so this query is deduped
+// with the one app/dashboard/page.tsx makes for the same request -- one
+// Supabase round trip for both, not two.
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const supabase = createClient();
+  const { profile } = await getCurrentUserAndProfile();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  let fullName: string | null = null;
-  let isAdmin = false;
-  let profileCompleteness = 0;
-
-  if (user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("full_name, is_admin, profile_completeness")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    fullName = (profile?.full_name as string | null) ?? null;
-    isAdmin = Boolean(profile?.is_admin);
-    profileCompleteness = (profile?.profile_completeness as number | null) ?? 0;
-  }
+  const fullName = profile?.full_name ?? null;
+  const isAdmin = Boolean(profile?.is_admin);
+  const profileCompleteness = profile?.profile_completeness ?? 0;
 
   return (
     <div className="min-h-screen bg-parchment">
