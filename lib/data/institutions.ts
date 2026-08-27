@@ -1,6 +1,6 @@
 // Curated list of Nigerian tertiary institutions. Not a scraped official
-// export -- see the note at the top of the push script that added this
-// file. `type` values match the live Postgres enum on
+// export -- there is no single clean machine-readable source for this, and
+// it changes yearly. `type` values match the live Postgres enum on
 // profiles.institution_type exactly, so a selected institution's type can
 // be written straight to that column with no conversion step:
 //   federal_uni | state_uni | private_uni | polytechnic | college_of_education
