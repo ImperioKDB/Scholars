@@ -45,3 +45,32 @@
   animation-timing-function: ease-in;
   animation-fill-mode: forwards;
 }
+
+/* Physical press feedback for every button in the app. Deliberately left
+   OUTSIDE any @layer block -- unlayered CSS always wins over ALL layered
+   rules (base/components/utilities), regardless of specificity. Buttons
+   using Tailwind's `transition-colors` utility set their own
+   `transition-property` (color/background-color/border-color only), which
+   would otherwise silently strip `transform` out of the transition and
+   turn the press into an instant snap instead of a soft compression.
+   Staying unlayered guarantees this rule always wins that fight. The
+   :active state only touches transform, so it stays on the compositor --
+   no layout or paint cost. */
+button:not(:disabled) {
+  transition-property: transform, opacity, background-color, border-color, color;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+button:not(:disabled):active {
+  transform: scale(0.97) translateY(1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled) {
+    transition-property: background-color, border-color, color;
+  }
+  button:not(:disabled):active {
+    transform: none;
+  }
+}
