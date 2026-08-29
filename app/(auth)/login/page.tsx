@@ -1,20 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AuthShell } from "@/components/AuthShell";
 import { FormField, inputClass } from "@/components/FormField";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [error, setError] = useState<string | null>(searchParams.get("error"));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -38,14 +40,24 @@ export default function LoginPage() {
   }
 
   async function handleGoogle() {
+    setError(null);
+    setGoogleLoading(true);
+    // Route through /auth/callback rather than straight to /dashboard --
+    // that's the route that actually exchanges Google's ?code= for a
+    // session before landing on a protected page. See
+    // app/auth/callback/route.ts.
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/dashboard` },
+      options: { redirectTo: `${window.location.origin}/auth/callback?next=/dashboard` },
     });
   }
 
   return (
     <AuthShell heading="Welcome back" sub="Log in to see your latest matches.">
+      {error && (
+        <p className="text-sm text-rose bg-rose-light rounded-lg px-3.5 py-2.5 mb-5">{error}</p>
+      )}
+
       <form onSubmit={handleSubmit} noValidate>
         <FormField label="Email">
           <input
@@ -59,7 +71,7 @@ export default function LoginPage() {
           />
         </FormField>
 
-        <FormField label="Password" error={error ?? undefined}>
+        <FormField label="Password">
           <input
             className={inputClass}
             type="password"
@@ -100,9 +112,16 @@ export default function LoginPage() {
 
       <button
         onClick={handleGoogle}
-        className="w-full rounded-lg border border-hairline bg-white py-2.5 text-sm font-medium text-ink hover:bg-navy-50 transition-colors"
+        disabled={googleLoading}
+        className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-hairline bg-white py-2.5 text-sm font-medium text-ink hover:bg-navy-50 transition-colors disabled:opacity-60"
       >
-        Continue with Google
+        {googleLoading && (
+          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        )}
+        {googleLoading ? "Redirecting…" : "Continue with Google"}
       </button>
 
       <p className="text-sm text-navy-light mt-8 text-center">
@@ -112,5 +131,16 @@ export default function LoginPage() {
         </Link>
       </p>
     </AuthShell>
+  );
+}
+
+// useSearchParams() requires a Suspense boundary in the App Router --
+// wrapping here (rather than inside AuthShell) keeps AuthShell reusable
+// for pages that don't need query params.
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }
