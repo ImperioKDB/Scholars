@@ -51,6 +51,15 @@ function CloseIcon() {
   );
 }
 
+function SpinnerIcon() {
+  return (
+    <svg className="animate-spin h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+    </svg>
+  );
+}
+
 function initialsFor(name: string | null): string {
   if (!name) return "?";
   const words = name.trim().split(/\s+/).filter(Boolean);
@@ -138,8 +147,10 @@ export function Sidebar({
         type="button"
         onClick={handleLogout}
         disabled={loggingOut}
-        className="w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium text-navy-light hover:bg-navy-50 hover:text-navy transition-colors disabled:opacity-60"
+        aria-busy={loggingOut}
+        className="w-full inline-flex items-center gap-2.5 text-left rounded-lg px-3 py-2.5 text-sm font-medium text-navy-light hover:bg-navy-50 hover:text-navy transition-colors disabled:opacity-60 disabled:hover:bg-transparent"
       >
+        {loggingOut && <SpinnerIcon />}
         {loggingOut ? "Logging out…" : "Log out"}
       </button>
     </div>
