@@ -179,14 +179,14 @@ export function DashboardClient({
             <div className="flex items-center justify-between mb-2 gap-3">
               <p className="text-sm font-medium text-ink">Your profile is {profileCompleteness}% complete</p>
               <Link href="/onboarding" className="text-sm font-medium text-navy hover:underline shrink-0">
-                Finish it →
+                Finish it &rarr;
               </Link>
             </div>
             <div className="h-2 rounded-full bg-hairline overflow-hidden">
               <div className="h-full rounded-full bg-amber" style={{ width: `${profileCompleteness}%` }} />
             </div>
             <p className="text-xs text-navy-light mt-2">
-              A fuller profile means more accurate match scores — you can browse now and finish it anytime.
+              A fuller profile means more accurate match scores -- you can browse now and finish it anytime.
             </p>
           </div>
         )}
@@ -226,10 +226,29 @@ export function DashboardClient({
             {upcomingDeadlines.map((s) => {
               const days = daysUntil(s.deadline) as number;
               return (
-                <div key={s.id} className="shrink-0 w-56 bg-white rounded-xl border border-hairline p-4">
-                  <p className="font-mono text-xs text-rose font-medium mb-1">{formatDeadlineLabel(days)}</p>
-                  <p className="text-sm font-medium text-ink leading-snug line-clamp-2">{s.title}</p>
-                  <p className="text-xs text-navy-light mt-1">{s.provider_name}</p>
+                // Stretched-link pattern: this card previously had no
+                // <Link> at all, so it was never navigable -- unlike
+                // ScholarshipCard below, which was fixed to use this
+                // same approach. The <Link> is a real anchor pinned to
+                // inset-0, visible content is pointer-events-none so
+                // taps pass through to it, and active:scale gives the
+                // press-physics feedback on the actual touch target.
+                <div
+                  key={s.id}
+                  className="relative shrink-0 w-56 bg-white rounded-xl border border-hairline p-4 transition-transform duration-150 ease-out active:scale-[0.97]"
+                >
+                  <Link
+                    href={`/scholarships/${s.id}`}
+                    aria-label={s.title}
+                    className="absolute inset-0 z-0 rounded-xl"
+                  >
+                    <span className="sr-only">{s.title}</span>
+                  </Link>
+                  <div className="pointer-events-none">
+                    <p className="font-mono text-xs text-rose font-medium mb-1">{formatDeadlineLabel(days)}</p>
+                    <p className="text-sm font-medium text-ink leading-snug line-clamp-2">{s.title}</p>
+                    <p className="text-xs text-navy-light mt-1">{s.provider_name}</p>
+                  </div>
                 </div>
               );
             })}
