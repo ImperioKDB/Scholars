@@ -234,7 +234,10 @@ function implicitRules(scholarship: ScholarshipRow): ScholarshipRule[] {
   return rules;
 }
 
-function tierFor(score: number, gatingFailed: boolean): MatchTier {
+// Exported so lib/matching/gaps.ts can re-derive a hypothetical tier when
+// simulating "what if this missing field were filled in" -- keeps the tier
+// thresholds defined in exactly one place instead of being duplicated.
+export function tierFor(score: number, gatingFailed: boolean): MatchTier {
   if (gatingFailed) return "unlikely";
   if (score >= 85) return "excellent";
   if (score >= 65) return "good";
