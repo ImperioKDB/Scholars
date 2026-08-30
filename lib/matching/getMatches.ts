@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserAndProfile } from "@/lib/supabase/currentUser";
-import { rankScholarships } from "./engine";
+import { rankScholarships, evaluateScholarship } from "./engine";
 import type { MatchableProfile, ScholarshipMatch, ScholarshipRule } from "./types";
 
 // Server-only: uses the caller's session (RLS-scoped), not the service role key.
@@ -74,4 +74,76 @@ export async function getMatchesForCurrentUser(): Promise<{
   const matches = rankScholarships(profile, scholarships, rulesByScholarship);
 
   return { matches, profileCompleteness: profile.profile_completeness, error: null };
+}
+
+// Single-scholarship version of the above, used by the scholarship detail
+// page and its API route. Reuses evaluateScholarship directly (same engine
+// getMatchesForCurrentUser uses) so a scholarship's score on its own detail
+// page always matches its score on the dashboard -- no second scoring path
+// to drift out of sync.
+//
+// Deliberately does NOT require the scholarship to be in the current
+// match list -- a student can land here from a saved scholarship whose
+// profile fields changed since it was saved, or a direct link.
+export async function getMatchForScholarship(scholarshipId: string): Promise<{
+  match: ScholarshipMatch | null;
+  profileCompleteness: number;
+  error: string | null;
+}> {
+  const { user, profile: profileRow } = await getCurrentUserAndProfile();
+
+  if (!user) {
+    return { match: null, profileCompleteness: 0, error: "not_authenticated" };
+  }
+
+  if (!profileRow) {
+    return { match: null, profileCompleteness: 0, error: "profile_not_found" };
+  }
+
+  const profile: MatchableProfile = {
+    discipline: profileRow.discipline,
+    gpa: profileRow.gpa,
+    nationality: profileRow.nationality,
+    gender: profileRow.gender,
+    financial_need: profileRow.financial_need,
+    date_of_birth: profileRow.date_of_birth,
+    state_of_origin: profileRow.state_of_origin,
+    lga_of_origin: profileRow.lga_of_origin,
+    year_of_study: profileRow.year_of_study,
+    institution_type: profileRow.institution_type,
+    jamb_score: profileRow.jamb_score,
+    waec_credit_count: profileRow.waec_credit_count,
+    has_english_maths_credit: profileRow.has_english_maths_credit,
+    disability_status: profileRow.disability_status,
+    profile_completeness: profileRow.profile_completeness,
+  };
+
+  const supabase = createClient();
+
+  const [{ data: scholarship, error: scholarshipError }, { data: rules, error: rulesError }] =
+    await Promise.all([
+      supabase
+        .from("scholarships")
+        .select("id, title, provider_name, description, amount, deadline, application_url, level, discipline, verified")
+        .eq("id", scholarshipId)
+        .eq("verified", true)
+        .in("level", ["undergrad", "both"])
+        .maybeSingle(),
+      supabase
+        .from("scholarship_rules")
+        .select("id, scholarship_id, field, operator, value")
+        .eq("scholarship_id", scholarshipId),
+    ]);
+
+  if (scholarshipError || rulesError) {
+    return { match: null, profileCompleteness: profile.profile_completeness, error: "fetch_failed" };
+  }
+
+  if (!scholarship) {
+    return { match: null, profileCompleteness: profile.profile_completeness, error: "not_found" };
+  }
+
+  const match = evaluateScholarship(profile, scholarship, (rules ?? []) as ScholarshipRule[]);
+
+  return { match, profileCompleteness: profile.profile_completeness, error: null };
 }
