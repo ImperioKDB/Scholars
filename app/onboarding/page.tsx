@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/Logo";
@@ -24,7 +24,7 @@ const STEPS = ["Personal", "Academic", "Eligibility", "Documents"];
 
 const DISCIPLINE_COMBO_OPTIONS = DISCIPLINE_OPTIONS.map((d) => ({ value: d, label: d }));
 
-export default function OnboardingPage() {
+function OnboardingForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
@@ -581,5 +581,18 @@ export default function OnboardingPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+// useSearchParams() (used above to support /onboarding?step=N deep links
+// from nudge CTAs) requires a Suspense boundary in the App Router -- same
+// fix already applied in app/(auth)/login/page.tsx. Without this, "next
+// build" fails prerendering /onboarding with "useSearchParams() should be
+// wrapped in a suspense boundary".
+export default function OnboardingPage() {
+  return (
+    <Suspense fallback={null}>
+      <OnboardingForm />
+    </Suspense>
   );
 }
