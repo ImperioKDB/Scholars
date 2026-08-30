@@ -11,6 +11,13 @@ type ApplicationApiItem = {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  draft_statement: string | null;
+  draft_summary: {
+    facts: { label: string; value: string }[];
+    checklist: { item: string; have: boolean }[];
+  } | null;
+  draft_generated_at: string | null;
+  draft_confirmed_at: string | null;
   scholarship: CardScholarship;
 };
 
@@ -22,6 +29,8 @@ type SavedApiItem = {
 
 const SCHOLARSHIP_COLUMNS =
   "id, title, provider_name, description, amount, deadline, application_url, level, discipline, verified";
+
+const APPLICATION_COLUMNS = `id, status, notes, created_at, updated_at, draft_statement, draft_summary, draft_generated_at, draft_confirmed_at, scholarship:scholarships ( ${SCHOLARSHIP_COLUMNS} )`;
 
 // Server Component: fetches tracked applications and saved scholarships
 // in parallel and hands them to ApplicationsClient as initial props.
@@ -42,7 +51,7 @@ export default async function ApplicationsPage() {
   const [appsResult, savedResult] = await Promise.all([
     supabase
       .from("applications")
-      .select(`id, status, notes, created_at, updated_at, scholarship:scholarships ( ${SCHOLARSHIP_COLUMNS} )`)
+      .select(APPLICATION_COLUMNS)
       .eq("profile_id", user.id)
       .order("updated_at", { ascending: false }),
     supabase
