@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ScholarshipCard, type CardScholarship } from "@/components/ScholarshipCard";
+import { ScholarshipCard, Spinner, type CardScholarship } from "@/components/ScholarshipCard";
 import { daysUntil, formatDeadlineLabel } from "@/lib/dates";
 import type { GapNudge } from "@/lib/matching/gaps";
 
@@ -28,6 +28,8 @@ const TABS: { value: "all" | MatchTier; label: string }[] = [
   { value: "good", label: "Worth a look" },
   { value: "possible", label: "Possible" },
 ];
+
+const SPINNER_DELAY_MS = 150;
 
 function timeGreeting() {
   const h = new Date().getHours();
@@ -84,6 +86,67 @@ function GapNudgeBanner({ gaps }: { gaps: GapNudge[] }) {
           Add it now
         </Link>
       </div>
+    </div>
+  );
+}
+
+// Same two-layer press/loading treatment as ScholarshipCard: an instant
+// native :active scale for the tap itself, a persisting scale-down + dim
+// set synchronously on click (cleared only by unmounting, i.e. by the
+// route actually changing), and a spinner that only shows up if the
+// navigation takes longer than SPINNER_DELAY_MS. Kept as its own small
+// component (rather than inline in the .map()) so each card owns its own
+// navigating/showSpinner state instead of one shared flag animating every
+// card in the row at once.
+function DeadlineCard({ scholarship, days }: { scholarship: CardScholarship; days: number }) {
+  const [navigating, setNavigating] = useState(false);
+  const [showSpinner, setShowSpinner] = useState(false);
+  const spinnerTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (spinnerTimeout.current) clearTimeout(spinnerTimeout.current);
+    };
+  }, []);
+
+  function handleNavigate() {
+    setNavigating(true);
+    spinnerTimeout.current = setTimeout(() => setShowSpinner(true), SPINNER_DELAY_MS);
+  }
+
+  return (
+    <div
+      className={[
+        "relative shrink-0 w-56 bg-white rounded-xl border border-hairline p-4",
+        "transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none",
+        "active:scale-[0.97]",
+        navigating ? "scale-[0.97] opacity-80" : "scale-100 opacity-100",
+      ].join(" ")}
+    >
+      {/* Stretched-link pattern: a real anchor pinned to inset-0, visible
+          content is pointer-events-none so taps pass through to it. */}
+      <Link
+        href={`/scholarships/${scholarship.id}`}
+        aria-label={scholarship.title}
+        className="absolute inset-0 z-0 rounded-xl"
+        onClick={handleNavigate}
+      >
+        <span className="sr-only">{scholarship.title}</span>
+      </Link>
+      <div className="pointer-events-none">
+        <p className="font-mono text-xs text-rose font-medium mb-1">{formatDeadlineLabel(days)}</p>
+        <p className="text-sm font-medium text-ink leading-snug line-clamp-2">{scholarship.title}</p>
+        <p className="text-xs text-navy-light mt-1">{scholarship.provider_name}</p>
+      </div>
+
+      {showSpinner && (
+        <div
+          className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/70 backdrop-blur-[1px] pointer-events-none"
+          aria-hidden="true"
+        >
+          <Spinner className="h-4 w-4 text-navy" />
+        </div>
+      )}
     </div>
   );
 }
@@ -262,35 +325,9 @@ export function DashboardClient({
         <div className="mb-10">
           <h2 className="font-display text-lg font-semibold text-navy mb-3">Upcoming deadlines</h2>
           <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
-            {upcomingDeadlines.map((s) => {
-              const days = daysUntil(s.deadline) as number;
-              return (
-                // Stretched-link pattern: this card previously had no
-                // <Link> at all, so it was never navigable -- unlike
-                // ScholarshipCard below, which was fixed to use this
-                // same approach. The <Link> is a real anchor pinned to
-                // inset-0, visible content is pointer-events-none so
-                // taps pass through to it, and active:scale gives the
-                // press-physics feedback on the actual touch target.
-                <div
-                  key={s.id}
-                  className="relative shrink-0 w-56 bg-white rounded-xl border border-hairline p-4 transition-transform duration-150 ease-out active:scale-[0.97]"
-                >
-                  <Link
-                    href={`/scholarships/${s.id}`}
-                    aria-label={s.title}
-                    className="absolute inset-0 z-0 rounded-xl"
-                  >
-                    <span className="sr-only">{s.title}</span>
-                  </Link>
-                  <div className="pointer-events-none">
-                    <p className="font-mono text-xs text-rose font-medium mb-1">{formatDeadlineLabel(days)}</p>
-                    <p className="text-sm font-medium text-ink leading-snug line-clamp-2">{s.title}</p>
-                    <p className="text-xs text-navy-light mt-1">{s.provider_name}</p>
-                  </div>
-                </div>
-              );
-            })}
+            {upcomingDeadlines.map((s) => (
+              <DeadlineCard key={s.id} scholarship={s} days={daysUntil(s.deadline) as number} />
+            ))}
           </div>
         </div>
       )}
