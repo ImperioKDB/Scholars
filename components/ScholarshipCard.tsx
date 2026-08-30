@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { MatchSeal } from "@/components/MatchSeal";
 import { ProviderMonogram } from "@/components/ProviderMonogram";
 import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
@@ -57,7 +58,7 @@ function SaveButton({
       aria-label={saved ? "Remove from saved scholarships" : "Save scholarship"}
       aria-pressed={saved}
       className={[
-        "shrink-0 rounded-full p-1.5 transition-colors disabled:opacity-50",
+        "shrink-0 rounded-full p-1.5 bg-white/90 backdrop-blur-sm transition-colors disabled:opacity-50",
         saved ? "text-emerald" : "text-navy-light hover:text-navy",
       ].join(" ")}
     >
@@ -68,6 +69,15 @@ function SaveButton({
   );
 }
 
+// Card title/avatar/badges are wrapped in a Link to /scholarships/[id]
+// (the detail page) via `className="contents"` so the wrapper doesn't
+// affect the existing flex layout. SaveButton is a sibling, absolutely
+// positioned in the top-right corner -- NOT nested inside the Link,
+// since a <button> inside an <a> is invalid HTML and would break
+// keyboard/screen-reader semantics. The external "View application"
+// link that used to live here was removed -- the detail page's "Apply on
+// provider's site" button is now the one place that sends someone to the
+// external URL, so a card never has two competing tap targets.
 export function ScholarshipCard({
   scholarship,
   score,
@@ -86,47 +96,39 @@ export function ScholarshipCard({
   pending?: boolean;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-hairline p-5 flex gap-4 shadow-card">
-      {score !== undefined ? (
-        <MatchSeal score={score} size={52} />
-      ) : (
-        <ProviderMonogram name={scholarship.provider_name} size={52} />
-      )}
+    <div className="relative bg-white rounded-xl border border-hairline p-5 flex gap-4 shadow-card">
+      <Link href={`/scholarships/${scholarship.id}`} className="contents">
+        {score !== undefined ? (
+          <MatchSeal score={score} size={52} />
+        ) : (
+          <ProviderMonogram name={scholarship.provider_name} size={52} />
+        )}
 
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="font-medium text-ink leading-snug">{scholarship.title}</p>
+        <div className="min-w-0 flex-1">
+          <div className="pr-8">
+            <p className="font-medium text-ink leading-snug hover:text-navy transition-colors">{scholarship.title}</p>
             <p className="text-xs text-navy-light mt-0.5">{scholarship.provider_name}</p>
           </div>
-          <SaveButton saved={saved} pending={pending} onToggle={onToggleSave} />
+
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            <DeadlineBadge deadline={scholarship.deadline} />
+            {scholarship.amount && <span className="text-xs font-mono text-emerald">{scholarship.amount}</span>}
+            <span className="text-xs text-navy-light capitalize">
+              {scholarship.level === "both" ? "Undergrad & postgrad" : scholarship.level}
+            </span>
+            {scholarship.discipline && <span className="text-xs text-navy-light">&middot; {scholarship.discipline}</span>}
+          </div>
+
+          {totalCount !== undefined && totalCount > 0 && (
+            <p className="text-xs text-navy-light mt-2 font-mono">
+              {metCount}/{totalCount} requirements met
+            </p>
+          )}
         </div>
+      </Link>
 
-        <div className="flex flex-wrap items-center gap-2 mt-3">
-          <DeadlineBadge deadline={scholarship.deadline} />
-          {scholarship.amount && <span className="text-xs font-mono text-emerald">{scholarship.amount}</span>}
-          <span className="text-xs text-navy-light capitalize">
-            {scholarship.level === "both" ? "Undergrad & postgrad" : scholarship.level}
-          </span>
-          {scholarship.discipline && <span className="text-xs text-navy-light">· {scholarship.discipline}</span>}
-        </div>
-
-        {totalCount !== undefined && totalCount > 0 && (
-          <p className="text-xs text-navy-light mt-2 font-mono">
-            {metCount}/{totalCount} requirements met
-          </p>
-        )}
-
-        {scholarship.application_url && (
-          <a
-            href={scholarship.application_url}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-block text-xs font-medium text-navy hover:underline mt-3"
-          >
-            View application →
-          </a>
-        )}
+      <div className="absolute top-5 right-5">
+        <SaveButton saved={saved} pending={pending} onToggle={onToggleSave} />
       </div>
     </div>
   );
