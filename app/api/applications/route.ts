@@ -6,6 +6,12 @@
 // rejected) plus optional notes, no documents/checklist/interview stages.
 // Separate from saved_scholarships -- saving means "might apply", creating
 // an application here means "actually pursuing this."
+//
+// GET now also returns the auto-apply draft columns (draft_statement,
+// draft_summary, draft_generated_at, draft_confirmed_at) so the
+// Applications page can render each card's draft state without a second
+// round trip. Generation/editing/confirming happens through the dedicated
+// /api/applications/[id]/draft route, not here.
 
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -17,6 +23,8 @@ const createSchema = z.object({
 
 const SCHOLARSHIP_COLUMNS =
   'id, title, provider_name, description, amount, deadline, application_url, level, discipline, verified'
+
+const APPLICATION_COLUMNS = `id, status, notes, created_at, updated_at, draft_statement, draft_summary, draft_generated_at, draft_confirmed_at, scholarship:scholarships ( ${SCHOLARSHIP_COLUMNS} )`
 
 export async function GET() {
   const supabase = await createClient()
@@ -32,7 +40,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from('applications')
-    .select(`id, status, notes, created_at, updated_at, scholarship:scholarships ( ${SCHOLARSHIP_COLUMNS} )`)
+    .select(APPLICATION_COLUMNS)
     .eq('profile_id', user.id)
     .order('updated_at', { ascending: false })
 
@@ -68,7 +76,7 @@ export async function POST(request: Request) {
   const { data, error } = await supabase
     .from('applications')
     .insert({ profile_id: user.id, scholarship_id: parsed.data.scholarship_id })
-    .select(`id, status, notes, created_at, updated_at, scholarship:scholarships ( ${SCHOLARSHIP_COLUMNS} )`)
+    .select(APPLICATION_COLUMNS)
     .single()
 
   if (error) {
@@ -77,7 +85,7 @@ export async function POST(request: Request) {
     if (error.code === '23505') {
       const { data: existing } = await supabase
         .from('applications')
-        .select(`id, status, notes, created_at, updated_at, scholarship:scholarships ( ${SCHOLARSHIP_COLUMNS} )`)
+        .select(APPLICATION_COLUMNS)
         .eq('profile_id', user.id)
         .eq('scholarship_id', parsed.data.scholarship_id)
         .single()
