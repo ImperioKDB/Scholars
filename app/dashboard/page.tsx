@@ -1,5 +1,6 @@
 import { getCurrentUserAndProfile } from "@/lib/supabase/currentUser";
 import { getMatchesForCurrentUser } from "@/lib/matching/getMatches";
+import { computeProfileGaps } from "@/lib/matching/gaps";
 import { createClient } from "@/lib/supabase/server";
 import { DashboardClient } from "./DashboardClient";
 import type { CardScholarship } from "@/components/ScholarshipCard";
@@ -20,6 +21,10 @@ type SavedApiItem = {
 // app/dashboard/loading.tsx now renders as the real Suspense fallback
 // for exactly as long as this fetch takes, rather than a client-only
 // loading flag.
+//
+// Gap nudges (lib/matching/gaps.ts) are computed here, synchronously, from
+// the same `matches` array getMatchesForCurrentUser() already returned --
+// no extra query, just a pure aggregation over data already in memory.
 export default async function DashboardPage() {
   const { user, profile } = await getCurrentUserAndProfile();
 
@@ -45,6 +50,7 @@ export default async function DashboardPage() {
   ]);
 
   const saved = (savedResult.data ?? []) as unknown as SavedApiItem[];
+  const gaps = computeProfileGaps(matches);
 
   // profile_not_found is the normal state for a user who hasn't finished
   // onboarding -- not an error banner, just an empty-matches state.
@@ -60,6 +66,7 @@ export default async function DashboardPage() {
       initialProfileCompleteness={profileCompleteness}
       initialSaved={saved}
       initialError={loadError}
+      gaps={gaps}
     />
   );
 }
