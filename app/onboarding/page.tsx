@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/Logo";
 import { StepIndicator } from "@/components/StepIndicator";
@@ -26,6 +26,7 @@ const DISCIPLINE_COMBO_OPTIONS = DISCIPLINE_OPTIONS.map((d) => ({ value: d, labe
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
 
   const [step, setStep] = useState(0);
@@ -34,6 +35,18 @@ export default function OnboardingPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Nudge CTAs (dashboard gap banner, scholarship card "Update profile"
+  // links) can deep-link straight to the step that collects the field
+  // they're pointing at, e.g. /onboarding?step=2 for WAEC results,
+  // instead of dropping every visitor on step 0.
+  useEffect(() => {
+    const stepParam = Number(searchParams.get("step"));
+    if (!Number.isNaN(stepParam) && stepParam >= 0 && stepParam < STEPS.length) {
+      setStep(stepParam);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     async function loadExistingProfile() {
