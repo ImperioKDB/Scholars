@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
 import { MatchSeal } from "@/components/MatchSeal";
-import { BackLink } from "@/components/BackLink";
+import { DraftPanel, type Draft } from "@/components/DraftPanel";
 
 type RequirementStatus = "met" | "not_met" | "missing_data" | "unverifiable";
 
@@ -32,6 +33,14 @@ type ScholarshipDetail = {
 };
 
 type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected";
+
+// Tracked application including the auto-apply draft columns -- this page
+// now generates/reviews/confirms a draft directly, the same as the
+// Applications tab, so it needs the same shape.
+type TrackedApplication = Draft & {
+  id: string;
+  status: ApplicationStatus;
+};
 
 const TIER_LABELS: Record<ScholarshipDetail["tier"], string> = {
   excellent: "Excellent fit",
@@ -69,9 +78,11 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
 };
 
 // Receives everything it needs from the server component
-// (app/scholarships/[id]/page.tsx) -- no fetch-on-mount waterfall. Save
-// and track-application actions hit the existing /api/scholarships/save
-// and /api/applications routes, same ones the dashboard already uses.
+// (app/scholarships/[id]/page.tsx) -- no fetch-on-mount waterfall. Save,
+// track-application, and draft actions hit the existing
+// /api/scholarships/save, /api/applications, and
+// /api/applications/[id]/draft routes -- same ones the Applications tab
+// already uses.
 export function ScholarshipDetailClient({
   scholarship,
   initialSaved,
@@ -79,7 +90,7 @@ export function ScholarshipDetailClient({
 }: {
   scholarship: ScholarshipDetail;
   initialSaved: boolean;
-  initialApplication: { id: string; status: ApplicationStatus } | null;
+  initialApplication: TrackedApplication | null;
 }) {
   const router = useRouter();
   const [saved, setSaved] = useState(initialSaved);
@@ -99,7 +110,7 @@ export function ScholarshipDetailClient({
     setSavePending(true);
 
     const res = wasSaved
-      ? await fetch("/api/scholarships/save?scholarship_id=" + scholarship.id, { method: "DELETE" })
+      ? await fetch(`/api/scholarships/save?scholarship_id=${scholarship.id}`, { method: "DELETE" })
       : await fetch("/api/scholarships/save", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -125,7 +136,16 @@ export function ScholarshipDetailClient({
 
     if (res.ok) {
       const data = await res.json();
-      setApplication(data.application ?? { id: "", status: "in_progress" });
+      setApplication(
+        data.application ?? {
+          id: "",
+          status: "in_progress",
+          draft_statement: null,
+          draft_summary: null,
+          draft_generated_at: null,
+          draft_confirmed_at: null,
+        }
+      );
       router.refresh();
     } else {
       setActionError("Couldn't start tracking. Try again.");
@@ -133,9 +153,15 @@ export function ScholarshipDetailClient({
     setTrackPending(false);
   }
 
+  function handleDraftChange(updated: Draft) {
+    setApplication((prev) => (prev ? { ...prev, ...updated } : prev));
+  }
+
   return (
     <div>
-      <BackLink href="/dashboard" label="Back to matches" />
+      <Link href="/dashboard" className="text-sm text-navy-light hover:text-navy mb-6 inline-block">
+        &larr; Back to matches
+      </Link>
 
       <div className="bg-white rounded-2xl border border-hairline shadow-card p-6 md:p-8">
         <div className="flex items-start gap-4 mb-6">
@@ -151,7 +177,7 @@ export function ScholarshipDetailClient({
 
         <div className="flex flex-wrap items-center gap-2 mb-6">
           {days !== null && (
-            <span className={"text-xs font-mono font-medium px-2 py-1 rounded-full " + DEADLINE_TONE_CLASSES[deadlineTone(days)]}>
+            <span className={`text-xs font-mono font-medium px-2 py-1 rounded-full ${DEADLINE_TONE_CLASSES[deadlineTone(days)]}`}>
               {formatDeadlineLabel(days)}
             </span>
           )}
@@ -174,47 +200,69 @@ export function ScholarshipDetailClient({
 
         {actionError && <p className="text-sm text-rose mb-4">{actionError}</p>}
 
-        <div className="flex flex-wrap items-center gap-3 mb-8 pb-8 border-b border-hairline">
-          {scholarship.application_url && (
-            <a
-              href={scholarship.application_url}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors"
-            >
-              Apply on provider&apos;s site &rarr;
-            </a>
-          )}
+        <div className="pb-8 border-b border-hairline">
+          <div className="flex flex-wrap items-center gap-3">
+            {scholarship.application_url && (
+              <a
+                href={scholarship.application_url}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors"
+              >
+                Apply on provider&apos;s site &rarr;
+              </a>
+            )}
 
-          <button
-            type="button"
-            onClick={toggleSave}
-            disabled={savePending}
-            className={[
-              "rounded-seal text-sm font-medium px-5 py-2.5 border transition-colors disabled:opacity-60",
-              saved ? "border-emerald text-emerald bg-emerald-light" : "border-hairline text-navy-light hover:border-navy/40",
-            ].join(" ")}
-          >
-            {saved ? "Saved \u2713" : "Save"}
-          </button>
-
-          {application ? (
-            <span className="text-sm font-medium text-navy-light px-2">
-              Tracking &middot; {STATUS_LABELS[application.status]}
-            </span>
-          ) : (
             <button
               type="button"
-              onClick={startTracking}
-              disabled={trackPending}
-              className="rounded-seal text-sm font-medium px-5 py-2.5 border border-hairline text-navy-light hover:border-navy/40 transition-colors disabled:opacity-60"
+              onClick={toggleSave}
+              disabled={savePending}
+              className={[
+                "rounded-seal text-sm font-medium px-5 py-2.5 border transition-colors disabled:opacity-60",
+                saved ? "border-emerald text-emerald bg-emerald-light" : "border-hairline text-navy-light hover:border-navy/40",
+              ].join(" ")}
             >
-              {trackPending ? "Adding\u2026" : "+ Track application"}
+              {saved ? "Saved \u2713" : "Save"}
             </button>
+
+            {application ? (
+              <span className="text-sm font-medium text-navy-light px-2">
+                Tracking &middot; {STATUS_LABELS[application.status]}
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={startTracking}
+                disabled={trackPending}
+                className="rounded-seal text-sm font-medium px-5 py-2.5 border border-hairline text-navy-light hover:border-navy/40 transition-colors disabled:opacity-60"
+              >
+                {trackPending ? "Adding\u2026" : "+ Track application"}
+              </button>
+            )}
+          </div>
+
+          {/* Auto-apply lives here, not just on the Applications tab -- this
+              is the moment a student is actually deciding whether to act on
+              a match, so the draft assist should be one tap away right
+              here, not three taps away in a different tab. Only shown once
+              they're tracking this scholarship, since a draft needs an
+              application row to attach to. */}
+          {application && (
+            <DraftPanel
+              applicationId={application.id}
+              draft={{
+                draft_statement: application.draft_statement,
+                draft_summary: application.draft_summary,
+                draft_generated_at: application.draft_generated_at,
+                draft_confirmed_at: application.draft_confirmed_at,
+              }}
+              applicationUrl={scholarship.application_url}
+              onDraftChange={handleDraftChange}
+            />
           )}
         </div>
 
-        <div>
+        <div className="mt-8">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-display text-lg font-semibold text-navy">Eligibility requirements</h2>
             {totalCount > 0 && (
@@ -229,12 +277,12 @@ export function ScholarshipDetailClient({
           ) : (
             <ul className="space-y-3">
               {scholarship.requirements.map((r, i) => (
-                <li key={r.field + "-" + i} className="flex items-start justify-between gap-3 bg-navy-50 rounded-lg p-3.5">
+                <li key={`${r.field}-${i}`} className="flex items-start justify-between gap-3 bg-navy-50 rounded-lg p-3.5">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-ink">{r.requirement}</p>
                     <p className="text-xs text-navy-light mt-0.5">{r.detail}</p>
                   </div>
-                  <span className={"shrink-0 text-xs font-medium px-2 py-1 rounded-full " + REQ_STATUS_TONE[r.status]}>
+                  <span className={`shrink-0 text-xs font-medium px-2 py-1 rounded-full ${REQ_STATUS_TONE[r.status]}`}>
                     {REQ_STATUS_LABELS[r.status]}
                   </span>
                 </li>
