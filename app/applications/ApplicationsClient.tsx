@@ -6,10 +6,11 @@ import { ProviderMonogram } from "@/components/ProviderMonogram";
 import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
 import type { CardScholarship } from "@/components/ScholarshipCard";
 import { StatusDonut } from "@/components/StatusDonut";
+import { DraftPanel, type Draft } from "@/components/DraftPanel";
 
 type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected";
 
-type ApplicationApiItem = {
+type ApplicationApiItem = Draft & {
   id: string;
   status: ApplicationStatus;
   notes: string | null;
@@ -154,6 +155,10 @@ export function ApplicationsClient({
     });
   }
 
+  function handleDraftChange(applicationId: string, updated: Draft) {
+    setApplications((prev) => prev.map((a) => (a.id === applicationId ? { ...a, ...updated } : a)));
+  }
+
   return (
     <div>
       <div className="mb-8">
@@ -277,10 +282,46 @@ export function ApplicationsClient({
                       Open application →
                     </a>
                   )}
+
+                  <DraftPanel
+                    applicationId={a.id}
+                    draft={{
+                      draft_statement: a.draft_statement,
+                      draft_summary: a.draft_summary,
+                      draft_generated_at: a.draft_generated_at,
+                      draft_confirmed_at: a.draft_confirmed_at,
+                    }}
+                    applicationUrl={a.scholarship.application_url}
+                    onDraftChange={(updated) => handleDraftChange(a.id, updated)}
+                  />
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      <h2 id="saved" className="font-display text-lg font-semibold text-navy mb-5 scroll-mt-20">
+        Saved ({saved.length})
+      </h2>
+
+      {saved.length === 0 ? (
+        <div className="bg-white rounded-xl border border-hairline p-8 text-center">
+          <p className="text-sm text-navy-light">
+            Save scholarships from your matches above to track their deadlines here.
+          </p>
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-2 gap-4">
+          {saved.map((s) => (
+            <div key={s.scholarship.id} className="bg-white rounded-xl border border-hairline p-5 flex gap-4 shadow-card">
+              <ProviderMonogram name={s.scholarship.provider_name} size={52} />
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-ink leading-snug">{s.scholarship.title}</p>
+                <p className="text-xs text-navy-light mt-0.5">{s.scholarship.provider_name}</p>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
