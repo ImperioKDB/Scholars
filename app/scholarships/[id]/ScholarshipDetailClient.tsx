@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
 import { MatchSeal } from "@/components/MatchSeal";
+import { BackLink } from "@/components/BackLink";
 
 type RequirementStatus = "met" | "not_met" | "missing_data" | "unverifiable";
 
@@ -99,7 +99,7 @@ export function ScholarshipDetailClient({
     setSavePending(true);
 
     const res = wasSaved
-      ? await fetch(`/api/scholarships/save?scholarship_id=${scholarship.id}`, { method: "DELETE" })
+      ? await fetch("/api/scholarships/save?scholarship_id=" + scholarship.id, { method: "DELETE" })
       : await fetch("/api/scholarships/save", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -135,9 +135,7 @@ export function ScholarshipDetailClient({
 
   return (
     <div>
-      <Link href="/dashboard" className="text-sm text-navy-light hover:text-navy mb-6 inline-block">
-        &larr; Back to matches
-      </Link>
+      <BackLink href="/dashboard" label="Back to matches" />
 
       <div className="bg-white rounded-2xl border border-hairline shadow-card p-6 md:p-8">
         <div className="flex items-start gap-4 mb-6">
@@ -153,7 +151,7 @@ export function ScholarshipDetailClient({
 
         <div className="flex flex-wrap items-center gap-2 mb-6">
           {days !== null && (
-            <span className={`text-xs font-mono font-medium px-2 py-1 rounded-full ${DEADLINE_TONE_CLASSES[deadlineTone(days)]}`}>
+            <span className={"text-xs font-mono font-medium px-2 py-1 rounded-full " + DEADLINE_TONE_CLASSES[deadlineTone(days)]}>
               {formatDeadlineLabel(days)}
             </span>
           )}
@@ -231,12 +229,12 @@ export function ScholarshipDetailClient({
           ) : (
             <ul className="space-y-3">
               {scholarship.requirements.map((r, i) => (
-                <li key={`${r.field}-${i}`} className="flex items-start justify-between gap-3 bg-navy-50 rounded-lg p-3.5">
+                <li key={r.field + "-" + i} className="flex items-start justify-between gap-3 bg-navy-50 rounded-lg p-3.5">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-ink">{r.requirement}</p>
                     <p className="text-xs text-navy-light mt-0.5">{r.detail}</p>
                   </div>
-                  <span className={`shrink-0 text-xs font-medium px-2 py-1 rounded-full ${REQ_STATUS_TONE[r.status]}`}>
+                  <span className={"shrink-0 text-xs font-medium px-2 py-1 rounded-full " + REQ_STATUS_TONE[r.status]}>
                     {REQ_STATUS_LABELS[r.status]}
                   </span>
                 </li>
