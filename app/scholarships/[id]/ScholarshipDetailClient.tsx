@@ -1,11 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
 import { MatchSeal } from "@/components/MatchSeal";
-import { RequirementsList, type Requirement } from "@/components/RequirementsList";
+import { BackLink } from "@/components/BackLink";
+
+type RequirementStatus = "met" | "not_met" | "missing_data" | "unverifiable";
+
+type Requirement = {
+  field: string;
+  label: string;
+  status: RequirementStatus;
+  requirement: string;
+  detail: string;
+};
 
 type ScholarshipDetail = {
   id: string;
@@ -31,6 +40,20 @@ const TIER_LABELS: Record<ScholarshipDetail["tier"], string> = {
   unlikely: "Long shot",
 };
 
+const REQ_STATUS_LABELS: Record<RequirementStatus, string> = {
+  met: "Met",
+  not_met: "Not met",
+  missing_data: "Add this to your profile",
+  unverifiable: "Verify with provider",
+};
+
+const REQ_STATUS_TONE: Record<RequirementStatus, string> = {
+  met: "bg-emerald-light text-emerald",
+  not_met: "bg-rose-light text-rose",
+  missing_data: "bg-amber-light text-amber",
+  unverifiable: "bg-navy-50 text-navy-light",
+};
+
 const DEADLINE_TONE_CLASSES: Record<ReturnType<typeof deadlineTone>, string> = {
   closed: "bg-hairline text-navy-light",
   urgent: "bg-rose-light text-rose",
@@ -49,13 +72,6 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
 // (app/scholarships/[id]/page.tsx) -- no fetch-on-mount waterfall. Save
 // and track-application actions hit the existing /api/scholarships/save
 // and /api/applications routes, same ones the dashboard already uses.
-//
-// Eligibility requirements now render via RequirementsList
-// (components/RequirementsList.tsx) instead of a flat <ul> -- that
-// component groups by status (missing from profile / not met / met /
-// verify with provider) so the actionable group surfaces first, and
-// collapses long requirement strings (e.g. a 15-item discipline list)
-// behind a "Show all" toggle instead of always rendering them in full.
 export function ScholarshipDetailClient({
   scholarship,
   initialSaved,
@@ -73,6 +89,8 @@ export function ScholarshipDetailClient({
   const [actionError, setActionError] = useState<string | null>(null);
 
   const days = daysUntil(scholarship.deadline);
+  const metCount = scholarship.requirements.filter((r) => r.status === "met").length;
+  const totalCount = scholarship.requirements.filter((r) => r.status !== "unverifiable").length;
 
   async function toggleSave() {
     setActionError(null);
@@ -81,7 +99,7 @@ export function ScholarshipDetailClient({
     setSavePending(true);
 
     const res = wasSaved
-      ? await fetch(`/api/scholarships/save?scholarship_id=${scholarship.id}`, { method: "DELETE" })
+      ? await fetch("/api/scholarships/save?scholarship_id=" + scholarship.id, { method: "DELETE" })
       : await fetch("/api/scholarships/save", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -117,9 +135,7 @@ export function ScholarshipDetailClient({
 
   return (
     <div>
-      <Link href="/dashboard" className="text-sm text-navy-light hover:text-navy mb-6 inline-block">
-        &larr; Back to matches
-      </Link>
+      <BackLink href="/dashboard" label="Back to matches" />
 
       <div className="bg-white rounded-2xl border border-hairline shadow-card p-6 md:p-8">
         <div className="flex items-start gap-4 mb-6">
@@ -135,7 +151,7 @@ export function ScholarshipDetailClient({
 
         <div className="flex flex-wrap items-center gap-2 mb-6">
           {days !== null && (
-            <span className={`text-xs font-mono font-medium px-2 py-1 rounded-full ${DEADLINE_TONE_CLASSES[deadlineTone(days)]}`}>
+            <span className={"text-xs font-mono font-medium px-2 py-1 rounded-full " + DEADLINE_TONE_CLASSES[deadlineTone(days)]}>
               {formatDeadlineLabel(days)}
             </span>
           )}
@@ -199,8 +215,32 @@ export function ScholarshipDetailClient({
         </div>
 
         <div>
-          <h2 className="font-display text-lg font-semibold text-navy mb-4">Eligibility requirements</h2>
-          <RequirementsList requirements={scholarship.requirements} />
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-display text-lg font-semibold text-navy">Eligibility requirements</h2>
+            {totalCount > 0 && (
+              <p className="text-xs text-navy-light font-mono">{metCount}/{totalCount} met</p>
+            )}
+          </div>
+
+          {scholarship.requirements.length === 0 ? (
+            <p className="text-sm text-navy-light">
+              No specific requirements set for this scholarship yet -- everyone gets a neutral match score.
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {scholarship.requirements.map((r, i) => (
+                <li key={r.field + "-" + i} className="flex items-start justify-between gap-3 bg-navy-50 rounded-lg p-3.5">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-ink">{r.requirement}</p>
+                    <p className="text-xs text-navy-light mt-0.5">{r.detail}</p>
+                  </div>
+                  <span className={"shrink-0 text-xs font-medium px-2 py-1 rounded-full " + REQ_STATUS_TONE[r.status]}>
+                    {REQ_STATUS_LABELS[r.status]}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
     </div>
