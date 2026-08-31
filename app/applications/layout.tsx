@@ -1,5 +1,6 @@
 import { getCurrentUserAndProfile } from "@/lib/supabase/currentUser";
 import { Sidebar } from "@/components/Sidebar";
+import { AdeProvider } from "@/components/ade/AdeProvider";
 
 // Duplicates app/dashboard/layout.tsx rather than sharing via a route
 // group -- kept deliberately simple. Worth consolidating into a shared
@@ -18,7 +19,9 @@ export default async function ApplicationsLayout({ children }: { children: React
     <div className="min-h-screen bg-parchment">
       <Sidebar fullName={fullName} isAdmin={isAdmin} profileCompleteness={profileCompleteness} />
       <main className="md:pl-60">
-        <div className="mx-auto max-w-5xl px-6 pt-20 pb-10 md:pt-10">{children}</div>
+        <div className="mx-auto max-w-5xl px-6 pt-20 pb-10 md:pt-10">
+          <AdeProvider>{children}</AdeProvider>
+        </div>
       </main>
     </div>
   );
