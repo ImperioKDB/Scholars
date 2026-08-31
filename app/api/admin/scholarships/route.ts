@@ -12,13 +12,38 @@
 // but we also check profile.is_admin server-side before attempting the
 // mutation, so a non-admin gets a clear 403 instead of a confusing RLS
 // failure buried in a Postgres error.
+//
+// ruleSchema.field was stale until this fix -- it only accepted the
+// original 7 fields (including a since-dropped 'academic_level'), while
+// the admin UI (RuleBuilder.tsx, ADMIN_RULE_FIELDS in
+// lib/admin/scholarship.ts) already offered the full undergrad-pivot
+// field set. Submitting a rule on year_of_study, institution_type,
+// jamb_score, waec_credit_count, state_of_origin, lga_of_origin, age,
+// has_english_maths_credit, or disability_status through the real admin
+// form hit a 400 here. Enum now matches ADMIN_RULE_FIELDS exactly.
 
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 
 const ruleSchema = z.object({
-  field: z.enum(['gpa', 'nationality', 'gender', 'financial_need', 'academic_level', 'discipline', 'career_goals']),
+  field: z.enum([
+    'discipline',
+    'gpa',
+    'nationality',
+    'gender',
+    'financial_need',
+    'age',
+    'state_of_origin',
+    'lga_of_origin',
+    'year_of_study',
+    'institution_type',
+    'jamb_score',
+    'waec_credit_count',
+    'has_english_maths_credit',
+    'disability_status',
+    'career_goals',
+  ]),
   operator: z.enum(['eq', 'gte', 'lte', 'in', 'exists']),
   value: z.unknown(),
 })
