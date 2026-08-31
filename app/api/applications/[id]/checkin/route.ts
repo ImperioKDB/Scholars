@@ -8,6 +8,12 @@
 //     checkin_prompted_at so the same question doesn't resurface.
 //   { action: "snooze" } -- suppresses this application's check-in for 3
 //     days without changing its status. "Ask me later," not "never."
+//   { action: "not_open_yet" } -- the scholarship's own application portal
+//     isn't open yet, so there's nothing to report. Deliberately NOT a
+//     status write -- the student is still in_progress, just blocked on
+//     the provider. Modeled as a longer snooze (14 days) instead, so it
+//     doesn't corrupt StatusDonut counts or the cron's overdue-checkin
+//     query, both of which key off `status`.
 
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -15,10 +21,12 @@ import { createClient } from '@/lib/supabase/server'
 
 const STATUS_VALUES = ['in_progress', 'submitted', 'accepted', 'rejected'] as const
 const SNOOZE_DAYS = 3
+const NOT_OPEN_SNOOZE_DAYS = 14
 
 const bodySchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('answer'), status: z.enum(STATUS_VALUES) }),
   z.object({ action: z.literal('snooze') }),
+  z.object({ action: z.literal('not_open_yet') }),
 ])
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -45,6 +53,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   if (parsed.data.action === 'answer') {
     update.status = parsed.data.status
+  } else if (parsed.data.action === 'not_open_yet') {
+    const snoozeUntil = new Date(now)
+    snoozeUntil.setDate(snoozeUntil.getDate() + NOT_OPEN_SNOOZE_DAYS)
+    update.checkin_snoozed_until = snoozeUntil.toISOString()
   } else {
     const snoozeUntil = new Date(now)
     snoozeUntil.setDate(snoozeUntil.getDate() + SNOOZE_DAYS)
