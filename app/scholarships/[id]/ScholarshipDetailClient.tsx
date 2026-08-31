@@ -1,12 +1,10 @@
-
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
 import { MatchSeal } from "@/components/MatchSeal";
-import { useAde } from "@/components/ade/AdeProvider";
+import { BackLink } from "@/components/BackLink";
 
 type RequirementStatus = "met" | "not_met" | "missing_data" | "unverifiable";
 
@@ -74,14 +72,6 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
 // (app/scholarships/[id]/page.tsx) -- no fetch-on-mount waterfall. Save
 // and track-application actions hit the existing /api/scholarships/save
 // and /api/applications routes, same ones the dashboard already uses.
-//
-// The "Apply on provider's site" action goes through Ade
-// (useAde().confirmApply). Ade now owns the entire track-then-open flow,
-// including click-tracking and the actual window.open call -- this
-// component only supplies startTracking() as the onTrack callback. See
-// components/ade/AdeProvider.tsx for why (fixes a real about:blank bug
-// from the previous version, which tried to redirect a pre-opened tab
-// after an awaited request).
 export function ScholarshipDetailClient({
   scholarship,
   initialSaved,
@@ -92,7 +82,6 @@ export function ScholarshipDetailClient({
   initialApplication: { id: string; status: ApplicationStatus } | null;
 }) {
   const router = useRouter();
-  const ade = useAde();
   const [saved, setSaved] = useState(initialSaved);
   const [application, setApplication] = useState(initialApplication);
   const [savePending, setSavePending] = useState(false);
@@ -110,7 +99,7 @@ export function ScholarshipDetailClient({
     setSavePending(true);
 
     const res = wasSaved
-      ? await fetch(`/api/scholarships/save?scholarship_id=${scholarship.id}`, { method: "DELETE" })
+      ? await fetch("/api/scholarships/save?scholarship_id=" + scholarship.id, { method: "DELETE" })
       : await fetch("/api/scholarships/save", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -124,10 +113,7 @@ export function ScholarshipDetailClient({
     setSavePending(false);
   }
 
-  // Returns the new/updated application (or null on failure) so Ade's
-  // apply-guard flow can grab the id it needs to record a click, without
-  // this component needing to know anything about tabs or popups.
-  async function startTracking(): Promise<{ id: string; status: ApplicationStatus } | null> {
+  async function startTracking() {
     setActionError(null);
     setTrackPending(true);
 
@@ -137,40 +123,19 @@ export function ScholarshipDetailClient({
       body: JSON.stringify({ scholarship_id: scholarship.id }),
     });
 
-    setTrackPending(false);
-
     if (res.ok) {
       const data = await res.json();
-      const newApp = data.application ?? { id: "", status: "in_progress" };
-      setApplication(newApp);
+      setApplication(data.application ?? { id: "", status: "in_progress" });
       router.refresh();
-      return newApp as { id: string; status: ApplicationStatus };
+    } else {
+      setActionError("Couldn't start tracking. Try again.");
     }
-
-    setActionError("Couldn't start tracking. Try again.");
-    return null;
-  }
-
-  function handleApplyClick() {
-    if (!scholarship.application_url) return;
-
-    ade.confirmApply({
-      scholarshipTitle: scholarship.title,
-      applicationUrl: scholarship.application_url,
-      alreadyTracked: Boolean(application),
-      applicationId: application?.id,
-      onTrack: async () => {
-        const newApp = await startTracking();
-        return newApp?.id ? { id: newApp.id } : null;
-      },
-    });
+    setTrackPending(false);
   }
 
   return (
     <div>
-      <Link href="/dashboard" className="text-sm text-navy-light hover:text-navy mb-6 inline-block">
-        &larr; Back to matches
-      </Link>
+      <BackLink href="/dashboard" label="Back to matches" />
 
       <div className="bg-white rounded-2xl border border-hairline shadow-card p-6 md:p-8">
         <div className="flex items-start gap-4 mb-6">
@@ -186,7 +151,7 @@ export function ScholarshipDetailClient({
 
         <div className="flex flex-wrap items-center gap-2 mb-6">
           {days !== null && (
-            <span className={`text-xs font-mono font-medium px-2 py-1 rounded-full ${DEADLINE_TONE_CLASSES[deadlineTone(days)]}`}>
+            <span className={"text-xs font-mono font-medium px-2 py-1 rounded-full " + DEADLINE_TONE_CLASSES[deadlineTone(days)]}>
               {formatDeadlineLabel(days)}
             </span>
           )}
@@ -211,14 +176,14 @@ export function ScholarshipDetailClient({
 
         <div className="flex flex-wrap items-center gap-3 mb-8 pb-8 border-b border-hairline">
           {scholarship.application_url && (
-            <button
-              type="button"
-              onClick={handleApplyClick}
-              disabled={trackPending}
-              className="rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60"
+            <a
+              href={scholarship.application_url}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors"
             >
               Apply on provider&apos;s site &rarr;
-            </button>
+            </a>
           )}
 
           <button
@@ -240,7 +205,7 @@ export function ScholarshipDetailClient({
           ) : (
             <button
               type="button"
-              onClick={() => startTracking()}
+              onClick={startTracking}
               disabled={trackPending}
               className="rounded-seal text-sm font-medium px-5 py-2.5 border border-hairline text-navy-light hover:border-navy/40 transition-colors disabled:opacity-60"
             >
@@ -264,12 +229,12 @@ export function ScholarshipDetailClient({
           ) : (
             <ul className="space-y-3">
               {scholarship.requirements.map((r, i) => (
-                <li key={`${r.field}-${i}`} className="flex items-start justify-between gap-3 bg-navy-50 rounded-lg p-3.5">
+                <li key={r.field + "-" + i} className="flex items-start justify-between gap-3 bg-navy-50 rounded-lg p-3.5">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-ink">{r.requirement}</p>
                     <p className="text-xs text-navy-light mt-0.5">{r.detail}</p>
                   </div>
-                  <span className={`shrink-0 text-xs font-medium px-2 py-1 rounded-full ${REQ_STATUS_TONE[r.status]}`}>
+                  <span className={"shrink-0 text-xs font-medium px-2 py-1 rounded-full " + REQ_STATUS_TONE[r.status]}>
                     {REQ_STATUS_LABELS[r.status]}
                   </span>
                 </li>
