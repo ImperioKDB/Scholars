@@ -6,13 +6,33 @@
 // /api/admin/scholarships/[id]/rules/[ruleId] and POST new ones, rather
 // than a "replace all" endpoint — keeps each operation small and auditable
 // rather than one call silently wiping and rebuilding a rule set.
+//
+// ruleSchema.field widened to match ADMIN_RULE_FIELDS in
+// lib/admin/scholarship.ts -- see app/api/admin/scholarships/route.ts for
+// the full note on why this was stale.
 
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 
 const ruleSchema = z.object({
-  field: z.enum(['gpa', 'nationality', 'gender', 'financial_need', 'academic_level', 'discipline', 'career_goals']),
+  field: z.enum([
+    'discipline',
+    'gpa',
+    'nationality',
+    'gender',
+    'financial_need',
+    'age',
+    'state_of_origin',
+    'lga_of_origin',
+    'year_of_study',
+    'institution_type',
+    'jamb_score',
+    'waec_credit_count',
+    'has_english_maths_credit',
+    'disability_status',
+    'career_goals',
+  ]),
   operator: z.enum(['eq', 'gte', 'lte', 'in', 'exists']),
   value: z.unknown(),
 })
