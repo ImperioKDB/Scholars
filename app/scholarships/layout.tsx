@@ -1,5 +1,6 @@
 import { getCurrentUserAndProfile } from "@/lib/supabase/currentUser";
 import { Sidebar } from "@/components/Sidebar";
+import { AdeProvider } from "@/components/ade/AdeProvider";
 
 // Mirrors app/dashboard/layout.tsx and app/applications/layout.tsx.
 // Worth consolidating all three into a shared app/(app)/layout.tsx at
@@ -16,7 +17,9 @@ export default async function ScholarshipsLayout({ children }: { children: React
     <div className="min-h-screen bg-parchment">
       <Sidebar fullName={fullName} isAdmin={isAdmin} profileCompleteness={profileCompleteness} />
       <main className="md:pl-60">
-        <div className="mx-auto max-w-3xl px-6 pt-20 pb-10 md:pt-10">{children}</div>
+        <div className="mx-auto max-w-3xl px-6 pt-20 pb-10 md:pt-10">
+          <AdeProvider>{children}</AdeProvider>
+        </div>
       </main>
     </div>
   );
