@@ -1,14 +1,14 @@
-"use client";
+\"use client\";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { ProviderMonogram } from "@/components/ProviderMonogram";
-import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
-import type { CardScholarship } from "@/components/ScholarshipCard";
-import { StatusDonut } from "@/components/StatusDonut";
-import { DraftPanel, type Draft } from "@/components/DraftPanel";
+import { useMemo, useState } from \"react\";
+import { useRouter } from \"next/navigation\";
+import { ProviderMonogram } from \"@/components/ProviderMonogram\";
+import { daysUntil, deadlineTone, formatDeadlineLabel } from \"@/lib/dates\";
+import type { CardScholarship } from \"@/components/ScholarshipCard\";
+import { StatusDonut } from \"@/components/StatusDonut\";
+import { DraftPanel, type Draft } from \"@/components/DraftPanel\";
 
-type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected";
+type ApplicationStatus = \"in_progress\" | \"submitted\" | \"accepted\" | \"rejected\";
 
 type ApplicationApiItem = Draft & {
   id: string;
@@ -26,24 +26,24 @@ type SavedApiItem = {
 };
 
 const STATUS_LABELS: Record<ApplicationStatus, string> = {
-  in_progress: "In progress",
-  submitted: "Submitted",
-  accepted: "Accepted",
-  rejected: "Rejected",
+  in_progress: \"In progress\",
+  submitted: \"Submitted\",
+  accepted: \"Accepted\",
+  rejected: \"Rejected\",
 };
 
 const STATUS_TONE: Record<ApplicationStatus, string> = {
-  in_progress: "bg-amber-light text-amber",
-  submitted: "bg-navy-50 text-navy",
-  accepted: "bg-emerald-light text-emerald",
-  rejected: "bg-rose-light text-rose",
+  in_progress: \"bg-amber-light text-amber\",
+  submitted: \"bg-navy-50 text-navy\",
+  accepted: \"bg-emerald-light text-emerald\",
+  rejected: \"bg-rose-light text-rose\",
 };
 
 const DEADLINE_TONE_CLASSES: Record<ReturnType<typeof deadlineTone>, string> = {
-  closed: "bg-hairline text-navy-light",
-  urgent: "bg-rose-light text-rose",
-  soon: "bg-amber-light text-amber",
-  later: "bg-navy-50 text-navy-light",
+  closed: \"bg-hairline text-navy-light\",
+  urgent: \"bg-rose-light text-rose\",
+  soon: \"bg-amber-light text-amber\",
+  later: \"bg-navy-50 text-navy-light\",
 };
 
 // Receives initial data from the server component (app/applications/page.tsx)
@@ -51,6 +51,12 @@ const DEADLINE_TONE_CLASSES: Record<ReturnType<typeof deadlineTone>, string> = {
 // after mutations (start/stop tracking, a failed status update), which is
 // a normal user-triggered network call via the existing API routes, not
 // part of first paint.
+//
+// \"Open application\" is now a button, not a plain <a>: opening the URL and
+// recording the click (POST /api/applications/[id]/click, fire-and-forget)
+// both happen synchronously in the same click handler, since the
+// application here is always already tracked -- no Ade track-first prompt
+// needed, unlike the scholarship detail page.
 export function ApplicationsClient({
   initialApplications,
   initialSaved,
@@ -71,12 +77,12 @@ export function ApplicationsClient({
     setLoadError(null);
 
     const [appsRes, savedRes] = await Promise.all([
-      fetch("/api/applications"),
-      fetch("/api/scholarships/save"),
+      fetch(\"/api/applications\"),
+      fetch(\"/api/scholarships/save\"),
     ]);
 
     if (!appsRes.ok) {
-      setLoadError("Couldn't load your applications. Try refreshing.");
+      setLoadError(\"Couldn't load your applications. Try refreshing.\");
       return;
     }
 
@@ -107,9 +113,9 @@ export function ApplicationsClient({
 
   async function startTracking(scholarshipId: string) {
     setPendingIds((p) => new Set(p).add(scholarshipId));
-    const res = await fetch("/api/applications", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    const res = await fetch(\"/api/applications\", {
+      method: \"POST\",
+      headers: { \"Content-Type\": \"application/json\" },
       body: JSON.stringify({ scholarship_id: scholarshipId }),
     });
     if (res.ok) await load();
@@ -125,8 +131,8 @@ export function ApplicationsClient({
     setApplications((prev) => prev.map((a) => (a.id === applicationId ? { ...a, status } : a)));
 
     const res = await fetch(`/api/applications/${applicationId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      method: \"PATCH\",
+      headers: { \"Content-Type\": \"application/json\" },
       body: JSON.stringify({ status }),
     });
 
@@ -140,12 +146,12 @@ export function ApplicationsClient({
   }
 
   async function stopTracking(applicationId: string) {
-    if (!confirm("Stop tracking this application?")) return;
+    if (!confirm(\"Stop tracking this application?\")) return;
     setPendingIds((p) => new Set(p).add(applicationId));
     const prev = applications;
     setApplications((cur) => cur.filter((a) => a.id !== applicationId));
 
-    const res = await fetch(`/api/applications/${applicationId}`, { method: "DELETE" });
+    const res = await fetch(`/api/applications/${applicationId}`, { method: \"DELETE\" });
     if (!res.ok) setApplications(prev);
 
     setPendingIds((p) => {
@@ -159,29 +165,34 @@ export function ApplicationsClient({
     setApplications((prev) => prev.map((a) => (a.id === applicationId ? { ...a, ...updated } : a)));
   }
 
+  function openApplication(applicationId: string, applicationUrl: string) {
+    fetch(`/api/applications/${applicationId}/click`, { method: \"POST\" }).catch(() => {});
+    window.open(applicationUrl, \"_blank\", \"noreferrer\");
+  }
+
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="font-display text-2xl font-semibold text-navy">Applications</h1>
-        <p className="text-sm text-navy-light mt-1 mb-6">
-          {applications.length} scholarship{applications.length === 1 ? "" : "s"} you&apos;re tracking.
+      <div className=\"mb-8\">
+        <h1 className=\"font-display text-2xl font-semibold text-navy\">Applications</h1>
+        <p className=\"text-sm text-navy-light mt-1 mb-6\">
+          {applications.length} scholarship{applications.length === 1 ? \"\" : \"s\"} you&apos;re tracking.
         </p>
 
-        <div className="bg-white rounded-xl border border-hairline p-5">
+        <div className=\"bg-white rounded-xl border border-hairline p-5\">
           <StatusDonut counts={counts} />
         </div>
       </div>
 
       {loadError && (
-        <p className="text-sm text-rose mb-6">
-          {loadError}{" "}
+        <p className=\"text-sm text-rose mb-6\">
+          {loadError}{\" \"}
           <button
-            type="button"
+            type=\"button\"
             onClick={() => {
               setLoadError(null);
               router.refresh();
             }}
-            className="font-medium underline"
+            className=\"font-medium underline\"
           >
             Try again
           </button>
@@ -189,22 +200,22 @@ export function ApplicationsClient({
       )}
 
       {untrackedSaved.length > 0 && (
-        <div className="mb-10">
-          <h2 className="font-display text-lg font-semibold text-navy mb-3">Start tracking</h2>
-          <p className="text-sm text-navy-light mb-4">Scholarships you&apos;ve saved but aren&apos;t tracking yet.</p>
-          <div className="grid md:grid-cols-2 gap-4">
+        <div className=\"mb-10\">
+          <h2 className=\"font-display text-lg font-semibold text-navy mb-3\">Start tracking</h2>
+          <p className=\"text-sm text-navy-light mb-4\">Scholarships you&apos;ve saved but aren&apos;t tracking yet.</p>
+          <div className=\"grid md:grid-cols-2 gap-4\">
             {untrackedSaved.map((s) => (
-              <div key={s.scholarship.id} className="bg-white rounded-xl border border-hairline p-4 flex items-center gap-3">
+              <div key={s.scholarship.id} className=\"bg-white rounded-xl border border-hairline p-4 flex items-center gap-3\">
                 <ProviderMonogram name={s.scholarship.provider_name} size={40} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-ink truncate">{s.scholarship.title}</p>
-                  <p className="text-xs text-navy-light">{s.scholarship.provider_name}</p>
+                <div className=\"min-w-0 flex-1\">
+                  <p className=\"text-sm font-medium text-ink truncate\">{s.scholarship.title}</p>
+                  <p className=\"text-xs text-navy-light\">{s.scholarship.provider_name}</p>
                 </div>
                 <button
-                  type="button"
+                  type=\"button\"
                   onClick={() => startTracking(s.scholarship.id)}
                   disabled={pendingIds.has(s.scholarship.id)}
-                  className="shrink-0 text-xs font-medium text-white bg-navy rounded-full px-3 py-1.5 hover:bg-navy-light transition-colors disabled:opacity-50"
+                  className=\"shrink-0 text-xs font-medium text-white bg-navy rounded-full px-3 py-1.5 hover:bg-navy-light transition-colors disabled:opacity-50\"
                 >
                   + Track
                 </button>
@@ -214,38 +225,38 @@ export function ApplicationsClient({
         </div>
       )}
 
-      <h2 className="font-display text-lg font-semibold text-navy mb-5">Tracked applications</h2>
+      <h2 className=\"font-display text-lg font-semibold text-navy mb-5\">Tracked applications</h2>
 
       {applications.length === 0 ? (
-        <div className="bg-white rounded-xl border border-hairline p-8 text-center">
-          <p className="text-sm text-navy-light">
+        <div className=\"bg-white rounded-xl border border-hairline p-8 text-center\">
+          <p className=\"text-sm text-navy-light\">
             Nothing tracked yet. Save a scholarship from your matches, then start tracking it here.
           </p>
         </div>
       ) : (
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className=\"grid md:grid-cols-2 gap-4\">
           {applications.map((a) => {
             const days = daysUntil(a.scholarship.deadline);
             return (
-              <div key={a.id} className="bg-white rounded-xl border border-hairline p-5 flex gap-4 shadow-card">
+              <div key={a.id} className=\"bg-white rounded-xl border border-hairline p-5 flex gap-4 shadow-card\">
                 <ProviderMonogram name={a.scholarship.provider_name} size={52} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-medium text-ink leading-snug">{a.scholarship.title}</p>
-                      <p className="text-xs text-navy-light mt-0.5">{a.scholarship.provider_name}</p>
+                <div className=\"min-w-0 flex-1\">
+                  <div className=\"flex items-start justify-between gap-3\">
+                    <div className=\"min-w-0\">
+                      <p className=\"font-medium text-ink leading-snug\">{a.scholarship.title}</p>
+                      <p className=\"text-xs text-navy-light mt-0.5\">{a.scholarship.provider_name}</p>
                     </div>
                     <button
-                      type="button"
+                      type=\"button\"
                       onClick={() => stopTracking(a.id)}
                       disabled={pendingIds.has(a.id)}
-                      className="shrink-0 text-xs text-navy-light hover:text-rose disabled:opacity-50"
+                      className=\"shrink-0 text-xs text-navy-light hover:text-rose disabled:opacity-50\"
                     >
                       Remove
                     </button>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 mt-3">
+                  <div className=\"flex flex-wrap items-center gap-2 mt-3\">
                     {days !== null && (
                       <span className={`text-xs font-mono font-medium px-2 py-1 rounded-full ${DEADLINE_TONE_CLASSES[deadlineTone(days)]}`}>
                         {formatDeadlineLabel(days)}
@@ -256,13 +267,13 @@ export function ApplicationsClient({
                     </span>
                   </div>
 
-                  <label className="block mt-3">
-                    <span className="sr-only">Status</span>
+                  <label className=\"block mt-3\">
+                    <span className=\"sr-only\">Status</span>
                     <select
                       value={a.status}
                       onChange={(e) => updateStatus(a.id, e.target.value as ApplicationStatus)}
                       disabled={pendingIds.has(a.id)}
-                      className="text-sm rounded-lg border border-hairline bg-white px-3 py-2 disabled:opacity-50"
+                      className=\"text-sm rounded-lg border border-hairline bg-white px-3 py-2 disabled:opacity-50\"
                     >
                       {(Object.keys(STATUS_LABELS) as ApplicationStatus[]).map((s) => (
                         <option key={s} value={s}>
@@ -273,14 +284,13 @@ export function ApplicationsClient({
                   </label>
 
                   {a.scholarship.application_url && (
-                    <a
-                      href={a.scholarship.application_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-block text-xs font-medium text-navy hover:underline mt-3"
+                    <button
+                      type=\"button\"
+                      onClick={() => openApplication(a.id, a.scholarship.application_url as string)}
+                      className=\"inline-block text-xs font-medium text-navy hover:underline mt-3\"
                     >
-                      Open application →
-                    </a>
+                      Open application &rarr;
+                    </button>
                   )}
 
                   <DraftPanel
@@ -301,24 +311,24 @@ export function ApplicationsClient({
         </div>
       )}
 
-      <h2 id="saved" className="font-display text-lg font-semibold text-navy mb-5 scroll-mt-20">
+      <h2 id=\"saved\" className=\"font-display text-lg font-semibold text-navy mb-5 scroll-mt-20\">
         Saved ({saved.length})
       </h2>
 
       {saved.length === 0 ? (
-        <div className="bg-white rounded-xl border border-hairline p-8 text-center">
-          <p className="text-sm text-navy-light">
+        <div className=\"bg-white rounded-xl border border-hairline p-8 text-center\">
+          <p className=\"text-sm text-navy-light\">
             Save scholarships from your matches above to track their deadlines here.
           </p>
         </div>
       ) : (
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className=\"grid md:grid-cols-2 gap-4\">
           {saved.map((s) => (
-            <div key={s.scholarship.id} className="bg-white rounded-xl border border-hairline p-5 flex gap-4 shadow-card">
+            <div key={s.scholarship.id} className=\"bg-white rounded-xl border border-hairline p-5 flex gap-4 shadow-card\">
               <ProviderMonogram name={s.scholarship.provider_name} size={52} />
-              <div className="min-w-0 flex-1">
-                <p className="font-medium text-ink leading-snug">{s.scholarship.title}</p>
-                <p className="text-xs text-navy-light mt-0.5">{s.scholarship.provider_name}</p>
+              <div className=\"min-w-0 flex-1\">
+                <p className=\"font-medium text-ink leading-snug\">{s.scholarship.title}</p>
+                <p className=\"text-xs text-navy-light mt-0.5\">{s.scholarship.provider_name}</p>
               </div>
             </div>
           ))}
