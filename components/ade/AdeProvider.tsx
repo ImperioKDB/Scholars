@@ -14,13 +14,28 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 // ALWAYS VISIBLE as a small round avatar button, bottom-right. Tapping it
 // toggles an expanded panel open/closed at any time.
 //
+// ATTENTION SHAKE: when a genuinely new passive check-in prompt shows up
+// (not a repeat poll hit for a prompt already surfaced), the avatar plays
+// a brief rotation shake (see .ade-attention in app/globals.css) and, on
+// browsers that support it, fires navigator.vibrate(). vibrate() is
+// Android-Chrome-only and frequently gated behind an active user gesture
+// by the browser itself -- it's a best-effort bonus, never the mechanism
+// users actually rely on. The shake is. lastSeenPromptIdRef gates this so
+// re-polling the same unanswered prompt doesn't re-shake every interval.
+// Note this ref resets on remount, and AdeProvider remounts per
+// authenticated layout (dashboard/applications/scholarships each have
+// their own instance) -- a user bouncing between sections can see one
+// re-shake for a prompt they'd already seen elsewhere. Acceptable for now;
+// fix is persisting seen ids to localStorage if it becomes annoying.
+//
 // AUTO-OPEN RULES (deliberately asymmetric):
 //   - Passive check-in prompts (from polling /api/mascot/next-prompt) do
-//     NOT auto-open the panel -- they only light up the badge dot. These
-//     arrive unprompted and can land while the user is mid-read on a page
-//     (e.g. the eligibility requirements list), so popping over content
-//     uninvited is a dialog-level interruption for something that should
-//     behave like a dismissible banner. A tap opens it.
+//     NOT auto-open the panel -- they only light up the badge dot (and now
+//     the attention shake). These arrive unprompted and can land while the
+//     user is mid-read on a page (e.g. the eligibility requirements list),
+//     so popping over content uninvited is a dialog-level interruption for
+//     something that should behave like a dismissible banner. A tap opens
+//     it.
 //   - The apply-guard prompt (from confirmApply, fired the instant the
 //     user clicks "Apply on provider's site") DOES auto-open -- it's a
 //     direct response to something the user just did, not an ambient
@@ -119,6 +134,9 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
   const [trackError, setTrackError] = useState<string | null>(null);
   const dismissedRef = useRef<Set<string>>(new Set());
   const pollingRef = useRef(false);
+  const lastSeenPromptIdRef = useRef<string | null>(null);
+  const [attention, setAttention] = useState(false);
+  const attentionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pollNextPrompt = useCallback(async () => {
     if (pollingRef.current) return;
@@ -130,6 +148,17 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
         if (prompt && !dismissedRef.current.has(prompt.applicationId)) {
           // Deliberately does NOT setOpen(true) -- see AUTO-OPEN RULES above.
           setPassivePrompt({ kind: "checkin", ...prompt });
+
+          if (lastSeenPromptIdRef.current !== prompt.applicationId) {
+            lastSeenPromptIdRef.current = prompt.applicationId;
+            setAttention(true);
+            if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+              // Best-effort only -- see file header note.
+              navigator.vibrate([120, 60, 120]);
+            }
+            if (attentionTimeoutRef.current) clearTimeout(attentionTimeoutRef.current);
+            attentionTimeoutRef.current = setTimeout(() => setAttention(false), 2000);
+          }
         }
       }
     } catch {
@@ -147,6 +176,12 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [pollNextPrompt]);
+
+  useEffect(() => {
+    return () => {
+      if (attentionTimeoutRef.current) clearTimeout(attentionTimeoutRef.current);
+    };
+  }, []);
 
   async function answerCheckin(applicationId: string, status: "submitted" | "in_progress" | "rejected") {
     setSubmitting(true);
@@ -166,6 +201,18 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "snooze" }),
+    }).catch(() => {});
+    setSubmitting(false);
+    dismissedRef.current.add(applicationId);
+    setPassivePrompt(null);
+  }
+
+  async function markNotOpenYet(applicationId: string) {
+    setSubmitting(true);
+    await fetch(`/api/applications/${applicationId}/checkin`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "not_open_yet" }),
     }).catch(() => {});
     setSubmitting(false);
     dismissedRef.current.add(applicationId);
@@ -324,6 +371,14 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                           {opt.label}
                         </button>
                       ))}
+                      <button
+                        type="button"
+                        disabled={submitting}
+                        onClick={() => markNotOpenYet(prompt.applicationId)}
+                        className="text-xs font-medium text-navy-light border border-hairline rounded-full px-3 py-1.5 hover:border-navy/40 hover:text-navy transition-colors disabled:opacity-50"
+                      >
+                        Portal not open yet
+                      </button>
                     </div>
                     <button
                       type="button"
@@ -353,9 +408,15 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
 
         <button
           type="button"
-          onClick={() => setOpen((o) => !o)}
+          onClick={() => {
+            setOpen((o) => !o);
+            setAttention(false);
+          }}
           aria-label={open ? "Close Ade" : "Open Ade"}
-          className="relative w-14 h-14 rounded-full shadow-card border border-hairline bg-white flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+          className={[
+            "relative w-14 h-14 rounded-full shadow-card border border-hairline bg-white flex items-center justify-center hover:scale-105 active:scale-95 transition-transform",
+            attention ? "ade-attention" : "",
+          ].join(" ")}
         >
           <AdeAvatar size={40} />
           {hasPending && !open && (
