@@ -1,5 +1,6 @@
 import { getCurrentUserAndProfile } from "@/lib/supabase/currentUser";
 import { Sidebar } from "@/components/Sidebar";
+import { AdeProvider } from "@/components/ade/AdeProvider";
 
 // middleware.ts already redirects unauthenticated requests to /login for
 // everything under /dashboard, so `user` here is expected to be present.
@@ -21,7 +22,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <Sidebar fullName={fullName} isAdmin={isAdmin} profileCompleteness={profileCompleteness} />
       {/* pt-20 clears the fixed mobile top bar; md:pl-60 clears the fixed desktop rail */}
       <main className="md:pl-60">
-        <div className="mx-auto max-w-5xl px-6 pt-20 pb-10 md:pt-10">{children}</div>
+        <div className="mx-auto max-w-5xl px-6 pt-20 pb-10 md:pt-10">
+          <AdeProvider>{children}</AdeProvider>
+        </div>
       </main>
     </div>
   );
