@@ -11,21 +11,30 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 // trigger a prompt via useAde(), while a single floating avatar owns the
 // UI so two prompts never stack on screen at once.
 //
-// ALWAYS VISIBLE as a small round avatar button, bottom-right -- this is
-// the fix for Ade being invisible on pages with nothing to ask about.
-// Tapping it toggles an expanded panel open/closed at any time. It opens
-// itself automatically the moment a real prompt exists (a check-in
-// question, or an apply-guard question), and shows a quiet dot badge if
-// closed with something pending. With nothing pending, opening it shows a
-// short idle message instead of nothing.
+// ALWAYS VISIBLE as a small round avatar button, bottom-right. Tapping it
+// toggles an expanded panel open/closed at any time.
 //
-// Two ways a prompt appears:
-//   1. Passive: on mount + on window focus, polls /api/mascot/next-prompt
-//      for a pending check-in (clicked-but-unanswered, or
-//      deadline-passed-still-in-progress).
-//   2. Active: a page calls confirmApply() right before sending someone to
-//      a provider's site for a scholarship they haven't tracked yet.
-// Active always takes priority over passive.
+// AUTO-OPEN RULES (deliberately asymmetric):
+//   - Passive check-in prompts (from polling /api/mascot/next-prompt) do
+//     NOT auto-open the panel -- they only light up the badge dot. These
+//     arrive unprompted and can land while the user is mid-read on a page
+//     (e.g. the eligibility requirements list), so popping over content
+//     uninvited is a dialog-level interruption for something that should
+//     behave like a dismissible banner. A tap opens it.
+//   - The apply-guard prompt (from confirmApply, fired the instant the
+//     user clicks "Apply on provider's site") DOES auto-open -- it's a
+//     direct response to something the user just did, not an ambient
+//     interruption, so showing it immediately is expected here.
+//
+// TRACK-THEN-OPEN FLOW (fixes the about:blank bug): the old approach
+// opened a blank tab synchronously, then tried to set its location after
+// an awaited tracking request finished -- mobile Chrome doesn't reliably
+// allow that deferred redirect, leaving a dead about:blank tab. The fix:
+// never pre-open a tab. Track first (shown as a loading state in the
+// panel), then render a fresh "Continue to application" button. Opening
+// the real tab happens on that brand-new, fully synchronous click -- no
+// popup blocker can intervene because there's no await between the click
+// and the window.open call.
 
 type CheckinReason = "clicked" | "deadline_passed";
 
@@ -39,17 +48,26 @@ type CheckinPrompt = {
 type ApplyGuardPrompt = {
   kind: "apply_guard";
   scholarshipTitle: string;
-  onTrack: () => void;
-  onJustGo: () => void;
+  applicationUrl: string;
+  onTrack: () => Promise<{ id: string } | null>;
 };
 
-type AdePromptState = CheckinPrompt | ApplyGuardPrompt | null;
+type ReadyToOpenPrompt = {
+  kind: "ready_to_open";
+  scholarshipTitle: string;
+  applicationUrl: string;
+  applicationId: string;
+};
+
+type ActivePrompt = ApplyGuardPrompt | ReadyToOpenPrompt;
+type AdePromptState = ActivePrompt | CheckinPrompt | null;
 
 type ConfirmApplyArgs = {
   scholarshipTitle: string;
+  applicationUrl: string;
   alreadyTracked: boolean;
-  onProceed: () => void;
-  onTrackThenProceed: () => void;
+  applicationId?: string;
+  onTrack: () => Promise<{ id: string } | null>;
 };
 
 type AdeContextValue = {
@@ -61,8 +79,13 @@ const AdeContext = createContext<AdeContextValue | null>(null);
 export function useAde(): AdeContextValue {
   const ctx = useContext(AdeContext);
   if (!ctx) {
-    // Pages outside an Ade-wrapped layout still work -- just no guard/nudge.
-    return { confirmApply: ({ onProceed }) => onProceed() };
+    // Pages outside an Ade-wrapped layout still work -- just no guard/nudge,
+    // straight through to the provider's site.
+    return {
+      confirmApply: (args) => {
+        window.open(args.applicationUrl, "_blank", "noreferrer");
+      },
+    };
   }
   return ctx;
 }
@@ -89,9 +112,11 @@ function AdeAvatar({ size = 36 }: { size?: number }) {
 
 export function AdeProvider({ children }: { children: React.ReactNode }) {
   const [passivePrompt, setPassivePrompt] = useState<CheckinPrompt | null>(null);
-  const [activePrompt, setActivePrompt] = useState<ApplyGuardPrompt | null>(null);
+  const [activePrompt, setActivePrompt] = useState<ActivePrompt | null>(null);
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [trackingInFlight, setTrackingInFlight] = useState(false);
+  const [trackError, setTrackError] = useState<string | null>(null);
   const dismissedRef = useRef<Set<string>>(new Set());
   const pollingRef = useRef(false);
 
@@ -103,8 +128,8 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
       if (res.ok) {
         const { prompt } = await res.json();
         if (prompt && !dismissedRef.current.has(prompt.applicationId)) {
+          // Deliberately does NOT setOpen(true) -- see AUTO-OPEN RULES above.
           setPassivePrompt({ kind: "checkin", ...prompt });
-          setOpen(true);
         }
       }
     } catch {
@@ -147,28 +172,61 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
     setPassivePrompt(null);
   }
 
-  const confirmApply = useCallback(
-    ({ scholarshipTitle, alreadyTracked, onProceed, onTrackThenProceed }: ConfirmApplyArgs) => {
-      if (alreadyTracked) {
-        onProceed();
-        return;
+  const confirmApply = useCallback((args: ConfirmApplyArgs) => {
+    if (args.alreadyTracked) {
+      // Already tracked: nothing to ask, just record the click and go --
+      // this stays fully synchronous inside the caller's click handler.
+      if (args.applicationId) {
+        fetch(`/api/applications/${args.applicationId}/click`, { method: "POST" }).catch(() => {});
       }
+      window.open(args.applicationUrl, "_blank", "noreferrer");
+      return;
+    }
+
+    setTrackError(null);
+    setActivePrompt({
+      kind: "apply_guard",
+      scholarshipTitle: args.scholarshipTitle,
+      applicationUrl: args.applicationUrl,
+      onTrack: args.onTrack,
+    });
+    setOpen(true);
+  }, []);
+
+  async function handleTrackFirst() {
+    if (!activePrompt || activePrompt.kind !== "apply_guard") return;
+    setTrackError(null);
+    setTrackingInFlight(true);
+    const result = await activePrompt.onTrack();
+    setTrackingInFlight(false);
+
+    if (result?.id) {
       setActivePrompt({
-        kind: "apply_guard",
-        scholarshipTitle,
-        onTrack: () => {
-          setActivePrompt(null);
-          onTrackThenProceed();
-        },
-        onJustGo: () => {
-          setActivePrompt(null);
-          onProceed();
-        },
+        kind: "ready_to_open",
+        scholarshipTitle: activePrompt.scholarshipTitle,
+        applicationUrl: activePrompt.applicationUrl,
+        applicationId: result.id,
       });
-      setOpen(true);
-    },
-    []
-  );
+    } else {
+      setTrackError("Couldn't track it just now -- you can still continue without tracking.");
+    }
+  }
+
+  function handleJustGo() {
+    if (!activePrompt || activePrompt.kind !== "apply_guard") return;
+    window.open(activePrompt.applicationUrl, "_blank", "noreferrer");
+    setActivePrompt(null);
+  }
+
+  function handleContinueToApplication() {
+    if (!activePrompt || activePrompt.kind !== "ready_to_open") return;
+    fetch(`/api/applications/${activePrompt.applicationId}/click`, { method: "POST" }).catch(() => {});
+    // Fresh, fully synchronous click -- no await before this line, so no
+    // popup blocker gets a chance to intervene.
+    window.open(activePrompt.applicationUrl, "_blank", "noreferrer");
+    setActivePrompt(null);
+    setOpen(false);
+  }
 
   const prompt: AdePromptState = activePrompt ?? passivePrompt;
   const hasPending = Boolean(prompt);
@@ -202,17 +260,38 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                     <div className="flex flex-wrap gap-2 mt-3">
                       <button
                         type="button"
-                        onClick={prompt.onTrack}
-                        className="text-xs font-medium text-white bg-emerald rounded-full px-3 py-1.5 hover:opacity-90 transition-opacity"
+                        onClick={handleTrackFirst}
+                        disabled={trackingInFlight}
+                        className="text-xs font-medium text-white bg-emerald rounded-full px-3 py-1.5 hover:opacity-90 transition-opacity disabled:opacity-50"
                       >
-                        Track it first
+                        {trackingInFlight ? "Tracking\u2026" : "Track it first"}
                       </button>
                       <button
                         type="button"
-                        onClick={prompt.onJustGo}
-                        className="text-xs font-medium text-navy-light hover:text-navy"
+                        onClick={handleJustGo}
+                        disabled={trackingInFlight}
+                        className="text-xs font-medium text-navy-light hover:text-navy disabled:opacity-50"
                       >
                         Just take me there
+                      </button>
+                    </div>
+                    {trackError && <p className="text-xs text-rose mt-2">{trackError}</p>}
+                  </>
+                )}
+
+                {prompt?.kind === "ready_to_open" && (
+                  <>
+                    <p className="text-sm text-ink leading-snug">
+                      You&apos;re tracking <span className="font-medium">{prompt.scholarshipTitle}</span> now
+                      \u2713. Tap below when you&apos;re ready to head to the application.
+                    </p>
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      <button
+                        type="button"
+                        onClick={handleContinueToApplication}
+                        className="text-xs font-medium text-white bg-navy rounded-full px-3 py-1.5 hover:bg-navy-light transition-colors"
+                      >
+                        Continue to application &rarr;
                       </button>
                     </div>
                   </>
