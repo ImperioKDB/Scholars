@@ -75,15 +75,13 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
 // and track-application actions hit the existing /api/scholarships/save
 // and /api/applications routes, same ones the dashboard already uses.
 //
-// The "Apply on provider's site" action now goes through Ade
-// (useAde().confirmApply) instead of a plain <a target="_blank">: if the
-// scholarship isn't tracked yet, Ade asks whether to track it first before
-// leaving; either way, once tracked (or already tracked), the click is
-// recorded via POST /api/applications/[id]/click so Ade can follow up next
-// visit. The blank-tab-then-redirect pattern in onTrackThenProceed keeps
-// the popup from being blocked -- opening it synchronously inside the
-// click handler, before the async track request, preserves the "direct
-// user gesture" browsers require to allow window.open.
+// The "Apply on provider's site" action goes through Ade
+// (useAde().confirmApply). Ade now owns the entire track-then-open flow,
+// including click-tracking and the actual window.open call -- this
+// component only supplies startTracking() as the onTrack callback. See
+// components/ade/AdeProvider.tsx for why (fixes a real about:blank bug
+// from the previous version, which tried to redirect a pre-opened tab
+// after an awaited request).
 export function ScholarshipDetailClient({
   scholarship,
   initialSaved,
@@ -126,7 +124,10 @@ export function ScholarshipDetailClient({
     setSavePending(false);
   }
 
-  async function startTracking() {
+  // Returns the new/updated application (or null on failure) so Ade's
+  // apply-guard flow can grab the id it needs to record a click, without
+  // this component needing to know anything about tabs or popups.
+  async function startTracking(): Promise<{ id: string; status: ApplicationStatus } | null> {
     setActionError(null);
     setTrackPending(true);
 
@@ -150,29 +151,17 @@ export function ScholarshipDetailClient({
     return null;
   }
 
-  function markClicked(applicationId: string) {
-    fetch(`/api/applications/${applicationId}/click`, { method: "POST" }).catch(() => {});
-  }
-
   function handleApplyClick() {
     if (!scholarship.application_url) return;
-    const url = scholarship.application_url;
 
     ade.confirmApply({
       scholarshipTitle: scholarship.title,
+      applicationUrl: scholarship.application_url,
       alreadyTracked: Boolean(application),
-      onProceed: () => {
-        if (application) markClicked(application.id);
-        window.open(url, "_blank", "noreferrer");
-      },
-      onTrackThenProceed: async () => {
-        // Open the tab synchronously, in direct response to the button
-        // click on Ade's bubble, so popup blockers don't intervene while
-        // we await the tracking request below.
-        const win = window.open("", "_blank", "noreferrer");
+      applicationId: application?.id,
+      onTrack: async () => {
         const newApp = await startTracking();
-        if (newApp?.id) markClicked(newApp.id);
-        if (win) win.location.href = url;
+        return newApp?.id ? { id: newApp.id } : null;
       },
     });
   }
