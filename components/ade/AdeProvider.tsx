@@ -1,3 +1,4 @@
+
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
@@ -7,8 +8,16 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 // Ade -- Scholars' persistent guide character (an owl; "Ade" reads as a
 // real Nigerian name prefix meaning "crown," not a generic mascot name).
 // One instance wraps each authenticated layout's children, so any page can
-// trigger a prompt via useAde(), while a single floating bubble owns the
+// trigger a prompt via useAde(), while a single floating avatar owns the
 // UI so two prompts never stack on screen at once.
+//
+// ALWAYS VISIBLE as a small round avatar button, bottom-right -- this is
+// the fix for Ade being invisible on pages with nothing to ask about.
+// Tapping it toggles an expanded panel open/closed at any time. It opens
+// itself automatically the moment a real prompt exists (a check-in
+// question, or an apply-guard question), and shows a quiet dot badge if
+// closed with something pending. With nothing pending, opening it shows a
+// short idle message instead of nothing.
 //
 // Two ways a prompt appears:
 //   1. Passive: on mount + on window focus, polls /api/mascot/next-prompt
@@ -81,6 +90,7 @@ function AdeAvatar({ size = 36 }: { size?: number }) {
 export function AdeProvider({ children }: { children: React.ReactNode }) {
   const [passivePrompt, setPassivePrompt] = useState<CheckinPrompt | null>(null);
   const [activePrompt, setActivePrompt] = useState<ApplyGuardPrompt | null>(null);
+  const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const dismissedRef = useRef<Set<string>>(new Set());
   const pollingRef = useRef(false);
@@ -94,6 +104,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
         const { prompt } = await res.json();
         if (prompt && !dismissedRef.current.has(prompt.applicationId)) {
           setPassivePrompt({ kind: "checkin", ...prompt });
+          setOpen(true);
         }
       }
     } catch {
@@ -154,25 +165,35 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
           onProceed();
         },
       });
+      setOpen(true);
     },
     []
   );
 
   const prompt: AdePromptState = activePrompt ?? passivePrompt;
+  const hasPending = Boolean(prompt);
 
   return (
     <AdeContext.Provider value={{ confirmApply }}>
       {children}
 
-      {prompt && (
-        <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:w-80 z-[90]">
-          <div className="bg-white rounded-2xl border border-hairline shadow-card p-4">
+      <div className="fixed bottom-4 right-4 z-[90] flex flex-col items-end gap-2">
+        {open && (
+          <div className="w-[calc(100vw-2rem)] max-w-80 bg-white rounded-2xl border border-hairline shadow-card p-4">
             <div className="flex items-start gap-3">
               <AdeAvatar />
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium text-emerald mb-0.5">Ade</p>
 
-                {prompt.kind === "apply_guard" ? (
+                {!prompt && (
+                  <p className="text-sm text-ink leading-snug">
+                    Hi, I&apos;m Ade! I&apos;ll remind you to track a scholarship before you head to a
+                    provider&apos;s site, and check in with you after deadlines pass. Nothing to ask about
+                    right now -- you&apos;re all caught up.
+                  </p>
+                )}
+
+                {prompt?.kind === "apply_guard" && (
                   <>
                     <p className="text-sm text-ink leading-snug">
                       Want me to track <span className="font-medium">{prompt.scholarshipTitle}</span> before you
@@ -195,7 +216,9 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                       </button>
                     </div>
                   </>
-                ) : (
+                )}
+
+                {prompt?.kind === "checkin" && (
                   <>
                     <p className="text-sm text-ink leading-snug">
                       {prompt.reason === "clicked" ? (
@@ -234,10 +257,33 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                   </>
                 )}
               </div>
+
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Close"
+                className="shrink-0 text-navy-light hover:text-navy -mt-1 -mr-1 p-1"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
+                </svg>
+              </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-label={open ? "Close Ade" : "Open Ade"}
+          className="relative w-14 h-14 rounded-full shadow-card border border-hairline bg-white flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+        >
+          <AdeAvatar size={40} />
+          {hasPending && !open && (
+            <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-rose border-2 border-white" />
+          )}
+        </button>
+      </div>
     </AdeContext.Provider>
   );
 }
