@@ -56,10 +56,6 @@ function StatTile({
   );
 }
 
-// A single actionable nudge: "N scholarships would move to a better tier
-// if you filled in X." scholarshipCount comes straight from
-// lib/matching/gaps.ts's simulation against the student's real matches --
-// never a made-up number.
 function GapNudgeBanner({ gaps }: { gaps: GapNudge[] }) {
   if (gaps.length === 0) return null;
   const top = gaps[0];
@@ -70,7 +66,7 @@ function GapNudgeBanner({ gaps }: { gaps: GapNudge[] }) {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
           <p className="text-sm font-medium text-ink">
-            Add your <span className="text-emerald">{top.label.toLowerCase()}</span> — {top.scholarshipCount}{" "}
+            Add your <span className="text-emerald">{top.label.toLowerCase()}</span> -- {top.scholarshipCount}{" "}
             scholarship{top.scholarshipCount === 1 ? "" : "s"} would move to a better match tier.
           </p>
           {rest.length > 0 && (
@@ -90,14 +86,6 @@ function GapNudgeBanner({ gaps }: { gaps: GapNudge[] }) {
   );
 }
 
-// Same two-layer press/loading treatment as ScholarshipCard: an instant
-// native :active scale for the tap itself, a persisting scale-down + dim
-// set synchronously on click (cleared only by unmounting, i.e. by the
-// route actually changing), and a spinner that only shows up if the
-// navigation takes longer than SPINNER_DELAY_MS. Kept as its own small
-// component (rather than inline in the .map()) so each card owns its own
-// navigating/showSpinner state instead of one shared flag animating every
-// card in the row at once.
 function DeadlineCard({ scholarship, days }: { scholarship: CardScholarship; days: number }) {
   const [navigating, setNavigating] = useState(false);
   const [showSpinner, setShowSpinner] = useState(false);
@@ -123,8 +111,6 @@ function DeadlineCard({ scholarship, days }: { scholarship: CardScholarship; day
         navigating ? "scale-[0.97] opacity-80" : "scale-100 opacity-100",
       ].join(" ")}
     >
-      {/* Stretched-link pattern: a real anchor pinned to inset-0, visible
-          content is pointer-events-none so taps pass through to it. */}
       <Link
         href={`/scholarships/${scholarship.id}`}
         aria-label={scholarship.title}
@@ -151,12 +137,8 @@ function DeadlineCard({ scholarship, days }: { scholarship: CardScholarship; day
   );
 }
 
-// Receives everything it needs to paint immediately from the server
-// component (app/dashboard/page.tsx) -- there is no fetch-on-mount
-// waterfall here. Only user-triggered mutations (saving/unsaving a
-// scholarship) hit the network client-side; those still go through the
-// existing /api/scholarships/save route, unchanged.
 export function DashboardClient({
+  userId,
   fullName,
   initialMatches,
   initialProfileCompleteness,
@@ -164,6 +146,10 @@ export function DashboardClient({
   initialError,
   gaps,
 }: {
+  // Threaded down to ScholarshipCard as `sharerId` so cards rendered here
+  // can build referral share links (?ref=<userId>). See
+  // components/ShareButton.tsx and app/auth/callback/route.ts.
+  userId: string;
   fullName: string | null;
   initialMatches: MatchApiItem[];
   initialProfileCompleteness: number;
@@ -373,6 +359,7 @@ export function DashboardClient({
                 saved={savedIds.has(m.id)}
                 pending={pendingIds.has(m.id)}
                 onToggleSave={() => toggleSave(m.id)}
+                sharerId={userId}
               />
             );
           })}
@@ -398,6 +385,7 @@ export function DashboardClient({
               saved
               pending={pendingIds.has(s.scholarship.id)}
               onToggleSave={() => toggleSave(s.scholarship.id)}
+              sharerId={userId}
             />
           ))}
         </div>
