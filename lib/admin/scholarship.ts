@@ -144,6 +144,12 @@ export function parseRuleValue(field: string, operator: RuleOperator, value: unk
   return String(value);
 }
 
+// how_to_apply: fallback guidance shown on the scholarship detail page and
+// in Applications when application_url is blank (email-only application,
+// no stable public portal, etc.) -- see migration:
+// add_how_to_apply_fallback. Deliberately NOT required even when
+// application_url is empty, since a scholarship can legitimately be saved
+// as a draft (verified: false) before either is known.
 export const scholarshipSchema = z.object({
   title: z.string().min(3, "Title is required."),
   provider_name: z.string().min(2, "Provider name is required."),
@@ -154,6 +160,7 @@ export const scholarshipSchema = z.object({
     .string()
     .optional()
     .refine((v) => !v || /^https?:\/\//.test(v), "Must be a full URL starting with http(s)://"),
+  how_to_apply: z.string().max(2000, "Keep it under 2000 characters.").optional(),
   level: z.enum(["undergrad", "both"]),
   discipline: z.string().optional(),
   verified: z.boolean(),
@@ -168,6 +175,7 @@ export const EMPTY_SCHOLARSHIP: ScholarshipFormValues = {
   amount: "",
   deadline: "",
   application_url: "",
+  how_to_apply: "",
   level: "both",
   discipline: "",
   verified: false,
