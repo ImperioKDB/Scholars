@@ -55,6 +55,7 @@ export default function NewScholarshipPage() {
         amount: parsed.data.amount || null,
         deadline: parsed.data.deadline,
         application_url: parsed.data.application_url || null,
+        how_to_apply: parsed.data.how_to_apply || null,
         level: parsed.data.level,
         discipline: parsed.data.discipline || null,
         verified: parsed.data.verified,
