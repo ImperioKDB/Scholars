@@ -154,7 +154,7 @@ Write the statement now. Do not include a greeting, a subject line, or a sign-of
 
 // Google Gemini (AI Studio) -- free tier, no credit card required. Get a
 // key at https://aistudio.google.com/apikey and set it as GEMINI_API_KEY
-// in Vercel. Free-tier limits (as of writing, gemini-2.0-flash): 1,500
+// in Vercel. Free-tier limits (as of writing, gemini-2.5-flash-lite): 1,500
 // requests/day, 15/minute -- comfortably enough for draft generation.
 type GeminiResponse = {
   candidates?: { content?: { parts?: { text?: string }[] } }[];
@@ -168,7 +168,7 @@ export async function generateStatement(prompt: string): Promise<string> {
   }
 
   const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },
