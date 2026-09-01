@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
 import { MatchSeal } from "@/components/MatchSeal";
 import { BackLink } from "@/components/BackLink";
+import { ShareButton } from "@/components/ShareButton";
 
 type RequirementStatus = "met" | "not_met" | "missing_data" | "unverifiable";
 
@@ -72,14 +73,23 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
 // (app/scholarships/[id]/page.tsx) -- no fetch-on-mount waterfall. Save
 // and track-application actions hit the existing /api/scholarships/save
 // and /api/applications routes, same ones the dashboard already uses.
+//
+// sharerId is the current user's profile id, threaded down from the
+// server component so the ShareButton can build a referral link
+// (?ref=<sharerId> -- see middleware.ts + app/auth/callback/route.ts).
+// Optional so this component still compiles/renders anywhere it hasn't
+// been wired through yet -- the share button simply doesn't render
+// without it, same pattern as ScholarshipCard.
 export function ScholarshipDetailClient({
   scholarship,
   initialSaved,
   initialApplication,
+  sharerId,
 }: {
   scholarship: ScholarshipDetail;
   initialSaved: boolean;
   initialApplication: { id: string; status: ApplicationStatus } | null;
+  sharerId?: string;
 }) {
   const router = useRouter();
   const [saved, setSaved] = useState(initialSaved);
@@ -195,7 +205,7 @@ export function ScholarshipDetailClient({
               saved ? "border-emerald text-emerald bg-emerald-light" : "border-hairline text-navy-light hover:border-navy/40",
             ].join(" ")}
           >
-            {saved ? "Saved \u2713" : "Save"}
+            {saved ? "Saved ✓" : "Save"}
           </button>
 
           {application ? (
@@ -209,8 +219,17 @@ export function ScholarshipDetailClient({
               disabled={trackPending}
               className="rounded-seal text-sm font-medium px-5 py-2.5 border border-hairline text-navy-light hover:border-navy/40 transition-colors disabled:opacity-60"
             >
-              {trackPending ? "Adding\u2026" : "+ Track application"}
+              {trackPending ? "Adding…" : "+ Track application"}
             </button>
+          )}
+
+          {sharerId && (
+            <ShareButton
+              variant="full"
+              scholarshipId={scholarship.id}
+              title={scholarship.title}
+              sharerId={sharerId}
+            />
           )}
         </div>
 
