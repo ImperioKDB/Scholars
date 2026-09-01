@@ -7,21 +7,10 @@ import { ScholarshipDetailClient } from "./ScholarshipDetailClient";
 
 type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected";
 
-// Server Component: evaluates the scholarship against the current user's
-// profile server-side (same engine the dashboard uses, via
-// getMatchForScholarship) and fetches saved/tracking status in parallel,
-// then hands everything to ScholarshipDetailClient as initial props --
-// same pattern as app/dashboard/page.tsx and app/applications/page.tsx.
-//
-// scholarship.how_to_apply (fallback guidance shown when application_url
-// is null) flows through automatically here since getMatchForScholarship's
-// query now selects it and ScholarshipMatch = ScholarshipRow & {...}.
 export default async function ScholarshipDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { user } = await getCurrentUserAndProfile();
 
-  // middleware.ts already gates /scholarships to authenticated users;
-  // this is a defensive fallback, not the primary auth boundary.
   if (!user) {
     return null;
   }
@@ -32,8 +21,6 @@ export default async function ScholarshipDetailPage({ params }: { params: Promis
     notFound();
   }
 
-  // profile_not_found is the normal state for a user who hasn't finished
-  // onboarding -- send them there instead of a dead error page.
   if (error === "profile_not_found") {
     return (
       <div className="bg-white rounded-2xl border border-hairline shadow-card p-8 text-center">
@@ -75,6 +62,7 @@ export default async function ScholarshipDetailPage({ params }: { params: Promis
       scholarship={match}
       initialSaved={Boolean(savedResult.data)}
       initialApplication={initialApplication}
+      sharerId={user.id}
     />
   );
 }
