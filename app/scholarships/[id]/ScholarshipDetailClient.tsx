@@ -1,11 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
 import { MatchSeal } from "@/components/MatchSeal";
-import { useAde } from "@/components/ade/AdeProvider";
+import { BackLink } from "@/components/BackLink";
 
 type RequirementStatus = "met" | "not_met" | "missing_data" | "unverifiable";
 
@@ -25,9 +24,6 @@ type ScholarshipDetail = {
   amount: string | null;
   deadline: string | null;
   application_url: string | null;
-  // Fallback guidance when application_url is null -- see
-  // migration: add_how_to_apply_fallback.
-  how_to_apply: string | null;
   level: "undergrad" | "postgrad" | "both";
   discipline: string | null;
   score: number;
@@ -76,17 +72,6 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
 // (app/scholarships/[id]/page.tsx) -- no fetch-on-mount waterfall. Save
 // and track-application actions hit the existing /api/scholarships/save
 // and /api/applications routes, same ones the dashboard already uses.
-//
-// The "Apply on provider's site" action now routes through
-// useAde().confirmApply() instead of a bare <a href>. A plain anchor
-// bypassed Ade entirely: confirmApply() is the only thing that (a) shows
-// the "track this first?" prompt before an untracked student leaves, and
-// (b) sets applications.link_clicked_at, which is what
-// /api/mascot/next-prompt uses to know to ask "how'd it go?" when the
-// student comes back. trackApplication() below is shared by the explicit
-// "+ Track application" button and by confirmApply's onTrack callback --
-// it returns {id} so Ade can move straight into its "ready to open" step
-// without a second round trip.
 export function ScholarshipDetailClient({
   scholarship,
   initialSaved,
@@ -97,7 +82,6 @@ export function ScholarshipDetailClient({
   initialApplication: { id: string; status: ApplicationStatus } | null;
 }) {
   const router = useRouter();
-  const { confirmApply } = useAde();
   const [saved, setSaved] = useState(initialSaved);
   const [application, setApplication] = useState(initialApplication);
   const [savePending, setSavePending] = useState(false);
@@ -115,7 +99,7 @@ export function ScholarshipDetailClient({
     setSavePending(true);
 
     const res = wasSaved
-      ? await fetch(`/api/scholarships/save?scholarship_id=${scholarship.id}`, { method: "DELETE" })
+      ? await fetch("/api/scholarships/save?scholarship_id=" + scholarship.id, { method: "DELETE" })
       : await fetch("/api/scholarships/save", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -129,54 +113,29 @@ export function ScholarshipDetailClient({
     setSavePending(false);
   }
 
-  // Shared by the "+ Track application" button and Ade's apply-guard
-  // prompt (onTrack). Returns {id} on success so confirmApply can move
-  // straight to its "ready to open" step, or null on failure so either
-  // caller can show its own error.
-  async function trackApplication(): Promise<{ id: string } | null> {
+  async function startTracking() {
+    setActionError(null);
+    setTrackPending(true);
+
     const res = await fetch("/api/applications", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ scholarship_id: scholarship.id }),
     });
 
-    if (!res.ok) return null;
-
-    const data = await res.json();
-    const app = data.application as { id: string; status: ApplicationStatus } | undefined;
-    if (!app?.id) return null;
-
-    setApplication(app);
-    router.refresh();
-    return { id: app.id };
-  }
-
-  async function startTracking() {
-    setActionError(null);
-    setTrackPending(true);
-    const result = await trackApplication();
-    if (!result) {
+    if (res.ok) {
+      const data = await res.json();
+      setApplication(data.application ?? { id: "", status: "in_progress" });
+      router.refresh();
+    } else {
       setActionError("Couldn't start tracking. Try again.");
     }
     setTrackPending(false);
   }
 
-  function handleApplyClick() {
-    if (!scholarship.application_url) return;
-    confirmApply({
-      scholarshipTitle: scholarship.title,
-      applicationUrl: scholarship.application_url,
-      alreadyTracked: Boolean(application),
-      applicationId: application?.id,
-      onTrack: trackApplication,
-    });
-  }
-
   return (
     <div>
-      <Link href="/dashboard" className="text-sm text-navy-light hover:text-navy mb-6 inline-block">
-        &larr; Back to matches
-      </Link>
+      <BackLink href="/dashboard" label="Back to matches" />
 
       <div className="bg-white rounded-2xl border border-hairline shadow-card p-6 md:p-8">
         <div className="flex items-start gap-4 mb-6">
@@ -192,7 +151,7 @@ export function ScholarshipDetailClient({
 
         <div className="flex flex-wrap items-center gap-2 mb-6">
           {days !== null && (
-            <span className={`text-xs font-mono font-medium px-2 py-1 rounded-full ${DEADLINE_TONE_CLASSES[deadlineTone(days)]}`}>
+            <span className={"text-xs font-mono font-medium px-2 py-1 rounded-full " + DEADLINE_TONE_CLASSES[deadlineTone(days)]}>
               {formatDeadlineLabel(days)}
             </span>
           )}
@@ -215,24 +174,17 @@ export function ScholarshipDetailClient({
 
         {actionError && <p className="text-sm text-rose mb-4">{actionError}</p>}
 
-        <div className="flex flex-wrap items-center gap-3 mb-4 pb-8 border-b border-hairline">
-          {scholarship.application_url ? (
-            <button
-              type="button"
-              onClick={handleApplyClick}
+        <div className="flex flex-wrap items-center gap-3 mb-8 pb-8 border-b border-hairline">
+          {scholarship.application_url && (
+            <a
+              href={scholarship.application_url}
+              target="_blank"
+              rel="noreferrer"
               className="rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors"
             >
               Apply on provider&apos;s site &rarr;
-            </button>
-          ) : !scholarship.how_to_apply ? (
-            // Neither a direct link nor fallback guidance is set -- surface
-            // this plainly rather than rendering nothing, since a missing
-            // apply path with no explanation looks like a broken page.
-            <p className="text-sm text-navy-light">
-              We don&apos;t have a confirmed application link for this scholarship yet. Search the
-              provider&apos;s name plus &quot;scholarship application&quot; to find their current process.
-            </p>
-          ) : null}
+            </a>
+          )}
 
           <button
             type="button"
@@ -262,13 +214,6 @@ export function ScholarshipDetailClient({
           )}
         </div>
 
-        {!scholarship.application_url && scholarship.how_to_apply && (
-          <div className="bg-amber-light rounded-xl p-4 mb-8">
-            <p className="text-xs font-medium text-amber uppercase tracking-wide mb-1.5">How to apply</p>
-            <p className="text-sm text-ink leading-relaxed">{scholarship.how_to_apply}</p>
-          </div>
-        )}
-
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-display text-lg font-semibold text-navy">Eligibility requirements</h2>
@@ -284,12 +229,12 @@ export function ScholarshipDetailClient({
           ) : (
             <ul className="space-y-3">
               {scholarship.requirements.map((r, i) => (
-                <li key={`${r.field}-${i}`} className="flex items-start justify-between gap-3 bg-navy-50 rounded-lg p-3.5">
+                <li key={r.field + "-" + i} className="flex items-start justify-between gap-3 bg-navy-50 rounded-lg p-3.5">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-ink">{r.requirement}</p>
                     <p className="text-xs text-navy-light mt-0.5">{r.detail}</p>
                   </div>
-                  <span className={`shrink-0 text-xs font-medium px-2 py-1 rounded-full ${REQ_STATUS_TONE[r.status]}`}>
+                  <span className={"shrink-0 text-xs font-medium px-2 py-1 rounded-full " + REQ_STATUS_TONE[r.status]}>
                     {REQ_STATUS_LABELS[r.status]}
                   </span>
                 </li>
