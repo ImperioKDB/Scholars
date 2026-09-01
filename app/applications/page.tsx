@@ -27,8 +27,12 @@ type SavedApiItem = {
   scholarship: CardScholarship;
 };
 
+// how_to_apply added: fallback guidance shown when application_url is
+// null (see migration: add_how_to_apply_fallback), so the "Open
+// application" link in ApplicationsClient has something to fall back to
+// instead of just disappearing.
 const SCHOLARSHIP_COLUMNS =
-  "id, title, provider_name, description, amount, deadline, application_url, level, discipline, verified";
+  "id, title, provider_name, description, amount, deadline, application_url, how_to_apply, level, discipline, verified";
 
 const APPLICATION_COLUMNS = `id, status, notes, created_at, updated_at, draft_statement, draft_summary, draft_generated_at, draft_confirmed_at, scholarship:scholarships ( ${SCHOLARSHIP_COLUMNS} )`;
 
