@@ -13,37 +13,16 @@
 // mutation, so a non-admin gets a clear 403 instead of a confusing RLS
 // failure buried in a Postgres error.
 //
-// ruleSchema.field was stale until this fix -- it only accepted the
-// original 7 fields (including a since-dropped 'academic_level'), while
-// the admin UI (RuleBuilder.tsx, ADMIN_RULE_FIELDS in
-// lib/admin/scholarship.ts) already offered the full undergrad-pivot
-// field set. Submitting a rule on year_of_study, institution_type,
-// jamb_score, waec_credit_count, state_of_origin, lga_of_origin, age,
-// has_english_maths_credit, or disability_status through the real admin
-// form hit a 400 here. Enum now matches ADMIN_RULE_FIELDS exactly.
+// how_to_apply added to the insert payload: fallback guidance shown to
+// students when application_url is blank -- see migration:
+// add_how_to_apply_fallback.
 
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 
 const ruleSchema = z.object({
-  field: z.enum([
-    'discipline',
-    'gpa',
-    'nationality',
-    'gender',
-    'financial_need',
-    'age',
-    'state_of_origin',
-    'lga_of_origin',
-    'year_of_study',
-    'institution_type',
-    'jamb_score',
-    'waec_credit_count',
-    'has_english_maths_credit',
-    'disability_status',
-    'career_goals',
-  ]),
+  field: z.enum(['gpa', 'nationality', 'gender', 'financial_need', 'academic_level', 'discipline', 'career_goals']),
   operator: z.enum(['eq', 'gte', 'lte', 'in', 'exists']),
   value: z.unknown(),
 })
@@ -55,6 +34,7 @@ const scholarshipSchema = z.object({
   amount: z.string().trim().max(200).nullable().optional(),
   deadline: z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'Invalid date'),
   application_url: z.string().url().nullable().optional(),
+  how_to_apply: z.string().trim().max(2000).nullable().optional(),
   level: z.enum(['undergrad', 'postgrad', 'both']).default('both'),
   discipline: z.string().trim().max(200).nullable().optional(),
   verified: z.boolean().default(false),
