@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useAde } from "@/components/ade/AdeProvider";
 
 // components/DraftPanel.tsx
 //
@@ -12,6 +13,15 @@ import { useState } from "react";
 // copying the statement + summary into the scholarship's own
 // application_url, which is why that link sits right next to the confirm
 // button rather than being buried elsewhere on the card.
+//
+// "Open real application" now routes through useAde().confirmApply()
+// instead of a bare <a href> -- this application is always already
+// tracked (DraftPanel only renders inside a tracked application's card),
+// so it takes the alreadyTracked branch: record the /click timestamp,
+// then open the tab. Without this, Ade never learns the student left for
+// the provider's site and the post-deadline check-in has nothing to key
+// off of. scholarshipTitle is a new required prop -- DraftPanel didn't
+// previously need the scholarship's title for anything.
 
 export type Draft = {
   draft_statement: string | null;
@@ -25,15 +35,18 @@ export type Draft = {
 
 export function DraftPanel({
   applicationId,
+  scholarshipTitle,
   draft,
   applicationUrl,
   onDraftChange,
 }: {
   applicationId: string;
+  scholarshipTitle: string;
   draft: Draft;
   applicationUrl: string | null;
   onDraftChange: (draft: Draft) => void;
 }) {
+  const { confirmApply } = useAde();
   const [open, setOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -85,6 +98,17 @@ export function DraftPanel({
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  function openRealApplication() {
+    if (!applicationUrl) return;
+    confirmApply({
+      scholarshipTitle,
+      applicationUrl,
+      alreadyTracked: true,
+      applicationId,
+      onTrack: async () => ({ id: applicationId }),
+    });
   }
 
   if (!hasDraft) {
@@ -185,14 +209,13 @@ export function DraftPanel({
               {generating ? "Regenerating\u2026" : "Regenerate"}
             </button>
             {applicationUrl && (
-              <a
-                href={applicationUrl}
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                onClick={openRealApplication}
                 className="text-xs font-medium text-navy hover:underline ml-auto"
               >
-                Open real application →
-              </a>
+                Open real application &rarr;
+              </button>
             )}
           </div>
 
