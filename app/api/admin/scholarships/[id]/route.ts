@@ -9,6 +9,9 @@
 // better even though 05_CODING_WORKFLOW.md says "PUT". Flagging the
 // deviation — swap the export name back to PUT if you'd rather match the
 // doc literally; the handler logic doesn't change either way.
+//
+// how_to_apply added: fallback guidance shown to students when
+// application_url is blank -- see migration: add_how_to_apply_fallback.
 
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -22,6 +25,7 @@ const updateSchema = z
     amount: z.string().trim().max(200).nullable(),
     deadline: z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'Invalid date'),
     application_url: z.string().url().nullable(),
+    how_to_apply: z.string().trim().max(2000).nullable(),
     level: z.enum(['undergrad', 'postgrad', 'both']),
     discipline: z.string().trim().max(200).nullable(),
     verified: z.boolean(),
