@@ -15,6 +15,8 @@ export function ScholarshipFields({
   errors: Partial<Record<keyof ScholarshipFormValues, string>>;
   onChange: <K extends keyof ScholarshipFormValues>(key: K, value: ScholarshipFormValues[K]) => void;
 }) {
+  const missingApplyPath = values.verified && !values.application_url?.trim() && !values.how_to_apply?.trim();
+
   return (
     <div className="grid md:grid-cols-2 gap-x-6">
       <div className="md:col-span-2">
@@ -55,7 +57,11 @@ export function ScholarshipFields({
         />
       </FormField>
 
-      <FormField label="Application URL" error={errors.application_url}>
+      <FormField
+        label="Application URL"
+        error={errors.application_url}
+        hint="Leave blank only if there's genuinely no direct online link -- fill in 'How to apply' below instead so students still have a path."
+      >
         <input
           className={inputClass}
           type="url"
@@ -64,6 +70,30 @@ export function ScholarshipFields({
           placeholder="https://..."
         />
       </FormField>
+
+      <div className="md:col-span-2">
+        <FormField
+          label="How to apply (fallback)"
+          error={errors.how_to_apply}
+          hint="Shown to students instead of an Apply button when there's no Application URL -- e.g. an application email, or which admissions office to contact. Leave blank if the URL above covers it."
+        >
+          <textarea
+            className={textareaClass}
+            value={values.how_to_apply ?? ""}
+            onChange={(e) => onChange("how_to_apply", e.target.value)}
+            placeholder="e.g. Applications are handled by email -- send a CGPA transcript and a 300-500 word essay to admissions@example.org."
+          />
+        </FormField>
+      </div>
+
+      {missingApplyPath && (
+        <div className="md:col-span-2 -mt-2 mb-4">
+          <p className="text-xs text-amber bg-amber-light rounded-lg px-3.5 py-2.5">
+            This scholarship is marked Verified but has neither an Application URL nor How-to-apply
+            text. Students won&apos;t see any way to apply. Fill in at least one before publishing.
+          </p>
+        </div>
+      )}
 
       <FormField label="Academic level" hint="Platform is undergrad-only -- postgrad listings won't be matched or shown.">
         <select
