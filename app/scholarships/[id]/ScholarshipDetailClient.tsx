@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
 import { MatchSeal } from "@/components/MatchSeal";
+import { useAde } from "@/components/ade/AdeProvider";
 
 type RequirementStatus = "met" | "not_met" | "missing_data" | "unverifiable";
 
@@ -75,6 +76,17 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
 // (app/scholarships/[id]/page.tsx) -- no fetch-on-mount waterfall. Save
 // and track-application actions hit the existing /api/scholarships/save
 // and /api/applications routes, same ones the dashboard already uses.
+//
+// The "Apply on provider's site" action now routes through
+// useAde().confirmApply() instead of a bare <a href>. A plain anchor
+// bypassed Ade entirely: confirmApply() is the only thing that (a) shows
+// the "track this first?" prompt before an untracked student leaves, and
+// (b) sets applications.link_clicked_at, which is what
+// /api/mascot/next-prompt uses to know to ask "how'd it go?" when the
+// student comes back. trackApplication() below is shared by the explicit
+// "+ Track application" button and by confirmApply's onTrack callback --
+// it returns {id} so Ade can move straight into its "ready to open" step
+// without a second round trip.
 export function ScholarshipDetailClient({
   scholarship,
   initialSaved,
@@ -85,6 +97,7 @@ export function ScholarshipDetailClient({
   initialApplication: { id: string; status: ApplicationStatus } | null;
 }) {
   const router = useRouter();
+  const { confirmApply } = useAde();
   const [saved, setSaved] = useState(initialSaved);
   const [application, setApplication] = useState(initialApplication);
   const [savePending, setSavePending] = useState(false);
@@ -116,24 +129,47 @@ export function ScholarshipDetailClient({
     setSavePending(false);
   }
 
-  async function startTracking() {
-    setActionError(null);
-    setTrackPending(true);
-
+  // Shared by the "+ Track application" button and Ade's apply-guard
+  // prompt (onTrack). Returns {id} on success so confirmApply can move
+  // straight to its "ready to open" step, or null on failure so either
+  // caller can show its own error.
+  async function trackApplication(): Promise<{ id: string } | null> {
     const res = await fetch("/api/applications", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ scholarship_id: scholarship.id }),
     });
 
-    if (res.ok) {
-      const data = await res.json();
-      setApplication(data.application ?? { id: "", status: "in_progress" });
-      router.refresh();
-    } else {
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const app = data.application as { id: string; status: ApplicationStatus } | undefined;
+    if (!app?.id) return null;
+
+    setApplication(app);
+    router.refresh();
+    return { id: app.id };
+  }
+
+  async function startTracking() {
+    setActionError(null);
+    setTrackPending(true);
+    const result = await trackApplication();
+    if (!result) {
       setActionError("Couldn't start tracking. Try again.");
     }
     setTrackPending(false);
+  }
+
+  function handleApplyClick() {
+    if (!scholarship.application_url) return;
+    confirmApply({
+      scholarshipTitle: scholarship.title,
+      applicationUrl: scholarship.application_url,
+      alreadyTracked: Boolean(application),
+      applicationId: application?.id,
+      onTrack: trackApplication,
+    });
   }
 
   return (
@@ -181,14 +217,13 @@ export function ScholarshipDetailClient({
 
         <div className="flex flex-wrap items-center gap-3 mb-4 pb-8 border-b border-hairline">
           {scholarship.application_url ? (
-            <a
-              href={scholarship.application_url}
-              target="_blank"
-              rel="noreferrer"
+            <button
+              type="button"
+              onClick={handleApplyClick}
               className="rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors"
             >
               Apply on provider&apos;s site &rarr;
-            </a>
+            </button>
           ) : !scholarship.how_to_apply ? (
             // Neither a direct link nor fallback guidance is set -- surface
             // this plainly rather than rendering nothing, since a missing
