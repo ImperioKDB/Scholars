@@ -54,7 +54,9 @@ export async function getMatchesForCurrentUser(): Promise<{
     await Promise.all([
       supabase
         .from("scholarships")
-        .select("id, title, provider_name, description, amount, deadline, application_url, level, discipline, verified")
+        .select(
+          "id, title, provider_name, description, amount, deadline, application_url, how_to_apply, level, discipline, verified"
+        )
         .eq("verified", true)
         .in("level", ["undergrad", "both"]),
       supabase.from("scholarship_rules").select("id, scholarship_id, field, operator, value"),
@@ -124,7 +126,9 @@ export async function getMatchForScholarship(scholarshipId: string): Promise<{
     await Promise.all([
       supabase
         .from("scholarships")
-        .select("id, title, provider_name, description, amount, deadline, application_url, level, discipline, verified")
+        .select(
+          "id, title, provider_name, description, amount, deadline, application_url, how_to_apply, level, discipline, verified"
+        )
         .eq("id", scholarshipId)
         .eq("verified", true)
         .in("level", ["undergrad", "both"])
