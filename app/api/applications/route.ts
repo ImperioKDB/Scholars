@@ -12,6 +12,10 @@
 // Applications page can render each card's draft state without a second
 // round trip. Generation/editing/confirming happens through the dedicated
 // /api/applications/[id]/draft route, not here.
+//
+// SCHOLARSHIP_COLUMNS also includes how_to_apply now -- fallback guidance
+// shown in place of the apply link when application_url is null (see
+// migration: add_how_to_apply_fallback).
 
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -22,7 +26,7 @@ const createSchema = z.object({
 })
 
 const SCHOLARSHIP_COLUMNS =
-  'id, title, provider_name, description, amount, deadline, application_url, level, discipline, verified'
+  'id, title, provider_name, description, amount, deadline, application_url, how_to_apply, level, discipline, verified'
 
 const APPLICATION_COLUMNS = `id, status, notes, created_at, updated_at, draft_statement, draft_summary, draft_generated_at, draft_confirmed_at, scholarship:scholarships ( ${SCHOLARSHIP_COLUMNS} )`
 
