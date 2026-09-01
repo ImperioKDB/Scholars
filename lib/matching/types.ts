@@ -44,6 +44,10 @@ export type ScholarshipRow = {
   amount: string | null;
   deadline: string | null;
   application_url: string | null;
+  // Fallback guidance shown in place of the "Apply" button when
+  // application_url is null (e.g. email-only application, no stable
+  // official portal found). See migration: add_how_to_apply_fallback.
+  how_to_apply: string | null;
   level: "undergrad" | "postgrad" | "both";
   discipline: string | null;
   verified: boolean;
