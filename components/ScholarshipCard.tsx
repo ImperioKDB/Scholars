@@ -3,18 +3,9 @@
 import Link from "next/link";
 import { MatchSeal } from "@/components/MatchSeal";
 import { ProviderMonogram } from "@/components/ProviderMonogram";
+import { ShareButton } from "@/components/ShareButton";
 import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
 
-// Deliberately narrow: this is the subset of a scholarship both
-// ScholarshipMatch (from /api/scholarships/match) and the saved-scholarship
-// shape (from /api/scholarships/save) share. Both are passed in as variables
-// (not object literals), so TS structural typing allows the extra fields
-// each one carries without a cast.
-//
-// how_to_apply is optional here (rather than on ScholarshipMatch's required
-// field) since cards themselves never render an apply action -- only
-// ApplicationsClient's "Open application" link needs it, via the wider
-// SCHOLARSHIP_COLUMNS shape it fetches.
 export type CardScholarship = {
   id: string;
   title: string;
@@ -27,12 +18,6 @@ export type CardScholarship = {
   how_to_apply?: string | null;
 };
 
-// DashboardClient.tsx imports this for its per-card navigation-pending
-// state (shown briefly over a deadline card while routing to the detail
-// page). Same animate-spin circle+path pattern used everywhere else in
-// the app (Sidebar's logout spinner, the login/signup submit spinners) --
-// centralized here since ScholarshipCard is the module DashboardClient
-// already imports scholarship-related pieces from.
 export function Spinner({ className = "" }: { className?: string }) {
   return (
     <svg className={`animate-spin ${className}`} viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -91,14 +76,14 @@ function SaveButton({
 }
 
 // Card title/avatar/badges are wrapped in a Link to /scholarships/[id]
-// (the detail page) via `className="contents"` so the wrapper doesn't
-// affect the existing flex layout. SaveButton is a sibling, absolutely
-// positioned in the top-right corner -- NOT nested inside the Link,
-// since a <button> inside an <a> is invalid HTML and would break
-// keyboard/screen-reader semantics. The external "View application"
-// link that used to live here was removed -- the detail page's "Apply on
-// provider's site" button is now the one place that sends someone to the
-// external URL, so a card never has two competing tap targets.
+// via `className="contents"` so the wrapper doesn't affect the existing
+// flex layout. ShareButton and SaveButton are siblings, absolutely
+// positioned in the top-right corner -- NOT nested inside the Link, since
+// a <button> inside an <a> is invalid HTML and would break keyboard/
+// screen-reader semantics. ShareButton calls stopPropagation/
+// preventDefault internally so tapping it never also triggers the card's
+// own Link navigation underneath. pr-14 (was pr-8) makes room for the
+// second icon now sitting in that corner.
 export function ScholarshipCard({
   scholarship,
   score,
@@ -108,21 +93,22 @@ export function ScholarshipCard({
   saved,
   onToggleSave,
   pending,
+  sharerId,
 }: {
   scholarship: CardScholarship;
   score?: number;
   metCount?: number;
   totalCount?: number;
-  // Short field labels (e.g. "GPA / CGPA", "State of origin") for
-  // requirements the engine couldn't check because the profile is missing
-  // that data -- DashboardClient.tsx derives this from
-  // requirements.filter(r => r.status === "missing_data"). Optional since
-  // the Saved-section call site doesn't have per-scholarship requirement
-  // data to compute it from.
   missingLabels?: string[];
   saved: boolean;
   onToggleSave: () => void;
   pending?: boolean;
+  // Current user's profile id, threaded down from the page-level Server
+  // Component so a generated share link carries ?ref=<sharerId> for
+  // referral attribution (middleware.ts + app/auth/callback/route.ts).
+  // Optional so this component doesn't break wherever it hasn't been
+  // wired through yet -- the share icon simply doesn't render without it.
+  sharerId?: string;
 }) {
   return (
     <div className="relative bg-white rounded-xl border border-hairline p-5 flex gap-4 shadow-card">
@@ -134,7 +120,7 @@ export function ScholarshipCard({
         )}
 
         <div className="min-w-0 flex-1">
-          <div className="pr-8">
+          <div className="pr-14">
             <p className="font-medium text-ink leading-snug hover:text-navy transition-colors">{scholarship.title}</p>
             <p className="text-xs text-navy-light mt-0.5">{scholarship.provider_name}</p>
           </div>
@@ -162,7 +148,15 @@ export function ScholarshipCard({
         </div>
       </Link>
 
-      <div className="absolute top-5 right-5">
+      <div className="absolute top-5 right-5 flex items-center gap-1">
+        {sharerId && (
+          <ShareButton
+            variant="icon"
+            scholarshipId={scholarship.id}
+            title={scholarship.title}
+            sharerId={sharerId}
+          />
+        )}
         <SaveButton saved={saved} pending={pending} onToggle={onToggleSave} />
       </div>
     </div>
