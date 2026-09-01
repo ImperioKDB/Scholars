@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
 import { MatchSeal } from "@/components/MatchSeal";
-import { BackLink } from "@/components/BackLink";
+import { ShareButton } from "@/components/ShareButton";
 
 type RequirementStatus = "met" | "not_met" | "missing_data" | "unverifiable";
 
@@ -24,6 +25,7 @@ type ScholarshipDetail = {
   amount: string | null;
   deadline: string | null;
   application_url: string | null;
+  how_to_apply: string | null;
   level: "undergrad" | "postgrad" | "both";
   discipline: string | null;
   score: number;
@@ -68,18 +70,19 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
   rejected: "Rejected",
 };
 
-// Receives everything it needs from the server component
-// (app/scholarships/[id]/page.tsx) -- no fetch-on-mount waterfall. Save
-// and track-application actions hit the existing /api/scholarships/save
-// and /api/applications routes, same ones the dashboard already uses.
 export function ScholarshipDetailClient({
   scholarship,
   initialSaved,
   initialApplication,
+  sharerId,
 }: {
   scholarship: ScholarshipDetail;
   initialSaved: boolean;
   initialApplication: { id: string; status: ApplicationStatus } | null;
+  // Current user's profile id -- always present here since /scholarships/**
+  // sits behind middleware.ts's PROTECTED_PREFIXES. Passed to ShareButton
+  // so the generated link carries ?ref=<sharerId> for referral attribution.
+  sharerId: string;
 }) {
   const router = useRouter();
   const [saved, setSaved] = useState(initialSaved);
@@ -99,7 +102,7 @@ export function ScholarshipDetailClient({
     setSavePending(true);
 
     const res = wasSaved
-      ? await fetch("/api/scholarships/save?scholarship_id=" + scholarship.id, { method: "DELETE" })
+      ? await fetch(`/api/scholarships/save?scholarship_id=${scholarship.id}`, { method: "DELETE" })
       : await fetch("/api/scholarships/save", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -135,7 +138,9 @@ export function ScholarshipDetailClient({
 
   return (
     <div>
-      <BackLink href="/dashboard" label="Back to matches" />
+      <Link href="/dashboard" className="text-sm text-navy-light hover:text-navy mb-6 inline-block">
+        &larr; Back to matches
+      </Link>
 
       <div className="bg-white rounded-2xl border border-hairline shadow-card p-6 md:p-8">
         <div className="flex items-start gap-4 mb-6">
@@ -151,7 +156,7 @@ export function ScholarshipDetailClient({
 
         <div className="flex flex-wrap items-center gap-2 mb-6">
           {days !== null && (
-            <span className={"text-xs font-mono font-medium px-2 py-1 rounded-full " + DEADLINE_TONE_CLASSES[deadlineTone(days)]}>
+            <span className={`text-xs font-mono font-medium px-2 py-1 rounded-full ${DEADLINE_TONE_CLASSES[deadlineTone(days)]}`}>
               {formatDeadlineLabel(days)}
             </span>
           )}
@@ -174,8 +179,8 @@ export function ScholarshipDetailClient({
 
         {actionError && <p className="text-sm text-rose mb-4">{actionError}</p>}
 
-        <div className="flex flex-wrap items-center gap-3 mb-8 pb-8 border-b border-hairline">
-          {scholarship.application_url && (
+        <div className="flex flex-wrap items-center gap-3 mb-4 pb-8 border-b border-hairline">
+          {scholarship.application_url ? (
             <a
               href={scholarship.application_url}
               target="_blank"
@@ -184,7 +189,12 @@ export function ScholarshipDetailClient({
             >
               Apply on provider&apos;s site &rarr;
             </a>
-          )}
+          ) : !scholarship.how_to_apply ? (
+            <p className="text-sm text-navy-light">
+              We don&apos;t have a confirmed application link for this scholarship yet. Search the
+              provider&apos;s name plus &quot;scholarship application&quot; to find their current process.
+            </p>
+          ) : null}
 
           <button
             type="button"
@@ -197,6 +207,8 @@ export function ScholarshipDetailClient({
           >
             {saved ? "Saved \u2713" : "Save"}
           </button>
+
+          <ShareButton variant="full" scholarshipId={scholarship.id} title={scholarship.title} sharerId={sharerId} />
 
           {application ? (
             <span className="text-sm font-medium text-navy-light px-2">
@@ -214,6 +226,13 @@ export function ScholarshipDetailClient({
           )}
         </div>
 
+        {!scholarship.application_url && scholarship.how_to_apply && (
+          <div className="bg-amber-light rounded-xl p-4 mb-8">
+            <p className="text-xs font-medium text-amber uppercase tracking-wide mb-1.5">How to apply</p>
+            <p className="text-sm text-ink leading-relaxed">{scholarship.how_to_apply}</p>
+          </div>
+        )}
+
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-display text-lg font-semibold text-navy">Eligibility requirements</h2>
@@ -229,12 +248,12 @@ export function ScholarshipDetailClient({
           ) : (
             <ul className="space-y-3">
               {scholarship.requirements.map((r, i) => (
-                <li key={r.field + "-" + i} className="flex items-start justify-between gap-3 bg-navy-50 rounded-lg p-3.5">
+                <li key={`${r.field}-${i}`} className="flex items-start justify-between gap-3 bg-navy-50 rounded-lg p-3.5">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-ink">{r.requirement}</p>
                     <p className="text-xs text-navy-light mt-0.5">{r.detail}</p>
                   </div>
-                  <span className={"shrink-0 text-xs font-medium px-2 py-1 rounded-full " + REQ_STATUS_TONE[r.status]}>
+                  <span className={`shrink-0 text-xs font-medium px-2 py-1 rounded-full ${REQ_STATUS_TONE[r.status]}`}>
                     {REQ_STATUS_LABELS[r.status]}
                   </span>
                 </li>
