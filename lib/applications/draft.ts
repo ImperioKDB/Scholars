@@ -114,7 +114,7 @@ export function buildDraftSummary(profile: DraftProfileInput, waecResults: Draft
 }
 
 function truncate(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max)}\u2026` : text;
+  return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
 // Everything the model needs is passed explicitly -- no hidden lookups --
@@ -154,8 +154,17 @@ Write the statement now. Do not include a greeting, a subject line, or a sign-of
 
 // Google Gemini (AI Studio) -- free tier, no credit card required. Get a
 // key at https://aistudio.google.com/apikey and set it as GEMINI_API_KEY
-// in Vercel. Free-tier limits (as of writing, gemini-2.5-flash-lite): 1,500
-// requests/day, 15/minute -- comfortably enough for draft generation.
+// in Vercel.
+//
+// MODEL NOTE (2026-09-01): gemini-2.5-flash-lite was retired for new
+// callers -- Google's API now returns a 404 NOT_FOUND pointing callers at
+// gemini-3.5-flash-lite instead (see the literal error text: "This model
+// models/gemini-2.5-flash-lite is no longer available to new users.
+// Please update your code to use models/gemini-3.5-flash-lite"). Switched
+// the model id below accordingly. If this model is retired in turn, the
+// same 404 pattern will show up in the draft-generation error banner on
+// the Applications page -- check that banner's text first, it names the
+// replacement model directly.
 type GeminiResponse = {
   candidates?: { content?: { parts?: { text?: string }[] } }[];
   promptFeedback?: { blockReason?: string };
@@ -168,7 +177,7 @@ export async function generateStatement(prompt: string): Promise<string> {
   }
 
   const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -192,7 +201,8 @@ export async function generateStatement(prompt: string): Promise<string> {
 
   const text = (data.candidates?.[0]?.content?.parts ?? [])
     .map((part) => part.text ?? "")
-    .join("\n")
+    .join("
+")
     .trim();
 
   if (!text) {
