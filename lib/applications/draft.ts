@@ -114,7 +114,7 @@ export function buildDraftSummary(profile: DraftProfileInput, waecResults: Draft
 }
 
 function truncate(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max)}…` : text;
+  return text.length > max ? `${text.slice(0, max)}\u2026` : text;
 }
 
 // Everything the model needs is passed explicitly -- no hidden lookups --
@@ -201,8 +201,7 @@ export async function generateStatement(prompt: string): Promise<string> {
 
   const text = (data.candidates?.[0]?.content?.parts ?? [])
     .map((part) => part.text ?? "")
-    .join("
-")
+    .join("\n")
     .trim();
 
   if (!text) {
