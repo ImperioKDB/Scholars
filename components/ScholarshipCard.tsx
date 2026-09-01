@@ -104,6 +104,7 @@ export function ScholarshipCard({
   score,
   metCount,
   totalCount,
+  missingLabels,
   saved,
   onToggleSave,
   pending,
@@ -112,6 +113,13 @@ export function ScholarshipCard({
   score?: number;
   metCount?: number;
   totalCount?: number;
+  // Short field labels (e.g. "GPA / CGPA", "State of origin") for
+  // requirements the engine couldn't check because the profile is missing
+  // that data -- DashboardClient.tsx derives this from
+  // requirements.filter(r => r.status === "missing_data"). Optional since
+  // the Saved-section call site doesn't have per-scholarship requirement
+  // data to compute it from.
+  missingLabels?: string[];
   saved: boolean;
   onToggleSave: () => void;
   pending?: boolean;
@@ -143,6 +151,12 @@ export function ScholarshipCard({
           {totalCount !== undefined && totalCount > 0 && (
             <p className="text-xs text-navy-light mt-2 font-mono">
               {metCount}/{totalCount} requirements met
+            </p>
+          )}
+
+          {missingLabels && missingLabels.length > 0 && (
+            <p className="text-xs text-amber mt-1.5">
+              Missing: {missingLabels.join(", ")}
             </p>
           )}
         </div>
