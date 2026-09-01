@@ -27,6 +27,21 @@ export type CardScholarship = {
   how_to_apply?: string | null;
 };
 
+// DashboardClient.tsx imports this for its per-card navigation-pending
+// state (shown briefly over a deadline card while routing to the detail
+// page). Same animate-spin circle+path pattern used everywhere else in
+// the app (Sidebar's logout spinner, the login/signup submit spinners) --
+// centralized here since ScholarshipCard is the module DashboardClient
+// already imports scholarship-related pieces from.
+export function Spinner({ className = "" }: { className?: string }) {
+  return (
+    <svg className={`animate-spin ${className}`} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+    </svg>
+  );
+}
+
 const DEADLINE_TONE_CLASSES: Record<ReturnType<typeof deadlineTone>, string> = {
   closed: "bg-hairline text-navy-light",
   urgent: "bg-rose-light text-rose",
