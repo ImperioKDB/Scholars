@@ -7,27 +7,15 @@ import { ScholarshipDetailClient } from "./ScholarshipDetailClient";
 
 type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected";
 
-type ApplicationRow = {
-  id: string;
-  status: ApplicationStatus;
-  draft_statement: string | null;
-  draft_summary: {
-    facts: { label: string; value: string }[];
-    checklist: { item: string; have: boolean }[];
-  } | null;
-  draft_generated_at: string | null;
-  draft_confirmed_at: string | null;
-};
-
 // Server Component: evaluates the scholarship against the current user's
 // profile server-side (same engine the dashboard uses, via
 // getMatchForScholarship) and fetches saved/tracking status in parallel,
 // then hands everything to ScholarshipDetailClient as initial props --
 // same pattern as app/dashboard/page.tsx and app/applications/page.tsx.
 //
-// The applications query now also selects the auto-apply draft columns so
-// the "Generate application draft" flow can live right on this page, next
-// to Save/Track, instead of only on the Applications tab.
+// scholarship.how_to_apply (fallback guidance shown when application_url
+// is null) flows through automatically here since getMatchForScholarship's
+// query now selects it and ScholarshipMatch = ScholarshipRow & {...}.
 export default async function ScholarshipDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { user } = await getCurrentUserAndProfile();
@@ -73,13 +61,14 @@ export default async function ScholarshipDetailPage({ params }: { params: Promis
       .maybeSingle(),
     supabase
       .from("applications")
-      .select("id, status, draft_statement, draft_summary, draft_generated_at, draft_confirmed_at")
+      .select("id, status")
       .eq("profile_id", user.id)
       .eq("scholarship_id", id)
       .maybeSingle(),
   ]);
 
-  const initialApplication = (applicationResult.data as ApplicationRow | null) ?? null;
+  const initialApplication =
+    (applicationResult.data as { id: string; status: ApplicationStatus } | null) ?? null;
 
   return (
     <ScholarshipDetailClient
