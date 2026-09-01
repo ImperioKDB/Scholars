@@ -5,6 +5,9 @@
 // Scoped by .eq('profile_id', user.id) in addition to RLS, same
 // belt-and-suspenders pattern as the admin rules routes -- makes a
 // cross-user id guess a clean 404 instead of relying solely on RLS.
+//
+// SCHOLARSHIP_COLUMNS also includes how_to_apply now, for consistency with
+// GET /api/applications -- see migration: add_how_to_apply_fallback.
 
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -21,7 +24,7 @@ const updateSchema = z
   .refine((obj) => Object.keys(obj).length > 0, 'No fields to update')
 
 const SCHOLARSHIP_COLUMNS =
-  'id, title, provider_name, description, amount, deadline, application_url, level, discipline, verified'
+  'id, title, provider_name, description, amount, deadline, application_url, how_to_apply, level, discipline, verified'
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
