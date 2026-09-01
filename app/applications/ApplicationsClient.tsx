@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemo, useState } from "react";
@@ -52,12 +51,6 @@ const DEADLINE_TONE_CLASSES: Record<ReturnType<typeof deadlineTone>, string> = {
 // after mutations (start/stop tracking, a failed status update), which is
 // a normal user-triggered network call via the existing API routes, not
 // part of first paint.
-//
-// "Open application" is now a button, not a plain <a>: opening the URL and
-// recording the click (POST /api/applications/[id]/click, fire-and-forget)
-// both happen synchronously in the same click handler, since the
-// application here is always already tracked -- no Ade track-first prompt
-// needed, unlike the scholarship detail page.
 export function ApplicationsClient({
   initialApplications,
   initialSaved,
@@ -164,11 +157,6 @@ export function ApplicationsClient({
 
   function handleDraftChange(applicationId: string, updated: Draft) {
     setApplications((prev) => prev.map((a) => (a.id === applicationId ? { ...a, ...updated } : a)));
-  }
-
-  function openApplication(applicationId: string, applicationUrl: string) {
-    fetch(`/api/applications/${applicationId}/click`, { method: "POST" }).catch(() => {});
-    window.open(applicationUrl, "_blank", "noreferrer");
   }
 
   return (
@@ -284,15 +272,24 @@ export function ApplicationsClient({
                     </select>
                   </label>
 
-                  {a.scholarship.application_url && (
-                    <button
-                      type="button"
-                      onClick={() => openApplication(a.id, a.scholarship.application_url as string)}
+                  {a.scholarship.application_url ? (
+                    <a
+                      href={a.scholarship.application_url}
+                      target="_blank"
+                      rel="noreferrer"
                       className="inline-block text-xs font-medium text-navy hover:underline mt-3"
                     >
-                      Open application &rarr;
-                    </button>
-                  )}
+                      Open application →
+                    </a>
+                  ) : a.scholarship.how_to_apply ? (
+                    // No direct link on file for this one (see
+                    // migration: add_how_to_apply_fallback) -- show the
+                    // guidance inline instead of just omitting the link.
+                    <p className="text-xs text-navy-light mt-3 leading-relaxed">
+                      <span className="font-medium text-ink">How to apply: </span>
+                      {a.scholarship.how_to_apply}
+                    </p>
+                  ) : null}
 
                   <DraftPanel
                     applicationId={a.id}
