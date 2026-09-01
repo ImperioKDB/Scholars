@@ -7,6 +7,7 @@ import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
 import type { CardScholarship } from "@/components/ScholarshipCard";
 import { StatusDonut } from "@/components/StatusDonut";
 import { DraftPanel, type Draft } from "@/components/DraftPanel";
+import { useAde } from "@/components/ade/AdeProvider";
 
 type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected";
 
@@ -51,6 +52,12 @@ const DEADLINE_TONE_CLASSES: Record<ReturnType<typeof deadlineTone>, string> = {
 // after mutations (start/stop tracking, a failed status update), which is
 // a normal user-triggered network call via the existing API routes, not
 // part of first paint.
+//
+// "Open application" now routes through useAde().confirmApply() instead of
+// a bare <a href>. Every row here already has a tracked application, so
+// alreadyTracked is always true -- confirmApply's alreadyTracked branch
+// just records the /click timestamp and opens the tab, which is what
+// makes Ade's post-deadline "did you hear back?" check-in possible at all.
 export function ApplicationsClient({
   initialApplications,
   initialSaved,
@@ -61,6 +68,7 @@ export function ApplicationsClient({
   initialError: string | null;
 }) {
   const router = useRouter();
+  const { confirmApply } = useAde();
 
   const [loadError, setLoadError] = useState<string | null>(initialError);
   const [applications, setApplications] = useState<ApplicationApiItem[]>(initialApplications);
@@ -157,6 +165,21 @@ export function ApplicationsClient({
 
   function handleDraftChange(applicationId: string, updated: Draft) {
     setApplications((prev) => prev.map((a) => (a.id === applicationId ? { ...a, ...updated } : a)));
+  }
+
+  // alreadyTracked is always true here -- every application in this list
+  // is, by definition, already being tracked -- so onTrack is never
+  // actually invoked by confirmApply. It's provided only to satisfy the
+  // function's required shape.
+  function openApplication(a: ApplicationApiItem) {
+    if (!a.scholarship.application_url) return;
+    confirmApply({
+      scholarshipTitle: a.scholarship.title,
+      applicationUrl: a.scholarship.application_url,
+      alreadyTracked: true,
+      applicationId: a.id,
+      onTrack: async () => ({ id: a.id }),
+    });
   }
 
   return (
@@ -273,14 +296,13 @@ export function ApplicationsClient({
                   </label>
 
                   {a.scholarship.application_url ? (
-                    <a
-                      href={a.scholarship.application_url}
-                      target="_blank"
-                      rel="noreferrer"
+                    <button
+                      type="button"
+                      onClick={() => openApplication(a)}
                       className="inline-block text-xs font-medium text-navy hover:underline mt-3"
                     >
-                      Open application →
-                    </a>
+                      Open application &rarr;
+                    </button>
                   ) : a.scholarship.how_to_apply ? (
                     // No direct link on file for this one (see
                     // migration: add_how_to_apply_fallback) -- show the
@@ -293,6 +315,7 @@ export function ApplicationsClient({
 
                   <DraftPanel
                     applicationId={a.id}
+                    scholarshipTitle={a.scholarship.title}
                     draft={{
                       draft_statement: a.draft_statement,
                       draft_summary: a.draft_summary,
