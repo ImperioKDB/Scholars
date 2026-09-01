@@ -4,6 +4,9 @@ import { NextResponse, type NextRequest } from "next/server";
 const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/discover", "/saved", "/applications", "/admin", "/scholarships"];
 const AUTH_PREFIXES = ["/login", "/signup"];
 
+const REF_COOKIE_NAME = "ref_id";
+const REF_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } });
 
@@ -47,6 +50,32 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
+  // Referral attribution: capture ?ref=<sharer_profile_id> from a public
+  // share link (see components/ShareButton.tsx, app/s/[id]/page.tsx) into
+  // a cookie, so it survives the redirect chain into signup and gets
+  // consumed once in app/auth/callback/route.ts. First-touch wins -- never
+  // overwrite an existing ref_id, so opening a second share link before
+  // signing up doesn't silently reassign who gets credit.
+  //
+  // This block MUST run after the Supabase getUser() call above, not
+  // before it. The cookies.set() callback wired into createServerClient
+  // reassigns `response` to a brand-new NextResponse.next() instance
+  // whenever Supabase needs to refresh a session cookie -- setting the ref
+  // cookie on the original `response` earlier in this function would be
+  // silently discarded the moment that reassignment happens.
+  if (path.startsWith("/s/")) {
+    const ref = request.nextUrl.searchParams.get("ref");
+    const alreadyHasRef = request.cookies.get(REF_COOKIE_NAME)?.value;
+    if (ref && !alreadyHasRef) {
+      response.cookies.set(REF_COOKIE_NAME, ref, {
+        maxAge: REF_COOKIE_MAX_AGE,
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+      });
+    }
+  }
+
   return response;
 }
 
@@ -59,6 +88,7 @@ export const config = {
     "/applications/:path*",
     "/admin/:path*",
     "/scholarships/:path*",
+    "/s/:path*",
     "/login",
     "/signup",
   ],
