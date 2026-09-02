@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/Logo";
+import { levelForXp } from "@/lib/xp/level";
 
 function DashboardIcon() {
   return (
@@ -23,6 +24,16 @@ function ApplicationsIcon() {
       <rect x="5" y="3.5" width="14" height="17" rx="2" />
       <path d="M9 3.5V3a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v.5" />
       <path d="M8.5 11h7M8.5 14.5h7M8.5 8h4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function AchievementsIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <path d="M8 4h8v5a4 4 0 0 1-8 0V4Z" />
+      <path d="M8 5H5a3 3 0 0 0 3 5M16 5h3a3 3 0 0 1-3 5" strokeLinecap="round" />
+      <path d="M12 13v3M9 20h6M10 20l.5-2h3l.5 2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -68,17 +79,18 @@ function initialsFor(name: string | null): string {
   return (words[0][0] + words[1][0]).toUpperCase();
 }
 
-// Only links to pages that actually exist today. Discover/Saved are
-// planned as separate pages later -- add their links here once they're
-// built rather than shipping dead links now.
 export function Sidebar({
   fullName,
   isAdmin,
   profileCompleteness,
+  xpTotal,
 }: {
   fullName: string | null;
   isAdmin: boolean;
   profileCompleteness: number;
+  // Trigger-maintained total from profiles.xp_total (see
+  // lib/supabase/currentUser.ts, migration add_xp_and_achievements).
+  xpTotal: number;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -86,9 +98,12 @@ export function Sidebar({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
+  const { level } = levelForXp(xpTotal);
+
   const navItems = [
     { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
     { href: "/applications", label: "Applications", Icon: ApplicationsIcon },
+    { href: "/achievements", label: "Achievements", Icon: AchievementsIcon },
     ...(isAdmin ? [{ href: "/admin", label: "Admin", Icon: AdminIcon }] : []),
   ];
 
@@ -115,6 +130,12 @@ export function Sidebar({
           className={`h-full rounded-full ${profileCompleteness === 100 ? "bg-emerald" : "bg-navy"}`}
           style={{ width: `${profileCompleteness}%` }}
         />
+      </div>
+      <div className="flex items-center justify-between mt-2.5">
+        <span className="text-xs font-mono font-medium text-navy">Lv {level} &middot; {xpTotal} XP</span>
+        <Link href="/achievements" className="text-xs text-emerald font-medium hover:underline">
+          Achievements
+        </Link>
       </div>
     </div>
   );
@@ -151,14 +172,13 @@ export function Sidebar({
         className="w-full inline-flex items-center gap-2.5 text-left rounded-lg px-3 py-2.5 text-sm font-medium text-navy-light hover:bg-navy-50 hover:text-navy transition-colors disabled:opacity-60 disabled:hover:bg-transparent"
       >
         {loggingOut && <SpinnerIcon />}
-        {loggingOut ? "Logging out…" : "Log out"}
+        {loggingOut ? "Logging out\u2026" : "Log out"}
       </button>
     </div>
   );
 
   return (
     <>
-      {/* Desktop rail */}
       <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-60 border-r border-hairline bg-white">
         <div className="px-5 py-5 border-b border-hairline">
           <Logo className="text-navy" />
@@ -168,7 +188,6 @@ export function Sidebar({
         {accountBlock}
       </aside>
 
-      {/* Mobile top bar -- hamburger on the left, same side the drawer opens from */}
       <header className="md:hidden fixed top-0 inset-x-0 z-40 h-14 bg-white border-b border-hairline flex items-center gap-3 px-4">
         <button type="button" onClick={() => setMobileOpen(true)} aria-label="Open menu" className="text-navy p-1.5 -ml-1.5">
           <MenuIcon />
@@ -176,7 +195,6 @@ export function Sidebar({
         <Logo className="text-navy" />
       </header>
 
-      {/* Mobile drawer */}
       <div
         className={[
           "md:hidden fixed inset-0 z-50 transition-opacity duration-200",
