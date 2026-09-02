@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
 import { MatchSeal } from "@/components/MatchSeal";
 import { BackLink } from "@/components/BackLink";
+import { ShareButton } from "@/components/ShareButton";
 import { CompetitivenessBadge, type CompetitivenessTier } from "@/components/CompetitivenessBadge";
 
 type RequirementStatus = "met" | "not_met" | "missing_data" | "unverifiable";
@@ -82,14 +83,21 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
 // (app/scholarships/[id]/page.tsx) -- no fetch-on-mount waterfall. Save
 // and track-application actions hit the existing /api/scholarships/save
 // and /api/applications routes, same ones the dashboard already uses.
+//
+// sharerId: the current user's profile id, threaded down from the
+// Server Component so the ShareButton below can build a referral link
+// (?ref=<sharerId>) via app/s/[id]/page.tsx + middleware.ts's cookie
+// capture -- see components/ShareButton.tsx for the full mechanism.
 export function ScholarshipDetailClient({
   scholarship,
   initialSaved,
   initialApplication,
+  sharerId,
 }: {
   scholarship: ScholarshipDetail;
   initialSaved: boolean;
   initialApplication: { id: string; status: ApplicationStatus } | null;
+  sharerId: string;
 }) {
   const router = useRouter();
   const [saved, setSaved] = useState(initialSaved);
@@ -243,6 +251,13 @@ export function ScholarshipDetailClient({
               {trackPending ? "Adding\u2026" : "+ Track application"}
             </button>
           )}
+
+          <ShareButton
+            variant="full"
+            scholarshipId={scholarship.id}
+            title={scholarship.title}
+            sharerId={sharerId}
+          />
         </div>
 
         <div>
