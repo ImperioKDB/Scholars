@@ -1,4 +1,5 @@
 import type {
+  CompetitivenessTier,
   EvaluatedRequirement,
   MatchTier,
   MatchableProfile,
@@ -245,6 +246,62 @@ export function tierFor(score: number, gatingFailed: boolean): MatchTier {
   return "unlikely";
 }
 
+// --- Competitiveness ---------------------------------------------------
+//
+// Layered on top of the pure eligibility score below, never folded into
+// it. Eligibility answers "can you apply"; competitiveness answers "how
+// likely are you to actually win" -- an eligible student for a 5-spot,
+// 20,000-applicant award shouldn't see the same confidence signal as one
+// for a 200-spot award with light competition. See
+// migration: add_competitiveness_fields.
+//
+// Deliberately floored at 0.5, never lower: competitiveness makes an
+// eligible student's realistic chances lower, it never makes them
+// ineligible -- that's what gating fields (see GATING_FIELDS above) are
+// for. Missing/unresearched competitiveness data is never penalized --
+// factor defaults to 1.0 (no discount), same "unknown isn't guessed at"
+// principle SUPPORTED_FIELDS already applies to eligibility rules.
+const COMPETITIVENESS_FACTOR_FLOOR = 0.5;
+
+const TIER_FACTORS: Record<CompetitivenessTier, number> = {
+  low: 1.0,
+  medium: 0.85,
+  high: 0.7,
+  very_high: 0.55,
+};
+
+function computeCompetitivenessFactor(scholarship: ScholarshipRow): number {
+  let factor = 1.0;
+  const headroom = 1 - COMPETITIVENESS_FACTOR_FLOOR; // 0.5
+
+  if (
+    scholarship.awards_available !== null &&
+    scholarship.estimated_applicant_pool !== null &&
+    scholarship.estimated_applicant_pool > 0
+  ) {
+    // A wide-open award (roughly 1-in-2 odds or better) gets no discount
+    // at all. As the ratio shrinks toward zero the factor eases down
+    // toward the floor instead of collapsing linearly past it, so a
+    // merely-competitive award (say 1-in-10) isn't treated the same as a
+    // 1-in-10,000 long shot.
+    const ratio = scholarship.awards_available / scholarship.estimated_applicant_pool;
+    factor = COMPETITIVENESS_FACTOR_FLOOR + Math.min(ratio, headroom);
+  } else if (scholarship.competitiveness_tier) {
+    factor = TIER_FACTORS[scholarship.competitiveness_tier];
+  }
+
+  // Historical acceptance rate is the most concrete signal available when
+  // known -- if it implies a harsher discount than the ratio/tier estimate
+  // above, defer to it (take the more conservative of the two rather than
+  // averaging them away).
+  if (scholarship.historical_acceptance_rate !== null) {
+    const historicalFactor = COMPETITIVENESS_FACTOR_FLOOR + scholarship.historical_acceptance_rate * headroom;
+    factor = Math.min(factor, historicalFactor);
+  }
+
+  return Math.max(COMPETITIVENESS_FACTOR_FLOOR, Math.min(1.0, factor));
+}
+
 export function evaluateScholarship(
   profile: MatchableProfile,
   scholarship: ScholarshipRow,
@@ -257,20 +314,31 @@ export function evaluateScholarship(
   const evaluable = requirements.filter((r) => r.status !== "unverifiable");
   const gatingFailed = requirements.some((r) => r.gating && r.status === "not_met");
 
-  let score: number;
+  let eligibilityScore: number;
   if (evaluable.length === 0) {
-    score = 50; // no rules defined yet to check against -- neutral, not zero
+    eligibilityScore = 50; // no rules defined yet to check against -- neutral, not zero
   } else {
     const metCount = evaluable.filter((r) => r.status === "met").length;
-    score = Math.round((metCount / evaluable.length) * 100);
+    eligibilityScore = Math.round((metCount / evaluable.length) * 100);
   }
-  if (gatingFailed) score = Math.min(score, 15);
+  if (gatingFailed) eligibilityScore = Math.min(eligibilityScore, 15);
+
+  const competitivenessFactor = computeCompetitivenessFactor(scholarship);
+
+  // A gating failure has already collapsed eligibilityScore down near
+  // zero -- there's nothing meaningful left to discount, and multiplying
+  // a competitiveness factor through it would just produce a confusing
+  // fractional single-digit number. Competitiveness only discounts a
+  // score that's actually reflecting real eligibility.
+  const score = gatingFailed ? eligibilityScore : Math.round(eligibilityScore * competitivenessFactor);
 
   const rankScore = Math.round(score * 0.85 + profile.profile_completeness * 0.15);
 
   return {
     ...scholarship,
     score,
+    eligibilityScore,
+    competitivenessFactor,
     rankScore,
     tier: tierFor(score, gatingFailed),
     requirements,
