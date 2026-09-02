@@ -1,11 +1,11 @@
-"use client";
+\"use client\";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
 import { MatchSeal } from "@/components/MatchSeal";
 import { BackLink } from "@/components/BackLink";
-import { ShareButton } from "@/components/ShareButton";
+import { CompetitivenessBadge, type CompetitivenessTier } from "@/components/CompetitivenessBadge";
 
 type RequirementStatus = "met" | "not_met" | "missing_data" | "unverifiable";
 
@@ -28,6 +28,15 @@ type ScholarshipDetail = {
   level: "undergrad" | "postgrad" | "both";
   discipline: string | null;
   score: number;
+  // Pure eligibility score before the competitiveness discount below is
+  // applied -- see lib/matching/engine.ts. Used to explain a gap between
+  // "you meet every requirement" and "but this award is competitive."
+  eligibilityScore: number;
+  competitivenessFactor: number;
+  awards_available: number | null;
+  estimated_applicant_pool: number | null;
+  competitiveness_tier: CompetitivenessTier | null;
+  historical_acceptance_rate: number | null;
   tier: "excellent" | "good" | "possible" | "unlikely";
   requirements: Requirement[];
 };
@@ -73,23 +82,14 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
 // (app/scholarships/[id]/page.tsx) -- no fetch-on-mount waterfall. Save
 // and track-application actions hit the existing /api/scholarships/save
 // and /api/applications routes, same ones the dashboard already uses.
-//
-// sharerId is the current user's profile id, threaded down from the
-// server component so the ShareButton can build a referral link
-// (?ref=<sharerId> -- see middleware.ts + app/auth/callback/route.ts).
-// Optional so this component still compiles/renders anywhere it hasn't
-// been wired through yet -- the share button simply doesn't render
-// without it, same pattern as ScholarshipCard.
 export function ScholarshipDetailClient({
   scholarship,
   initialSaved,
   initialApplication,
-  sharerId,
 }: {
   scholarship: ScholarshipDetail;
   initialSaved: boolean;
   initialApplication: { id: string; status: ApplicationStatus } | null;
-  sharerId?: string;
 }) {
   const router = useRouter();
   const [saved, setSaved] = useState(initialSaved);
@@ -159,7 +159,7 @@ export function ScholarshipDetailClient({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 mb-6">
+        <div className="flex flex-wrap items-center gap-2 mb-4">
           {days !== null && (
             <span className={"text-xs font-mono font-medium px-2 py-1 rounded-full " + DEADLINE_TONE_CLASSES[deadlineTone(days)]}>
               {formatDeadlineLabel(days)}
@@ -178,8 +178,29 @@ export function ScholarshipDetailClient({
           )}
         </div>
 
+        {/* Competitiveness transparency block -- separate from the
+            eligibility requirements list below. Explains why `score` (the
+            number on the seal above) can sit lower than pure eligibility
+            would suggest. Renders nothing if no competitiveness data has
+            been researched for this scholarship yet -- see
+            components/CompetitivenessBadge.tsx. */}
+        <CompetitivenessBadge
+          awardsAvailable={scholarship.awards_available}
+          estimatedApplicantPool={scholarship.estimated_applicant_pool}
+          competitivenessTier={scholarship.competitiveness_tier}
+          historicalAcceptanceRate={scholarship.historical_acceptance_rate}
+        />
+
+        {scholarship.competitivenessFactor < 1 && (
+          <p className="text-xs text-navy-light mt-2">
+            You meet <span className="font-mono text-ink">{scholarship.eligibilityScore}%</span> of this
+            scholarship&apos;s requirements. The score above reflects that this award is more competitive
+            than average.
+          </p>
+        )}
+
         {scholarship.description && (
-          <p className="text-sm text-ink leading-relaxed mb-6">{scholarship.description}</p>
+          <p className="text-sm text-ink leading-relaxed mb-6 mt-4">{scholarship.description}</p>
         )}
 
         {actionError && <p className="text-sm text-rose mb-4">{actionError}</p>}
@@ -205,7 +226,7 @@ export function ScholarshipDetailClient({
               saved ? "border-emerald text-emerald bg-emerald-light" : "border-hairline text-navy-light hover:border-navy/40",
             ].join(" ")}
           >
-            {saved ? "Saved ✓" : "Save"}
+            {saved ? "Saved \u2713" : "Save"}
           </button>
 
           {application ? (
@@ -219,17 +240,8 @@ export function ScholarshipDetailClient({
               disabled={trackPending}
               className="rounded-seal text-sm font-medium px-5 py-2.5 border border-hairline text-navy-light hover:border-navy/40 transition-colors disabled:opacity-60"
             >
-              {trackPending ? "Adding…" : "+ Track application"}
+              {trackPending ? "Adding\u2026" : "+ Track application"}
             </button>
-          )}
-
-          {sharerId && (
-            <ShareButton
-              variant="full"
-              scholarshipId={scholarship.id}
-              title={scholarship.title}
-              sharerId={sharerId}
-            />
           )}
         </div>
 
