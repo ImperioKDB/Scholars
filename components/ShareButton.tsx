@@ -8,11 +8,15 @@
 //
 // Builds a link to the public, unauthenticated /s/[id] landing page (see
 // app/s/[id]/page.tsx), tagged with ?ref=<sharerId> for referral
-// attribution (see middleware.ts + app/auth/callback/route.ts). Prefers
-// the native OS share sheet (navigator.share) so WhatsApp, Messages,
-// email, etc. all show up as the person's device already has them
-// configured; falls back to a direct wa.me deep link only when the Web
-// Share API isn't available (most desktop browsers).
+// attribution (middleware.ts + app/auth/callback/route.ts). Prefers the
+// native OS share sheet (navigator.share); falls back to a direct wa.me
+// deep link only when the Web Share API isn't available.
+//
+// Also fires a fire-and-forget POST to /api/xp/share when sharerId is
+// present -- the small, deliberately cheap "share_click" XP award. Never
+// awaited before opening the share sheet (XP is a bonus, not a gate on
+// the actual share action), and its failure is swallowed silently -- same
+// best-effort posture as Ade's own network calls elsewhere in this app.
 
 type ShareButtonProps = {
   scholarshipId: string;
@@ -43,6 +47,15 @@ export function ShareButton({ scholarshipId, title, sharerId, variant = "full" }
   async function handleShare(e?: React.MouseEvent) {
     e?.preventDefault();
     e?.stopPropagation();
+
+    if (sharerId) {
+      fetch("/api/xp/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scholarship_id: scholarshipId }),
+      }).catch(() => {});
+    }
+
     const url = buildShareUrl(scholarshipId, sharerId);
     await performShare(url, title + " -- check if you qualify on Scholars");
   }
