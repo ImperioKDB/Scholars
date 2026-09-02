@@ -3,16 +3,11 @@
 // React's cache() memoizes a function's result per request within the
 // Server Component render tree. Wrapping the auth + profile lookup here
 // means a layout AND its page can both call getCurrentUserAndProfile()
-// and Supabase only gets hit once, not once per caller -- this is what
-// eliminates the "profile fetched 2-3x per dashboard load" duplication
-// (dashboard/layout.tsx, dashboard/page.tsx, and getMatchesForCurrentUser()
-// were each doing their own separate query before).
+// and Supabase only gets hit once, not once per caller.
 //
 // Route Handlers (app/api/**) are NOT part of the React render tree, so
 // this cache() dedup doesn't extend to them -- calling this from a route
-// handler just runs once per handler invocation, same as before. That's
-// fine; the duplication problem only existed within the Server Component
-// tree for a single page render.
+// handler just runs once per handler invocation, same as before.
 
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
@@ -36,6 +31,10 @@ export type CurrentUserProfile = {
   waec_credit_count: number | null;
   has_english_maths_credit: boolean;
   disability_status: boolean;
+  // Trigger-maintained cache of sum(xp_events.points) for this profile --
+  // see migration add_xp_and_achievements / lib/xp/level.ts. Never write
+  // to this column directly from application code.
+  xp_total: number;
 };
 
 export const getCurrentUserAndProfile = cache(async () => {
@@ -52,7 +51,7 @@ export const getCurrentUserAndProfile = cache(async () => {
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "full_name, is_admin, profile_completeness, discipline, gpa, nationality, gender, financial_need, date_of_birth, state_of_origin, lga_of_origin, year_of_study, institution_type, jamb_score, waec_credit_count, has_english_maths_credit, disability_status"
+      "full_name, is_admin, profile_completeness, discipline, gpa, nationality, gender, financial_need, date_of_birth, state_of_origin, lga_of_origin, year_of_study, institution_type, jamb_score, waec_credit_count, has_english_maths_credit, disability_status, xp_total"
     )
     .eq("id", user.id)
     .maybeSingle();
