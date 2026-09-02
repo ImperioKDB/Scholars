@@ -59,13 +59,14 @@ export default async function AchievementsPage() {
     supabase.from("user_achievements").select("achievement_id, unlocked_at").eq("profile_id", user.id),
   ]);
 
-  // Supabase's query builder returns loosely-typed rows -- `tier` comes
-  // back as `string`, not the "bronze" | "silver" | "gold" union
-  // TIER_CHIP_CLASSES/TIER_LABELS are keyed on. Cast once here rather than
-  // widening those Records to Record<string, string>, which would silently
-  // allow an unrecognized tier value to resolve to undefined classes.
-  const typedAchievements = (achievements ?? []) as Achievement[];
-
+  // Supabase's client has no generated Database types in this project, so
+  // .select() results come back untyped -- cast explicitly before mapping,
+  // same pattern already used for `unlocked` -> UnlockedRow[] right below,
+  // and the same pattern used everywhere else in this codebase for
+  // untyped reads. Without this, `a` inside .map() is implicitly `any`,
+  // and TIER_CHIP_CLASSES[a.tier] / TIER_LABELS[a.tier] can't index a
+  // Record with an `any` key under strict mode.
+  const achievementList = (achievements ?? []) as Achievement[];
   const unlockedMap = new Map(((unlocked ?? []) as UnlockedRow[]).map((u) => [u.achievement_id, u.unlocked_at]));
   const xpTotal = profile?.xp_total ?? 0;
   const { level, currentFloor, nextCeiling } = levelForXp(xpTotal);
@@ -97,7 +98,7 @@ export default async function AchievementsPage() {
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">
-        {typedAchievements.map((a) => {
+        {achievementList.map((a) => {
           const unlockedAt = unlockedMap.get(a.id);
           const isUnlocked = Boolean(unlockedAt);
           return (
