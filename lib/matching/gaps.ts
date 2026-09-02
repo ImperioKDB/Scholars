@@ -19,6 +19,13 @@
 // field that's currently `missing_data` isn't currently failing gating
 // either -- so the simulation can only ever show improvement, matching
 // what "unlock" honestly promises.
+//
+// Competitiveness note: real tiers are computed off the combined
+// (eligibility x competitiveness) score, not the raw eligibility score
+// (see engine.ts). The hypothetical hidden below applies this
+// scholarship's own competitivenessFactor before comparing tiers, so an
+// "unlock" nudge only fires when the displayed tier would actually move --
+// not just the underlying eligibility number.
 
 import { tierFor } from "./engine";
 import type { MatchTier, ScholarshipMatch } from "./types";
@@ -79,7 +86,10 @@ export function computeProfileGaps(matches: ScholarshipMatch[]): GapNudge[] {
     // simulation here, so this stays a conservative (never overstated)
     // count.
     for (const req of missing) {
-      const hypotheticalScore = Math.round(((metCount + 1) / evaluable.length) * 100);
+      const hypotheticalEligibilityScore = Math.round(((metCount + 1) / evaluable.length) * 100);
+      const hypotheticalScore = gatingFailed
+        ? hypotheticalEligibilityScore
+        : Math.round(hypotheticalEligibilityScore * match.competitivenessFactor);
       const hypotheticalTier = tierFor(hypotheticalScore, gatingFailed);
 
       if (TIER_RANK[hypotheticalTier] > currentTierRank) {
