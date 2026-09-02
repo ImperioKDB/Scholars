@@ -1,8 +1,12 @@
-"use client";
+\"use client\";
 
 import { FormField, inputClass, selectClass, textareaClass } from "@/components/FormField";
 import { Combobox } from "@/components/Combobox";
-import { DISCIPLINE_OPTIONS, type ScholarshipFormValues } from "@/lib/admin/scholarship";
+import {
+  COMPETITIVENESS_TIER_OPTIONS,
+  DISCIPLINE_OPTIONS,
+  type ScholarshipFormValues,
+} from "@/lib/admin/scholarship";
 
 const DISCIPLINE_COMBO_OPTIONS = DISCIPLINE_OPTIONS.map((d) => ({ value: d, label: d }));
 
@@ -126,8 +130,102 @@ export function ScholarshipFields({
         </FormField>
       </div>
 
+      {/* Competitiveness -- separate from eligibility rules above. These
+          feed lib/matching/engine.ts's computeCompetitivenessFactor, which
+          discounts (never boosts) the eligibility score students see based
+          on how oversubscribed the award actually is. All optional --
+          leaving this blank simply means the score isn't discounted, not
+          that the scholarship is penalized for missing research. */}
+      <div className="md:col-span-2 border-t border-hairline pt-5 mt-1">
+        <h3 className="text-sm font-semibold text-ink mb-1">Competitiveness (optional)</h3>
+        <p className="text-xs text-navy-light mb-4">
+          Adjusts the match score students see -- an eligible student for a 5-spot, 10,000-applicant
+          award should see a more cautious score than one for a 200-spot award. Leave blank if you
+          haven&apos;t researched this yet; unresearched scholarships are not penalized.
+        </p>
+      </div>
+
+      <FormField
+        label="Awards available"
+        error={errors.awards_available}
+        hint="Slots per cycle, if known."
+      >
+        <input
+          className={inputClass}
+          type="number"
+          min="1"
+          value={values.awards_available ?? ""}
+          onChange={(e) => onChange("awards_available", e.target.value)}
+          placeholder="e.g. 50"
+        />
+      </FormField>
+
+      <FormField
+        label="Estimated applicant pool"
+        error={errors.estimated_applicant_pool}
+        hint="Your best researched estimate."
+      >
+        <input
+          className={inputClass}
+          type="number"
+          min="1"
+          value={values.estimated_applicant_pool ?? ""}
+          onChange={(e) => onChange("estimated_applicant_pool", e.target.value)}
+          placeholder="e.g. 3000"
+        />
+      </FormField>
+
+      <FormField
+        label="Competitiveness tier"
+        hint="Fallback used when you don't have precise awards/pool numbers."
+      >
+        <select
+          className={selectClass}
+          value={values.competitiveness_tier ?? ""}
+          onChange={(e) => onChange("competitiveness_tier", e.target.value as ScholarshipFormValues["competitiveness_tier"])}
+        >
+          <option value="">Not set</option>
+          {COMPETITIVENESS_TIER_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </FormField>
+
+      <FormField
+        label="Historical acceptance rate"
+        error={errors.historical_acceptance_rate}
+        hint="0 to 1, e.g. 0.08 for 8%. From past cycles, if known."
+      >
+        <input
+          className={inputClass}
+          type="number"
+          min="0"
+          max="1"
+          step="0.01"
+          value={values.historical_acceptance_rate ?? ""}
+          onChange={(e) => onChange("historical_acceptance_rate", e.target.value)}
+          placeholder="e.g. 0.08"
+        />
+      </FormField>
+
       <div className="md:col-span-2">
-        <label className="flex items-center gap-2 text-sm font-medium text-ink mb-4">
+        <FormField
+          label="Competitiveness notes (admin-only)"
+          hint="Sourcing/reasoning -- never shown to students, same as research notes."
+        >
+          <textarea
+            className={textareaClass}
+            value={values.competitiveness_notes ?? ""}
+            onChange={(e) => onChange("competitiveness_notes", e.target.value)}
+            placeholder="e.g. Provider's 2025 annual report cites ~1,200 applicants for 40 slots."
+          />
+        </FormField>
+      </div>
+
+      <div className="md:col-span-2">
+        <label className="flex items-center gap-2 text-sm font-medium text-ink mb-4 mt-2">
           <input
             type="checkbox"
             checked={values.verified}
