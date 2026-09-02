@@ -1,4 +1,4 @@
-"use client";
+\"use client\";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -59,6 +59,18 @@ export default function NewScholarshipPage() {
         level: parsed.data.level,
         discipline: parsed.data.discipline || null,
         verified: parsed.data.verified,
+        // Competitiveness fields arrive from the form as raw strings (see
+        // lib/admin/scholarship.ts) -- convert to the numeric/null shape
+        // the API expects, same pattern application_url/etc. already use.
+        awards_available: parsed.data.awards_available ? Number(parsed.data.awards_available) : null,
+        estimated_applicant_pool: parsed.data.estimated_applicant_pool
+          ? Number(parsed.data.estimated_applicant_pool)
+          : null,
+        competitiveness_tier: parsed.data.competitiveness_tier || null,
+        historical_acceptance_rate: parsed.data.historical_acceptance_rate
+          ? Number(parsed.data.historical_acceptance_rate)
+          : null,
+        competitiveness_notes: parsed.data.competitiveness_notes || null,
         rules: validRules.map((r) => ({
           field: r.field,
           operator: r.operator,
