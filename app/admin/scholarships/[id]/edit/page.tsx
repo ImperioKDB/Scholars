@@ -1,4 +1,4 @@
-"use client";
+\"use client\";
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -15,8 +15,25 @@ import {
   type ScholarshipFormValues,
 } from "@/lib/admin/scholarship";
 
-type AdminScholarship = ScholarshipFormValues & {
+// The admin list API returns competitiveness fields in their real DB
+// shape (nullable number/enum), not the form's raw-string shape (see
+// lib/admin/scholarship.ts) -- Omit + re-declare those five keys here
+// rather than intersecting ScholarshipFormValues directly, since the form
+// and DB shapes for these fields genuinely differ (string vs number/enum).
+type AdminScholarship = Omit<
+  ScholarshipFormValues,
+  | "awards_available"
+  | "estimated_applicant_pool"
+  | "competitiveness_tier"
+  | "historical_acceptance_rate"
+  | "competitiveness_notes"
+> & {
   id: string;
+  awards_available: number | null;
+  estimated_applicant_pool: number | null;
+  competitiveness_tier: "low" | "medium" | "high" | "very_high" | null;
+  historical_acceptance_rate: number | null;
+  competitiveness_notes: string | null;
   scholarship_rules: { id: string; field: string; operator: RuleOperator; value: unknown }[];
 };
 
@@ -65,6 +82,15 @@ export default function EditScholarshipPage() {
         level: scholarship.level,
         discipline: scholarship.discipline ?? "",
         verified: scholarship.verified,
+        // DB numeric/enum values -> form's raw-string representation, the
+        // inverse of the conversion done on submit below.
+        awards_available: scholarship.awards_available != null ? String(scholarship.awards_available) : "",
+        estimated_applicant_pool:
+          scholarship.estimated_applicant_pool != null ? String(scholarship.estimated_applicant_pool) : "",
+        competitiveness_tier: scholarship.competitiveness_tier ?? "",
+        historical_acceptance_rate:
+          scholarship.historical_acceptance_rate != null ? String(scholarship.historical_acceptance_rate) : "",
+        competitiveness_notes: scholarship.competitiveness_notes ?? "",
       });
 
       const loadedRules: RuleFormRow[] = (scholarship.scholarship_rules ?? []).map((r) => ({
@@ -117,6 +143,15 @@ export default function EditScholarshipPage() {
         level: parsed.data.level,
         discipline: parsed.data.discipline || null,
         verified: parsed.data.verified,
+        awards_available: parsed.data.awards_available ? Number(parsed.data.awards_available) : null,
+        estimated_applicant_pool: parsed.data.estimated_applicant_pool
+          ? Number(parsed.data.estimated_applicant_pool)
+          : null,
+        competitiveness_tier: parsed.data.competitiveness_tier || null,
+        historical_acceptance_rate: parsed.data.historical_acceptance_rate
+          ? Number(parsed.data.historical_acceptance_rate)
+          : null,
+        competitiveness_notes: parsed.data.competitiveness_notes || null,
       }),
     });
 
