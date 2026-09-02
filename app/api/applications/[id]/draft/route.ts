@@ -144,6 +144,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       level: 'undergrad',
       discipline: scholarship.discipline,
       verified: true,
+      // Not loaded/needed either -- this route never surfaces a score or
+      // competitiveness info, only requirement labels. Added to satisfy
+      // ScholarshipRow's shape (see migration: add_competitiveness_fields).
+      awards_available: null,
+      estimated_applicant_pool: null,
+      competitiveness_tier: null,
+      historical_acceptance_rate: null,
     },
     rules
   )
