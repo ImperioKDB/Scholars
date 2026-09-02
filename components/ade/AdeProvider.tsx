@@ -1,7 +1,7 @@
-
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 
 // components/ade/AdeProvider.tsx
 //
@@ -14,42 +14,38 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 // ALWAYS VISIBLE as a small round avatar button, bottom-right. Tapping it
 // toggles an expanded panel open/closed at any time.
 //
-// ATTENTION SHAKE: when a genuinely new passive check-in prompt shows up
-// (not a repeat poll hit for a prompt already surfaced), the avatar plays
-// a brief rotation shake (see .ade-attention in app/globals.css) and, on
-// browsers that support it, fires navigator.vibrate(). vibrate() is
-// Android-Chrome-only and frequently gated behind an active user gesture
-// by the browser itself -- it's a best-effort bonus, never the mechanism
-// users actually rely on. The shake is. lastSeenPromptIdRef gates this so
-// re-polling the same unanswered prompt doesn't re-shake every interval.
-// Note this ref resets on remount, and AdeProvider remounts per
-// authenticated layout (dashboard/applications/scholarships each have
-// their own instance) -- a user bouncing between sections can see one
-// re-shake for a prompt they'd already seen elsewhere. Acceptable for now;
-// fix is persisting seen ids to localStorage if it becomes annoying.
+// THREE PROMPT KINDS now share the same floating panel:
+//   - apply_guard / ready_to_open -- the "track before you go" flow,
+//     client-driven via confirmApply(), auto-opens the panel (see
+//     AUTO-OPEN RULES below).
+//   - checkin -- passive, from polling /api/mascot/next-prompt. Does NOT
+//     auto-open.
+//   - achievement -- also passive, same polling endpoint, same
+//     non-auto-opening treatment. Added alongside checkin rather than as
+//     a separate toast/confetti system, so unlock moments speak in the
+//     same voice as everything else Ade already says.
+//
+// ATTENTION SHAKE: when a genuinely new passive prompt (checkin OR
+// achievement) shows up, the avatar plays a brief rotation shake (see
+// .ade-attention in app/globals.css) and, where supported,
+// navigator.vibrate(). lastSeenPromptIdRef is now keyed by a prefixed id
+// ("chk:<applicationId>" or "ach:<achievementId>") so the two kinds don't
+// collide in the same ref. Resets on remount, same caveat as before:
+// AdeProvider remounts per authenticated layout, so bouncing between
+// sections can re-shake a prompt already seen elsewhere. Acceptable for
+// now; fix is persisting seen ids to localStorage if it becomes annoying.
 //
 // AUTO-OPEN RULES (deliberately asymmetric):
-//   - Passive check-in prompts (from polling /api/mascot/next-prompt) do
-//     NOT auto-open the panel -- they only light up the badge dot (and now
-//     the attention shake). These arrive unprompted and can land while the
-//     user is mid-read on a page (e.g. the eligibility requirements list),
-//     so popping over content uninvited is a dialog-level interruption for
-//     something that should behave like a dismissible banner. A tap opens
-//     it.
-//   - The apply-guard prompt (from confirmApply, fired the instant the
-//     user clicks "Apply on provider's site") DOES auto-open -- it's a
-//     direct response to something the user just did, not an ambient
-//     interruption, so showing it immediately is expected here.
+//   - Passive prompts (checkin AND achievement) do NOT auto-open the
+//     panel -- they only light up the badge dot and the attention shake.
+//     A tap opens it.
+//   - The apply-guard prompt DOES auto-open -- it's a direct response to
+//     something the user just did, not an ambient interruption.
 //
-// TRACK-THEN-OPEN FLOW (fixes the about:blank bug): the old approach
-// opened a blank tab synchronously, then tried to set its location after
-// an awaited tracking request finished -- mobile Chrome doesn't reliably
-// allow that deferred redirect, leaving a dead about:blank tab. The fix:
-// never pre-open a tab. Track first (shown as a loading state in the
-// panel), then render a fresh "Continue to application" button. Opening
-// the real tab happens on that brand-new, fully synchronous click -- no
-// popup blocker can intervene because there's no await between the click
-// and the window.open call.
+// TRACK-THEN-OPEN FLOW: unchanged from the original -- track first (shown
+// as a loading state in the panel), then render a fresh "Continue to
+// application" button so the real tab opens on a brand-new, fully
+// synchronous click with no popup blocker able to intervene.
 
 type CheckinReason = "clicked" | "deadline_passed";
 
@@ -59,6 +55,17 @@ type CheckinPrompt = {
   scholarshipTitle: string;
   reason: CheckinReason;
 };
+
+type AchievementPrompt = {
+  kind: "achievement";
+  achievementId: string;
+  label: string;
+  description: string;
+  xpReward: number;
+  tier: string;
+};
+
+type PassivePrompt = CheckinPrompt | AchievementPrompt;
 
 type ApplyGuardPrompt = {
   kind: "apply_guard";
@@ -75,7 +82,7 @@ type ReadyToOpenPrompt = {
 };
 
 type ActivePrompt = ApplyGuardPrompt | ReadyToOpenPrompt;
-type AdePromptState = ActivePrompt | CheckinPrompt | null;
+type AdePromptState = ActivePrompt | PassivePrompt | null;
 
 type ConfirmApplyArgs = {
   scholarshipTitle: string;
@@ -94,8 +101,6 @@ const AdeContext = createContext<AdeContextValue | null>(null);
 export function useAde(): AdeContextValue {
   const ctx = useContext(AdeContext);
   if (!ctx) {
-    // Pages outside an Ade-wrapped layout still work -- just no guard/nudge,
-    // straight through to the provider's site.
     return {
       confirmApply: (args) => {
         window.open(args.applicationUrl, "_blank", "noreferrer");
@@ -126,7 +131,7 @@ function AdeAvatar({ size = 36 }: { size?: number }) {
 }
 
 export function AdeProvider({ children }: { children: React.ReactNode }) {
-  const [passivePrompt, setPassivePrompt] = useState<CheckinPrompt | null>(null);
+  const [passivePrompt, setPassivePrompt] = useState<PassivePrompt | null>(null);
   const [activePrompt, setActivePrompt] = useState<ActivePrompt | null>(null);
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -145,19 +150,38 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch("/api/mascot/next-prompt");
       if (res.ok) {
         const { prompt } = await res.json();
-        if (prompt && !dismissedRef.current.has(prompt.applicationId)) {
-          // Deliberately does NOT setOpen(true) -- see AUTO-OPEN RULES above.
-          setPassivePrompt({ kind: "checkin", ...prompt });
+        if (prompt) {
+          const key = prompt.type === "achievement" ? `ach:${prompt.achievementId}` : `chk:${prompt.applicationId}`;
 
-          if (lastSeenPromptIdRef.current !== prompt.applicationId) {
-            lastSeenPromptIdRef.current = prompt.applicationId;
-            setAttention(true);
-            if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-              // Best-effort only -- see file header note.
-              navigator.vibrate([120, 60, 120]);
+          if (!dismissedRef.current.has(key)) {
+            const next: PassivePrompt =
+              prompt.type === "achievement"
+                ? {
+                    kind: "achievement",
+                    achievementId: prompt.achievementId,
+                    label: prompt.label,
+                    description: prompt.description,
+                    xpReward: prompt.xpReward,
+                    tier: prompt.tier,
+                  }
+                : {
+                    kind: "checkin",
+                    applicationId: prompt.applicationId,
+                    scholarshipTitle: prompt.scholarshipTitle,
+                    reason: prompt.reason,
+                  };
+
+            setPassivePrompt(next);
+
+            if (lastSeenPromptIdRef.current !== key) {
+              lastSeenPromptIdRef.current = key;
+              setAttention(true);
+              if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+                navigator.vibrate([120, 60, 120]);
+              }
+              if (attentionTimeoutRef.current) clearTimeout(attentionTimeoutRef.current);
+              attentionTimeoutRef.current = setTimeout(() => setAttention(false), 2000);
             }
-            if (attentionTimeoutRef.current) clearTimeout(attentionTimeoutRef.current);
-            attentionTimeoutRef.current = setTimeout(() => setAttention(false), 2000);
           }
         }
       }
@@ -191,7 +215,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ action: "answer", status }),
     }).catch(() => {});
     setSubmitting(false);
-    dismissedRef.current.add(applicationId);
+    dismissedRef.current.add(`chk:${applicationId}`);
     setPassivePrompt(null);
   }
 
@@ -203,7 +227,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ action: "snooze" }),
     }).catch(() => {});
     setSubmitting(false);
-    dismissedRef.current.add(applicationId);
+    dismissedRef.current.add(`chk:${applicationId}`);
     setPassivePrompt(null);
   }
 
@@ -215,14 +239,24 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ action: "not_open_yet" }),
     }).catch(() => {});
     setSubmitting(false);
-    dismissedRef.current.add(applicationId);
+    dismissedRef.current.add(`chk:${applicationId}`);
+    setPassivePrompt(null);
+  }
+
+  async function acknowledgeAchievement(achievementId: string) {
+    setSubmitting(true);
+    await fetch("/api/achievements/announce", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ achievement_id: achievementId }),
+    }).catch(() => {});
+    setSubmitting(false);
+    dismissedRef.current.add(`ach:${achievementId}`);
     setPassivePrompt(null);
   }
 
   const confirmApply = useCallback((args: ConfirmApplyArgs) => {
     if (args.alreadyTracked) {
-      // Already tracked: nothing to ask, just record the click and go --
-      // this stays fully synchronous inside the caller's click handler.
       if (args.applicationId) {
         fetch(`/api/applications/${args.applicationId}/click`, { method: "POST" }).catch(() => {});
       }
@@ -268,8 +302,6 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
   function handleContinueToApplication() {
     if (!activePrompt || activePrompt.kind !== "ready_to_open") return;
     fetch(`/api/applications/${activePrompt.applicationId}/click`, { method: "POST" }).catch(() => {});
-    // Fresh, fully synchronous click -- no await before this line, so no
-    // popup blocker gets a chance to intervene.
     window.open(activePrompt.applicationUrl, "_blank", "noreferrer");
     setActivePrompt(null);
     setOpen(false);
@@ -293,8 +325,9 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                 {!prompt && (
                   <p className="text-sm text-ink leading-snug">
                     Hi, I&apos;m Ade! I&apos;ll remind you to track a scholarship before you head to a
-                    provider&apos;s site, and check in with you after deadlines pass. Nothing to ask about
-                    right now -- you&apos;re all caught up.
+                    provider&apos;s site, check in with you after deadlines pass, and let you know when
+                    you&apos;ve earned something. Nothing to tell you about right now -- you&apos;re all
+                    caught up.
                   </p>
                 )}
 
@@ -329,8 +362,8 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                 {prompt?.kind === "ready_to_open" && (
                   <>
                     <p className="text-sm text-ink leading-snug">
-                      You&apos;re tracking <span className="font-medium">{prompt.scholarshipTitle}</span> now
-                      \u2713. Tap below when you&apos;re ready to head to the application.
+                      You&apos;re tracking <span className="font-medium">{prompt.scholarshipTitle}</span> now{" "}
+                      {"\u2713"}. Tap below when you&apos;re ready to head to the application.
                     </p>
                     <div className="flex flex-wrap gap-2 mt-3">
                       <button
@@ -388,6 +421,32 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                     >
                       Ask me later
                     </button>
+                  </>
+                )}
+
+                {prompt?.kind === "achievement" && (
+                  <>
+                    <p className="text-sm text-ink leading-snug">
+                      You unlocked <span className="font-medium">{prompt.label}</span> -- {prompt.description}
+                    </p>
+                    <p className="text-xs font-mono text-emerald mt-1">+{prompt.xpReward} XP</p>
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      <button
+                        type="button"
+                        disabled={submitting}
+                        onClick={() => acknowledgeAchievement(prompt.achievementId)}
+                        className="text-xs font-medium text-white bg-emerald rounded-full px-3 py-1.5 hover:opacity-90 transition-opacity disabled:opacity-50"
+                      >
+                        Nice!
+                      </button>
+                      <Link
+                        href="/achievements"
+                        onClick={() => acknowledgeAchievement(prompt.achievementId)}
+                        className="text-xs font-medium text-navy-light hover:text-navy"
+                      >
+                        View achievements &rarr;
+                      </Link>
+                    </div>
                   </>
                 )}
               </div>
