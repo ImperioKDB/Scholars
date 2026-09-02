@@ -16,6 +16,13 @@
 // how_to_apply added to the insert payload: fallback guidance shown to
 // students when application_url is blank -- see migration:
 // add_how_to_apply_fallback.
+//
+// awards_available / estimated_applicant_pool / competitiveness_tier /
+// historical_acceptance_rate / competitiveness_notes added: competitiveness
+// inputs consumed by lib/matching/engine.ts's computeCompetitivenessFactor
+// -- see migration: add_competitiveness_fields. All optional/nullable; the
+// client (app/admin/scholarships/new/page.tsx) sends already-converted
+// numbers or null, not raw form strings.
 
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -38,6 +45,11 @@ const scholarshipSchema = z.object({
   level: z.enum(['undergrad', 'postgrad', 'both']).default('both'),
   discipline: z.string().trim().max(200).nullable().optional(),
   verified: z.boolean().default(false),
+  awards_available: z.number().int().positive().nullable().optional(),
+  estimated_applicant_pool: z.number().int().positive().nullable().optional(),
+  competitiveness_tier: z.enum(['low', 'medium', 'high', 'very_high']).nullable().optional(),
+  historical_acceptance_rate: z.number().min(0).max(1).nullable().optional(),
+  competitiveness_notes: z.string().trim().max(2000).nullable().optional(),
   rules: z.array(ruleSchema).optional().default([]),
 })
 
