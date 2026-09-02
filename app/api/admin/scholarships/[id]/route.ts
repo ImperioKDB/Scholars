@@ -12,6 +12,11 @@
 //
 // how_to_apply added: fallback guidance shown to students when
 // application_url is blank -- see migration: add_how_to_apply_fallback.
+//
+// awards_available / estimated_applicant_pool / competitiveness_tier /
+// historical_acceptance_rate / competitiveness_notes added: competitiveness
+// inputs consumed by lib/matching/engine.ts's computeCompetitivenessFactor
+// -- see migration: add_competitiveness_fields.
 
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -29,6 +34,11 @@ const updateSchema = z
     level: z.enum(['undergrad', 'postgrad', 'both']),
     discipline: z.string().trim().max(200).nullable(),
     verified: z.boolean(),
+    awards_available: z.number().int().positive().nullable(),
+    estimated_applicant_pool: z.number().int().positive().nullable(),
+    competitiveness_tier: z.enum(['low', 'medium', 'high', 'very_high']).nullable(),
+    historical_acceptance_rate: z.number().min(0).max(1).nullable(),
+    competitiveness_notes: z.string().trim().max(2000).nullable(),
   })
   .partial()
   .refine((obj) => Object.keys(obj).length > 0, 'No fields to update')
