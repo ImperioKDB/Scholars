@@ -8,11 +8,15 @@
 //      followed up on yet (or was clicked again since the last check-in).
 //   2. An application whose deadline has passed and is still "in_progress"
 //      with no in-app check-in shown yet.
+//   3. An achievement unlocked but not yet announced (unlocks happen
+//      entirely in Postgres triggers -- see migration
+//      add_xp_and_achievements -- this just surfaces the oldest one this
+//      route hasn't shown yet, one at a time, same "never stack" rule as
+//      the other two).
 // Deliberately returns at most one prompt -- Ade asks one thing at a time,
 // never stacks questions. The "track this before you go" nudge is NOT
 // handled here -- that one is purely client-side (see
-// components/ade/AdeProvider.tsx's confirmApply), since it depends on
-// which scholarship is on screen right now, not on stored state.
+// components/ade/AdeProvider.tsx's confirmApply).
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
@@ -32,8 +36,6 @@ export async function GET() {
   const todayStr = new Date().toISOString().slice(0, 10)
   const nowIso = new Date().toISOString()
 
-  // Priority 1: clicked the apply link, never checked in since (or clicked
-  // again after the last check-in was shown).
   const { data: clicked } = await supabase
     .from('applications')
     .select(
@@ -60,6 +62,7 @@ export async function GET() {
   if (clickedMatch && clickedMatch.scholarship) {
     return NextResponse.json({
       prompt: {
+        type: 'checkin',
         applicationId: clickedMatch.id,
         scholarshipId: clickedMatch.scholarship.id,
         scholarshipTitle: clickedMatch.scholarship.title,
@@ -68,12 +71,6 @@ export async function GET() {
     })
   }
 
-  // Priority 2: deadline passed, still in_progress, never asked in-app yet.
-  // `!inner` is required -- without it a non-matching deadline nulls the
-  // embedded scholarship instead of dropping the row (same reasoning as
-  // the cron job's join). Sorted in JS rather than via `.order()` on an
-  // embedded column to avoid relying on untested foreign-table ordering
-  // syntax for a query this small.
   const { data: overdue } = await supabase
     .from('applications')
     .select(
@@ -97,10 +94,39 @@ export async function GET() {
   if (overdueMatch) {
     return NextResponse.json({
       prompt: {
+        type: 'checkin',
         applicationId: overdueMatch.id,
         scholarshipId: overdueMatch.scholarships.id,
         scholarshipTitle: overdueMatch.scholarships.title,
         reason: 'deadline_passed',
+      },
+    })
+  }
+
+  const { data: achievementRow } = await supabase
+    .from('user_achievements')
+    .select('achievement_id, unlocked_at, achievements ( label, description, xp_reward, tier )')
+    .eq('profile_id', user.id)
+    .is('announced_at', null)
+    .order('unlocked_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (achievementRow && achievementRow.achievements) {
+    const a = achievementRow.achievements as unknown as {
+      label: string
+      description: string
+      xp_reward: number
+      tier: string
+    }
+    return NextResponse.json({
+      prompt: {
+        type: 'achievement',
+        achievementId: achievementRow.achievement_id,
+        label: a.label,
+        description: a.description,
+        xpReward: a.xp_reward,
+        tier: a.tier,
       },
     })
   }
