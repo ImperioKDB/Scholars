@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DISCIPLINE_OPTIONS, GENDER_OPTIONS, NIGERIAN_STATES, INSTITUTION_TYPE_OPTIONS } from "@/lib/profile";
+import type { CompetitivenessTier } from "@/lib/matching/types";
 
 export type ScholarshipLevel = "undergrad" | "postgrad" | "both";
 export type RuleOperator = "eq" | "gte" | "lte" | "in" | "exists";
@@ -69,6 +70,17 @@ export const OPERATOR_LABELS: Record<RuleOperator, string> = {
 };
 
 export { DISCIPLINE_OPTIONS, GENDER_OPTIONS, NIGERIAN_STATES, INSTITUTION_TYPE_OPTIONS };
+
+// Competitiveness tier options for the admin form's manual fallback field
+// (used when awards_available/estimated_applicant_pool aren't known
+// precisely). See migration: add_competitiveness_fields and
+// lib/matching/engine.ts's computeCompetitivenessFactor.
+export const COMPETITIVENESS_TIER_OPTIONS: { value: CompetitivenessTier; label: string }[] = [
+  { value: "low", label: "Low -- wide open" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "very_high", label: "Very high -- extremely oversubscribed" },
+];
 
 // -- Rule row (UI state, before serializing `value` to jsonb) --------------
 export type RuleFormRow = {
@@ -150,6 +162,17 @@ export function parseRuleValue(field: string, operator: RuleOperator, value: unk
 // add_how_to_apply_fallback. Deliberately NOT required even when
 // application_url is empty, since a scholarship can legitimately be saved
 // as a draft (verified: false) before either is known.
+//
+// Competitiveness fields (awards_available, estimated_applicant_pool,
+// competitiveness_tier, historical_acceptance_rate, competitiveness_notes)
+// mirror the DB columns from migration: add_competitiveness_fields. Kept
+// as raw strings here (like amount/application_url) rather than typed
+// numbers -- the numeric conversion happens on submit in
+// app/admin/scholarships/new/page.tsx and .../[id]/edit/page.tsx, same
+// pattern the rest of this form already uses (e.g. RuleBuilder's numeric
+// inputs via serializeRuleValue). All optional: a scholarship with no
+// competitiveness research yet is unaffected by the matching engine, not
+// blocked from saving.
 export const scholarshipSchema = z.object({
   title: z.string().min(3, "Title is required."),
   provider_name: z.string().min(2, "Provider name is required."),
@@ -164,6 +187,20 @@ export const scholarshipSchema = z.object({
   level: z.enum(["undergrad", "both"]),
   discipline: z.string().optional(),
   verified: z.boolean(),
+  awards_available: z
+    .string()
+    .optional()
+    .refine((v) => !v || (/^\d+$/.test(v.trim()) && Number(v) > 0), "Must be a positive whole number"),
+  estimated_applicant_pool: z
+    .string()
+    .optional()
+    .refine((v) => !v || (/^\d+$/.test(v.trim()) && Number(v) > 0), "Must be a positive whole number"),
+  competitiveness_tier: z.union([z.enum(["low", "medium", "high", "very_high"]), z.literal("")]).optional(),
+  historical_acceptance_rate: z
+    .string()
+    .optional()
+    .refine((v) => !v || (!Number.isNaN(Number(v)) && Number(v) >= 0 && Number(v) <= 1), "Must be between 0 and 1"),
+  competitiveness_notes: z.string().max(2000, "Keep it under 2000 characters.").optional(),
 });
 
 export type ScholarshipFormValues = z.infer<typeof scholarshipSchema>;
@@ -179,4 +216,9 @@ export const EMPTY_SCHOLARSHIP: ScholarshipFormValues = {
   level: "both",
   discipline: "",
   verified: false,
+  awards_available: "",
+  estimated_applicant_pool: "",
+  competitiveness_tier: "",
+  historical_acceptance_rate: "",
+  competitiveness_notes: "",
 };
