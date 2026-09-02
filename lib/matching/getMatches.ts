@@ -11,6 +11,15 @@ import type { MatchableProfile, ScholarshipMatch, ScholarshipRule } from "./type
 // cache()-wrapped) instead of its own query -- when this is called from
 // a Server Component that's already called that helper (e.g. a layout),
 // this profile fetch is free.
+//
+// SCHOLARSHIP_COLUMNS now includes the competitiveness fields (see
+// migration: add_competitiveness_fields) -- the engine needs them to
+// compute each match's competitivenessFactor. competitiveness_notes is
+// deliberately NOT selected here -- admin-only sourcing detail, same
+// exclusion as research_notes.
+const SCHOLARSHIP_COLUMNS =
+  "id, title, provider_name, description, amount, deadline, application_url, how_to_apply, level, discipline, verified, awards_available, estimated_applicant_pool, competitiveness_tier, historical_acceptance_rate";
+
 export async function getMatchesForCurrentUser(): Promise<{
   matches: ScholarshipMatch[];
   profileCompleteness: number;
@@ -54,9 +63,7 @@ export async function getMatchesForCurrentUser(): Promise<{
     await Promise.all([
       supabase
         .from("scholarships")
-        .select(
-          "id, title, provider_name, description, amount, deadline, application_url, how_to_apply, level, discipline, verified"
-        )
+        .select(SCHOLARSHIP_COLUMNS)
         .eq("verified", true)
         .in("level", ["undergrad", "both"]),
       supabase.from("scholarship_rules").select("id, scholarship_id, field, operator, value"),
@@ -126,9 +133,7 @@ export async function getMatchForScholarship(scholarshipId: string): Promise<{
     await Promise.all([
       supabase
         .from("scholarships")
-        .select(
-          "id, title, provider_name, description, amount, deadline, application_url, how_to_apply, level, discipline, verified"
-        )
+        .select(SCHOLARSHIP_COLUMNS)
         .eq("id", scholarshipId)
         .eq("verified", true)
         .in("level", ["undergrad", "both"])
