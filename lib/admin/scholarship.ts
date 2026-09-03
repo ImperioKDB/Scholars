@@ -158,10 +158,15 @@ export function parseRuleValue(field: string, operator: RuleOperator, value: unk
 
 // how_to_apply: fallback guidance shown on the scholarship detail page and
 // in Applications when application_url is blank (email-only application,
-// no stable public portal, etc.) -- see migration:
+# no stable public portal, etc.) -- see migration:
 // add_how_to_apply_fallback. Deliberately NOT required even when
 // application_url is empty, since a scholarship can legitimately be saved
 // as a draft (verified: false) before either is known.
+//
+// opens_at: date applications open, admin-set, optional. Blank/null means
+// "no restriction" -- treated as already open. Feeds the "Open now" badge
+// (lib/discovery.ts), never the eligibility score. See migration:
+// add_opens_at_and_trending_fn.
 //
 // Competitiveness fields (awards_available, estimated_applicant_pool,
 // competitiveness_tier, historical_acceptance_rate, competitiveness_notes)
@@ -179,6 +184,10 @@ export const scholarshipSchema = z.object({
   description: z.string().optional(),
   amount: z.string().optional(),
   deadline: z.string().min(1, "Deadline is required."),
+  opens_at: z
+    .string()
+    .optional()
+    .refine((v) => !v || !Number.isNaN(Date.parse(v)), "Invalid date"),
   application_url: z
     .string()
     .optional()
@@ -211,6 +220,7 @@ export const EMPTY_SCHOLARSHIP: ScholarshipFormValues = {
   description: "",
   amount: "",
   deadline: "",
+  opens_at: "",
   application_url: "",
   how_to_apply: "",
   level: "both",
