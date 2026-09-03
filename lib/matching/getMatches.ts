@@ -12,13 +12,14 @@ import type { MatchableProfile, ScholarshipMatch, ScholarshipRule } from "./type
 // a Server Component that's already called that helper (e.g. a layout),
 // this profile fetch is free.
 //
-// SCHOLARSHIP_COLUMNS now includes the competitiveness fields (see
-// migration: add_competitiveness_fields) -- the engine needs them to
-// compute each match's competitivenessFactor. competitiveness_notes is
-// deliberately NOT selected here -- admin-only sourcing detail, same
-// exclusion as research_notes.
+// SCHOLARSHIP_COLUMNS now includes opens_at (see migration:
+// add_opens_at_and_trending_fn) alongside the competitiveness fields (see
+// migration: add_competitiveness_fields). opens_at doesn't feed the engine
+// -- it's read straight through to the UI for the "Open now" badge (see
+// lib/discovery.ts). competitiveness_notes is deliberately NOT selected
+# here -- admin-only sourcing detail, same exclusion as research_notes.
 const SCHOLARSHIP_COLUMNS =
-  "id, title, provider_name, description, amount, deadline, application_url, how_to_apply, level, discipline, verified, awards_available, estimated_applicant_pool, competitiveness_tier, historical_acceptance_rate";
+  "id, title, provider_name, description, amount, deadline, opens_at, application_url, how_to_apply, level, discipline, verified, awards_available, estimated_applicant_pool, competitiveness_tier, historical_acceptance_rate";
 
 export async function getMatchesForCurrentUser(): Promise<{
   matches: ScholarshipMatch[];
