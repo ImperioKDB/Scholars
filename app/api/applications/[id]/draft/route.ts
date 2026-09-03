@@ -138,8 +138,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       application_url: null,
       // Not loaded/needed for draft generation -- this route only uses
       // the evaluation's requirement labels, never renders an apply
-      // action. Added to satisfy ScholarshipRow's how_to_apply field
-      // (see migration: add_how_to_apply_fallback).
+      // action. Added to satisfy ScholarshipRow's opens_at and
+      // how_to_apply fields (see migrations: add_opens_at_and_trending_fn,
+      // add_how_to_apply_fallback).
+      opens_at: null,
       how_to_apply: null,
       level: 'undergrad',
       discipline: scholarship.discipline,
