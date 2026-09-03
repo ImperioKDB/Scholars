@@ -54,6 +54,7 @@ export default function NewScholarshipPage() {
         description: parsed.data.description || null,
         amount: parsed.data.amount || null,
         deadline: parsed.data.deadline,
+        opens_at: parsed.data.opens_at || null,
         application_url: parsed.data.application_url || null,
         how_to_apply: parsed.data.how_to_apply || null,
         level: parsed.data.level,
@@ -122,7 +123,7 @@ export default function NewScholarshipPage() {
             disabled={saving}
             className="rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60"
           >
-            {saving ? "Saving…" : "Save scholarship"}
+            {saving ? "Saving\u2026" : "Save scholarship"}
           </button>
           <button
             type="button"
