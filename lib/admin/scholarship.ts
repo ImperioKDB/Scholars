@@ -158,7 +158,7 @@ export function parseRuleValue(field: string, operator: RuleOperator, value: unk
 
 // how_to_apply: fallback guidance shown on the scholarship detail page and
 // in Applications when application_url is blank (email-only application,
-# no stable public portal, etc.) -- see migration:
+// no stable public portal, etc.) -- see migration:
 // add_how_to_apply_fallback. Deliberately NOT required even when
 // application_url is empty, since a scholarship can legitimately be saved
 // as a draft (verified: false) before either is known.
