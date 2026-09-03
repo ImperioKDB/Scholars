@@ -2,6 +2,7 @@ import { getCurrentUserAndProfile } from "@/lib/supabase/currentUser";
 import { getMatchesForCurrentUser } from "@/lib/matching/getMatches";
 import { computeProfileGaps } from "@/lib/matching/gaps";
 import { createClient } from "@/lib/supabase/server";
+import { applyDiscoveryOrder, isCurrentlyOpen } from "@/lib/discovery";
 import { DashboardClient } from "./DashboardClient";
 import type { CardScholarship } from "@/components/ScholarshipCard";
 
@@ -20,19 +21,50 @@ export default async function DashboardPage() {
 
   const supabase = createClient();
 
-  const [{ matches, profileCompleteness, error: matchError }, savedResult] = await Promise.all([
+  const [{ matches, profileCompleteness, error: matchError }, savedResult, trendingResult] = await Promise.all([
     getMatchesForCurrentUser(),
     supabase
       .from("saved_scholarships")
       .select(
         `id, saved_at,
-         scholarship:scholarships ( id, title, provider_name, description, amount, deadline, application_url, level, discipline, verified )`
+         scholarship:scholarships ( id, title, provider_name, description, amount, deadline, opens_at, application_url, level, discipline, verified )`
       )
       .eq("profile_id", user.id)
       .order("saved_at", { ascending: false }),
+    // Real save-velocity signal, computed in Postgres -- see migration:
+    // add_opens_at_and_trending_fn. Not a fabricated number: if fewer than
+    // `threshold` students saved it in the last `days` days, it's not
+    // trending, full stop.
+    supabase.rpc("get_trending_scholarship_ids", { threshold: 3, days: 7 }),
   ]);
 
   const saved = (savedResult.data ?? []) as unknown as SavedApiItem[];
+  const trendingIds = new Set(
+    ((trendingResult.data ?? []) as { scholarship_id: string }[]).map((r) => r.scholarship_id)
+  );
+
+  // Reorders matches within each tier (open+trending pinned first, the
+  // rest deterministically shuffled per user per day) instead of a fixed
+  // score-sorted list -- see lib/discovery.ts for the reasoning. Tier
+  // grouping itself is untouched, so "your best matches surface first"
+  // still holds at the tier level; gaps below is computed from the
+  // original unordered `matches`, since tier/status is all it reads.
+  const { ordered, openIds } = applyDiscoveryOrder(matches, user.id, trendingIds);
+  const matchesWithBadges = ordered.map((m) => ({
+    ...m,
+    isOpenNow: openIds.has(m.id),
+    isTrending: trendingIds.has(m.id),
+  }));
+
+  const savedWithBadges = saved.map((s) => ({
+    ...s,
+    scholarship: {
+      ...s.scholarship,
+      isOpenNow: isCurrentlyOpen(s.scholarship),
+      isTrending: trendingIds.has(s.scholarship.id),
+    },
+  }));
+
   const gaps = computeProfileGaps(matches);
 
   const loadError =
@@ -44,9 +76,9 @@ export default async function DashboardPage() {
     <DashboardClient
       userId={user.id}
       fullName={profile?.full_name ?? null}
-      initialMatches={matches}
+      initialMatches={matchesWithBadges}
       initialProfileCompleteness={profileCompleteness}
-      initialSaved={saved}
+      initialSaved={savedWithBadges}
       initialError={loadError}
       gaps={gaps}
     />
