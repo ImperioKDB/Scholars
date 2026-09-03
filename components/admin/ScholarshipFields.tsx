@@ -48,7 +48,7 @@ export function ScholarshipFields({
           className={inputClass}
           value={values.amount ?? ""}
           onChange={(e) => onChange("amount", e.target.value)}
-          placeholder="e.g. ₦300,000 + Mentorship"
+          placeholder="e.g. \u20a6300,000 + Mentorship"
         />
       </FormField>
 
@@ -58,6 +58,19 @@ export function ScholarshipFields({
           type="date"
           value={values.deadline}
           onChange={(e) => onChange("deadline", e.target.value)}
+        />
+      </FormField>
+
+      <FormField
+        label="Opens on"
+        error={errors.opens_at}
+        hint="Leave blank if applications are open as soon as this is verified -- only set this if the portal genuinely isn't accepting applications yet."
+      >
+        <input
+          className={inputClass}
+          type="date"
+          value={values.opens_at ?? ""}
+          onChange={(e) => onChange("opens_at", e.target.value)}
         />
       </FormField>
 
