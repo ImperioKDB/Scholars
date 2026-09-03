@@ -48,6 +48,11 @@ export type ScholarshipRow = {
   description: string | null;
   amount: string | null;
   deadline: string | null;
+  // Date applications open. Null = no restriction (open as soon as
+  // verified). Distinct from deadline -- feeds the "Open now" badge, not
+  // the matching/eligibility score. See migration:
+  // add_opens_at_and_trending_fn and lib/discovery.ts.
+  opens_at: string | null;
   application_url: string | null;
   // Fallback guidance shown in place of the "Apply" button when
   // application_url is null (e.g. email-only application, no stable
