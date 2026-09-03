@@ -12,10 +12,18 @@ export type CardScholarship = {
   provider_name: string;
   amount: string | null;
   deadline: string | null;
+  // Date applications open; null = no restriction. Only used to compute
+  // isOpenNow server-side (see lib/discovery.ts) -- not rendered directly.
+  opens_at?: string | null;
   level: "undergrad" | "postgrad" | "both";
   discipline: string | null;
   application_url: string | null;
   how_to_apply?: string | null;
+  // Computed server-side (see lib/discovery.ts) -- real signals, not
+  // fabricated. isOpenNow checks opens_at/deadline; isTrending checks
+  // actual recent save counts via get_trending_scholarship_ids().
+  isOpenNow?: boolean;
+  isTrending?: boolean;
 };
 
 export function Spinner({ className = "" }: { className?: string }) {
@@ -127,6 +135,16 @@ export function ScholarshipCard({
 
           <div className="flex flex-wrap items-center gap-2 mt-3">
             <DeadlineBadge deadline={scholarship.deadline} />
+            {scholarship.isOpenNow && (
+              <span className="text-xs font-medium px-2 py-1 rounded-full bg-emerald-light text-emerald">
+                Open now
+              </span>
+            )}
+            {scholarship.isTrending && (
+              <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-light text-amber">
+                Trending
+              </span>
+            )}
             {scholarship.amount && <span className="text-xs font-mono text-emerald">{scholarship.amount}</span>}
             <span className="text-xs text-navy-light capitalize">
               {scholarship.level === "both" ? "Undergrad & postgrad" : scholarship.level}
