@@ -15,13 +15,15 @@ import {
   type ScholarshipFormValues,
 } from "@/lib/admin/scholarship";
 
-// The admin list API returns competitiveness fields in their real DB
-// shape (nullable number/enum), not the form's raw-string shape (see
-// lib/admin/scholarship.ts) -- Omit + re-declare those five keys here
-// rather than intersecting ScholarshipFormValues directly, since the form
-// and DB shapes for these fields genuinely differ (string vs number/enum).
+// The admin list API returns competitiveness fields (and opens_at) in
+// their real DB shape (nullable date/number/enum), not the form's
+// raw-string shape (see lib/admin/scholarship.ts) -- Omit + re-declare
+// those keys here rather than intersecting ScholarshipFormValues
+// directly, since the form and DB shapes for these fields genuinely
+// differ (string|undefined vs string|null, string vs number/enum).
 type AdminScholarship = Omit<
   ScholarshipFormValues,
+  | "opens_at"
   | "awards_available"
   | "estimated_applicant_pool"
   | "competitiveness_tier"
@@ -29,6 +31,7 @@ type AdminScholarship = Omit<
   | "competitiveness_notes"
 > & {
   id: string;
+  opens_at: string | null;
   awards_available: number | null;
   estimated_applicant_pool: number | null;
   competitiveness_tier: "low" | "medium" | "high" | "very_high" | null;
@@ -77,6 +80,7 @@ export default function EditScholarshipPage() {
         description: scholarship.description ?? "",
         amount: scholarship.amount ?? "",
         deadline: scholarship.deadline,
+        opens_at: scholarship.opens_at ?? "",
         application_url: scholarship.application_url ?? "",
         how_to_apply: scholarship.how_to_apply ?? "",
         level: scholarship.level,
@@ -138,6 +142,7 @@ export default function EditScholarshipPage() {
         description: parsed.data.description || null,
         amount: parsed.data.amount || null,
         deadline: parsed.data.deadline,
+        opens_at: parsed.data.opens_at || null,
         application_url: parsed.data.application_url || null,
         how_to_apply: parsed.data.how_to_apply || null,
         level: parsed.data.level,
