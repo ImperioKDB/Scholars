@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const COLORS = ["#0B1E3D", "#1B8A6B", "#C98A2E", "#B4433E", "#14315C"];
+const DEFAULT_COLORS = ["#0B1E3D", "#1B8A6B", "#C98A2E", "#B4433E", "#14315C"];
 
 type Piece = {
   id: number;
@@ -15,17 +15,26 @@ type Piece = {
 };
 
 // One-shot celebratory burst -- deliberately not a general-purpose UI
-// animation, and not meant to be reused for ambient decoration. Used once:
-// when a student finishes onboarding with a 100% complete profile.
+// animation, and not meant to be reused for ambient decoration. Used on
+// 100% profile completion, and with a tier-matched `colors` override, for
+// achievement unlocks fired from components/ade/AdeProvider.tsx.
 // Auto-removes itself after durationMs; renders nothing after that.
-export function Confetti({ pieceCount = 60, durationMs = 2600 }: { pieceCount?: number; durationMs?: number }) {
+export function Confetti({
+  pieceCount = 60,
+  durationMs = 2600,
+  colors = DEFAULT_COLORS,
+}: {
+  pieceCount?: number;
+  durationMs?: number;
+  colors?: string[];
+}) {
   const [visible, setVisible] = useState(true);
   const [pieces] = useState<Piece[]>(() =>
     Array.from({ length: pieceCount }, (_, i) => ({
       id: i,
       left: Math.random() * 100,
       size: 6 + Math.random() * 6,
-      color: COLORS[i % COLORS.length],
+      color: colors[i % colors.length],
       duration: 2 + Math.random() * 1.2,
       delay: Math.random() * 0.4,
       rounded: Math.random() > 0.5,
