@@ -13,6 +13,9 @@
 // how_to_apply added: fallback guidance shown to students when
 // application_url is blank -- see migration: add_how_to_apply_fallback.
 //
+// opens_at added: date applications open, optional/nullable -- see
+// migration: add_opens_at_and_trending_fn.
+//
 // awards_available / estimated_applicant_pool / competitiveness_tier /
 // historical_acceptance_rate / competitiveness_notes added: competitiveness
 // inputs consumed by lib/matching/engine.ts's computeCompetitivenessFactor
@@ -29,6 +32,10 @@ const updateSchema = z
     description: z.string().trim().max(5000).nullable(),
     amount: z.string().trim().max(200).nullable(),
     deadline: z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'Invalid date'),
+    opens_at: z
+      .string()
+      .nullable()
+      .refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Invalid date'),
     application_url: z.string().url().nullable(),
     how_to_apply: z.string().trim().max(2000).nullable(),
     level: z.enum(['undergrad', 'postgrad', 'both']),
