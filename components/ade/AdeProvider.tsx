@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { Confetti } from "@/components/Confetti";
 
 // components/ade/AdeProvider.tsx
 //
@@ -21,9 +22,18 @@ import Link from "next/link";
 //   - checkin -- passive, from polling /api/mascot/next-prompt. Does NOT
 //     auto-open.
 //   - achievement -- also passive, same polling endpoint, same
-//     non-auto-opening treatment. Added alongside checkin rather than as
-//     a separate toast/confetti system, so unlock moments speak in the
-//     same voice as everything else Ade already says.
+//     non-auto-opening treatment. Unlock moments speak in the same voice
+//     as everything else Ade already says.
+//
+// ACHIEVEMENT CELEBRATION: the first time the panel is opened while an
+// achievement prompt is showing, a tier-colored confetti burst fires and
+// the panel content gets a spring "pop" entrance (see .badge-pop-in in
+// app/globals.css). confettiShownRef dedupes by achievementId so
+// re-opening the panel later (or the same achievement resurfacing across
+// an AdeProvider remount) doesn't re-fire the burst. Deliberately NOT
+// fired ambiently while the panel is closed -- that would be an
+// interruption, which contradicts the deliberate non-auto-opening
+// treatment passive prompts already get (see AUTO-OPEN RULES below).
 //
 // ATTENTION SHAKE: when a genuinely new passive prompt (checkin OR
 // achievement) shows up, the avatar plays a brief rotation shake (see
@@ -116,6 +126,18 @@ const STATUS_OPTIONS: { value: "submitted" | "in_progress" | "rejected"; label: 
   { value: "rejected", label: "Changed my mind" },
 ];
 
+// Tier -> confetti palette. Deliberately reuses the app's existing brand
+// colors (navy/emerald/amber/parchment) rather than inventing literal
+// bronze/silver/gold hex values -- gold leans on emerald, the color this
+// app already treats as its top tier elsewhere (MatchSeal, achievement
+// chips). Falls back to Confetti's own default palette for an unknown
+// tier string.
+const TIER_CONFETTI_COLORS: Record<string, string[]> = {
+  bronze: ["#C98A2E", "#0B1E3D", "#F7F5EF"],
+  silver: ["#8B93A3", "#0B1E3D", "#F7F5EF"],
+  gold: ["#1B8A6B", "#C98A2E", "#0B1E3D"],
+};
+
 function AdeAvatar({ size = 36 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" className="shrink-0">
@@ -142,6 +164,13 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
   const lastSeenPromptIdRef = useRef<string | null>(null);
   const [attention, setAttention] = useState(false);
   const attentionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Achievement-unlock celebration state -- see the ACHIEVEMENT
+  // CELEBRATION note above the type definitions for why this fires on
+  // open() rather than the moment the poll first sees the prompt.
+  const confettiShownRef = useRef<Set<string>>(new Set());
+  const [confettiColors, setConfettiColors] = useState<string[] | undefined>(undefined);
+  const confettiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pollNextPrompt = useCallback(async () => {
     if (pollingRef.current) return;
@@ -204,6 +233,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     return () => {
       if (attentionTimeoutRef.current) clearTimeout(attentionTimeoutRef.current);
+      if (confettiTimeoutRef.current) clearTimeout(confettiTimeoutRef.current);
     };
   }, []);
 
@@ -310,9 +340,31 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
   const prompt: AdePromptState = activePrompt ?? passivePrompt;
   const hasPending = Boolean(prompt);
 
+  function handleAvatarClick() {
+    setOpen((wasOpen) => {
+      const nextOpen = !wasOpen;
+
+      if (
+        nextOpen &&
+        passivePrompt?.kind === "achievement" &&
+        !confettiShownRef.current.has(passivePrompt.achievementId)
+      ) {
+        confettiShownRef.current.add(passivePrompt.achievementId);
+        setConfettiColors(TIER_CONFETTI_COLORS[passivePrompt.tier]);
+        if (confettiTimeoutRef.current) clearTimeout(confettiTimeoutRef.current);
+        confettiTimeoutRef.current = setTimeout(() => setConfettiColors(undefined), 2600);
+      }
+
+      return nextOpen;
+    });
+    setAttention(false);
+  }
+
   return (
     <AdeContext.Provider value={{ confirmApply }}>
       {children}
+
+      {confettiColors && <Confetti colors={confettiColors} pieceCount={70} durationMs={2600} />}
 
       <div className="fixed bottom-4 right-4 z-[90] flex flex-col items-end gap-2">
         {open && (
@@ -425,7 +477,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                 )}
 
                 {prompt?.kind === "achievement" && (
-                  <>
+                  <div className="badge-pop-in">
                     <p className="text-sm text-ink leading-snug">
                       You unlocked <span className="font-medium">{prompt.label}</span> -- {prompt.description}
                     </p>
@@ -447,7 +499,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                         View achievements &rarr;
                       </Link>
                     </div>
-                  </>
+                  </div>
                 )}
               </div>
 
@@ -467,10 +519,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
 
         <button
           type="button"
-          onClick={() => {
-            setOpen((o) => !o);
-            setAttention(false);
-          }}
+          onClick={handleAvatarClick}
           aria-label={open ? "Close Ade" : "Open Ade"}
           className={[
             "relative w-14 h-14 rounded-full shadow-card border border-hairline bg-white flex items-center justify-center hover:scale-105 active:scale-95 transition-transform",
