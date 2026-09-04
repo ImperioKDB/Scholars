@@ -46,6 +46,15 @@ function AdminIcon() {
   );
 }
 
+function DiscoverIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="M20 20l-4.3-4.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function MenuIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -79,6 +88,16 @@ function initialsFor(name: string | null): string {
   return (words[0][0] + words[1][0]).toUpperCase();
 }
 
+// AUDIT FIX (batch 4): the three primary destinations get a fixed bottom
+// tab bar on mobile -- reaching them through the hamburger drawer every
+// time was the audit's top mobile-nav complaint. Browse, Admin, and Log
+// out stay in the drawer as secondary items.
+const MOBILE_TABS = [
+  { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
+  { href: "/applications", label: "Applications", Icon: ApplicationsIcon },
+  { href: "/achievements", label: "Achievements", Icon: AchievementsIcon },
+];
+
 export function Sidebar({
   fullName,
   isAdmin,
@@ -102,6 +121,7 @@ export function Sidebar({
 
   const navItems = [
     { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
+    { href: "/discover", label: "Browse", Icon: DiscoverIcon },
     { href: "/applications", label: "Applications", Icon: ApplicationsIcon },
     { href: "/achievements", label: "Achievements", Icon: AchievementsIcon },
     ...(isAdmin ? [{ href: "/admin", label: "Admin", Icon: AdminIcon }] : []),
@@ -219,6 +239,35 @@ export function Sidebar({
           {accountBlock}
         </div>
       </div>
+
+      {/* AUDIT FIX (batch 4): bottom tab bar, mobile only. min-h-[56px]
+          per tab clears the audit's 44px touch-target floor with room
+          for the label; pb-[env(safe-area-inset-bottom)] keeps the taps
+          reachable above the iOS home indicator. The matching bottom
+          padding on each section's content lives in the section layouts
+          (pb-24 md:pb-10), and Ade's floating avatar lifts clear of
+          this bar on mobile too (see components/ade/AdeProvider.tsx). */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-hairline pb-[env(safe-area-inset-bottom)]">
+        <div className="grid grid-cols-3">
+          {MOBILE_TABS.map(({ href, label, Icon }) => {
+            const active = pathname === href;
+            return (
+              <Link
+                key={href}
+                href={href}
+                onClick={() => setMobileOpen(false)}
+                className={[
+                  "flex flex-col items-center justify-center gap-1 min-h-[56px] py-2 text-[11px] font-medium transition-colors",
+                  active ? "text-navy" : "text-navy-light",
+                ].join(" ")}
+              >
+                <Icon />
+                {label}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
     </>
   );
 }
