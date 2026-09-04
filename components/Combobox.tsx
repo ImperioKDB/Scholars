@@ -9,11 +9,17 @@ export type ComboboxOption = {
   sublabel?: string;
 };
 
-// Search-and-select input: filters options as you type, but only commits a
-// value when you actually pick an option from the list -- typing alone
-// never sets the underlying value. Used anywhere a field must be
+// Search-and-select input: filters options as you type, and commits a
+// value when you pick an option from the list. Typing alone also commits
+// now when the typed text is an EXACT, unambiguous match for one option's
+// label (case-insensitive) -- on blur, click-outside, or Enter. That
+// closes the product-audit drop-off where someone typed "Computer
+// Science", saw the right row, tabbed away, and silently had nothing
+// saved because they never clicked the option. Anything short of an
+// exact match still commits nothing and resets to the last selected
+// label, so free text can never sneak into fields that must stay
 // constrained to a known list (institution, course/discipline, WAEC
-// subject) instead of free text.
+// subject).
 export function Combobox({
   options,
   value,
@@ -38,16 +44,35 @@ export function Combobox({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
+  // If the typed text exactly matches one option's label
+  // (case-insensitive), commit it -- otherwise fall back to the last
+  // selected value. Returns true when something was committed.
+  function commitExactMatch(): boolean {
+    const typed = query.trim().toLowerCase();
+    if (!typed) return false;
+    const exact = options.filter((o) => o.label.toLowerCase() === typed);
+    if (exact.length === 1) {
+      onChange(exact[0].value);
+      setQuery(exact[0].label);
+      return true;
+    }
+    setQuery(selected?.label ?? "");
+    return false;
+  }
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        commitExactMatch();
         setOpen(false);
-        setQuery(selected?.label ?? "");
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [selected]);
+    // query/options in the deps so the listener always sees the latest
+    // typed text (the closure would otherwise go stale between renders).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, options, query]);
 
   const filtered =
     query.trim() === "" || query === selected?.label
@@ -73,7 +98,13 @@ export function Combobox({
       setHighlighted((h) => Math.max(h - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const option = filtered[highlighted];
+      // Prefer an exact label match over whatever row happens to be
+      // highlighted, so "type the full name + Enter" always lands on
+      // that exact option even when the filtered list starts somewhere
+      // else.
+      const typed = query.trim().toLowerCase();
+      const exact = options.find((o) => o.label.toLowerCase() === typed);
+      const option = exact ?? filtered[highlighted];
       if (option) select(option);
     } else if (e.key === "Escape") {
       setOpen(false);
@@ -96,6 +127,13 @@ export function Combobox({
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={handleKeyDown}
+        onBlur={() => {
+          // Keyboard users tabbing away get the same exact-match commit
+          // mouse users get via the click-outside handler. Option-button
+          // clicks never reach this handler -- their onMouseDown calls
+          // preventDefault(), which keeps focus on this input.
+          commitExactMatch();
+        }}
         role="combobox"
         aria-expanded={open}
         aria-autocomplete="list"
