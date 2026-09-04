@@ -15,13 +15,21 @@
 // worth something, but hammering the button in a loop right now earns
 // nothing past the first call today.
 //
+// AUDIT FIX (batch 5): the dedupe above only stopped repeat-shares of ONE
+// scholarship -- a script walking every scholarship id could still farm
+// 3 points per row. There's now a hard per-profile daily cap on total
+// share_click awards, checked against xp_events before awarding. Checked
+// via the service client because xp_events has no read policy for the
+// authenticated role (same reason award_xp runs through it). Capped
+// requests return success-with-nothing rather than an error -- no reason
+// to advertise the cap to a scraper.
+//
 // Uses the service-role client deliberately: award_xp() has EXECUTE
 // revoked from the authenticated Postgres role specifically so a client
 // can never call it directly (e.g. via supabase.rpc() from devtools with
 // a fabricated point value). This route is the one narrow, server-
 // controlled path allowed to award it, with the point value hardcoded
 // here -- never accepted from the request body.
-
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -32,15 +40,14 @@ const bodySchema = z.object({
 })
 
 const SHARE_CLICK_POINTS = 3
+const MAX_SHARE_CLICKS_PER_DAY = 10
 
 export async function POST(request: Request) {
   const supabase = await createClient()
-
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
-
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
@@ -55,6 +62,25 @@ export async function POST(request: Request) {
   const dedupeKey = 'share_click:' + parsed.data.scholarship_id + ':' + today
 
   const service = createServiceClient()
+
+  // Per-profile daily cap. dedupe_key always ends with ":<YYYY-MM-DD>"
+  // for share_click events, so suffix-matching counts today's awards
+  // without depending on columns beyond the ones award_xp already
+  // guarantees exist (profile_id, event_type, dedupe_key).
+  const { count: awardedToday, error: countError } = await service
+    .from('xp_events')
+    .select('id', { count: 'exact', head: true })
+    .eq('profile_id', user.id)
+    .eq('event_type', 'share_click')
+    .like('dedupe_key', `%:${today}`)
+
+  if (countError) {
+    return NextResponse.json({ error: countError.message }, { status: 500 })
+  }
+  if ((awardedToday ?? 0) >= MAX_SHARE_CLICKS_PER_DAY) {
+    return NextResponse.json({ awarded: false, points: 0 })
+  }
+
   const { error } = await service.rpc('award_xp', {
     p_profile_id: user.id,
     p_event_type: 'share_click',
@@ -62,7 +88,6 @@ export async function POST(request: Request) {
     p_dedupe_key: dedupeKey,
     p_metadata: { scholarship_id: parsed.data.scholarship_id },
   })
-
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
