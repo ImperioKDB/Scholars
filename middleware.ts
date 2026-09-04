@@ -1,7 +1,10 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/discover", "/saved", "/applications", "/admin", "/scholarships"];
+// AUDIT FIX (batch 5): /settings added -- the new profile overview page
+// shows personal data, so it's gated to authenticated users like the
+// rest of the app shell.
+const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/discover", "/saved", "/applications", "/admin", "/scholarships", "/settings"];
 const AUTH_PREFIXES = ["/login", "/signup"];
 
 const REF_COOKIE_NAME = "ref_id";
@@ -88,6 +91,7 @@ export const config = {
     "/applications/:path*",
     "/admin/:path*",
     "/scholarships/:path*",
+    "/settings/:path*",
     "/s/:path*",
     "/login",
     "/signup",
