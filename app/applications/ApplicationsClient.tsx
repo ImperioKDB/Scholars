@@ -69,7 +69,6 @@ export function ApplicationsClient({
 }) {
   const router = useRouter();
   const { confirmApply } = useAde();
-
   const [loadError, setLoadError] = useState<string | null>(initialError);
   const [applications, setApplications] = useState<ApplicationApiItem[]>(initialApplications);
   const [saved, setSaved] = useState<SavedApiItem[]>(initialSaved);
@@ -77,20 +76,16 @@ export function ApplicationsClient({
 
   async function load() {
     setLoadError(null);
-
     const [appsRes, savedRes] = await Promise.all([
       fetch("/api/applications"),
       fetch("/api/scholarships/save"),
     ]);
-
     if (!appsRes.ok) {
       setLoadError("Couldn't load your applications. Try refreshing.");
       return;
     }
-
     const appsData = await appsRes.json();
     setApplications(appsData.applications ?? []);
-
     if (savedRes.ok) {
       const savedData = await savedRes.json();
       setSaved(savedData.saved ?? []);
@@ -101,7 +96,6 @@ export function ApplicationsClient({
     () => new Set(applications.map((a) => a.scholarship.id)),
     [applications]
   );
-
   const untrackedSaved = useMemo(
     () => saved.filter((s) => !trackedScholarshipIds.has(s.scholarship.id)),
     [saved, trackedScholarshipIds]
@@ -131,15 +125,12 @@ export function ApplicationsClient({
   async function updateStatus(applicationId: string, status: ApplicationStatus) {
     setPendingIds((p) => new Set(p).add(applicationId));
     setApplications((prev) => prev.map((a) => (a.id === applicationId ? { ...a, status } : a)));
-
     const res = await fetch(`/api/applications/${applicationId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
-
     if (!res.ok) await load(); // fall back to a full reload on failure
-
     setPendingIds((p) => {
       const next = new Set(p);
       next.delete(applicationId);
@@ -152,10 +143,8 @@ export function ApplicationsClient({
     setPendingIds((p) => new Set(p).add(applicationId));
     const prev = applications;
     setApplications((cur) => cur.filter((a) => a.id !== applicationId));
-
     const res = await fetch(`/api/applications/${applicationId}`, { method: "DELETE" });
     if (!res.ok) setApplications(prev);
-
     setPendingIds((p) => {
       const next = new Set(p);
       next.delete(applicationId);
@@ -189,7 +178,6 @@ export function ApplicationsClient({
         <p className="text-sm text-navy-light mt-1 mb-6">
           {applications.length} scholarship{applications.length === 1 ? "" : "s"} you&apos;re tracking.
         </p>
-
         <div className="bg-white rounded-xl border border-hairline p-5">
           <StatusDonut counts={counts} />
         </div>
@@ -215,7 +203,13 @@ export function ApplicationsClient({
         <div className="mb-10">
           <h2 className="font-display text-lg font-semibold text-navy mb-3">Start tracking</h2>
           <p className="text-sm text-navy-light mb-4">Scholarships you&apos;ve saved but aren&apos;t tracking yet.</p>
-          <div className="grid md:grid-cols-2 gap-4">
+          {/* grid-cols-1 = repeat(1, minmax(0, 1fr)): without an explicit
+              mobile column the implicit auto track is sized by the card's
+              min-content, and the truncated (nowrap) title made that
+              wider than the viewport -- the card bled off the right edge
+              on phones. minmax(0, ...) lets the track shrink so truncate
+              can do its job. Same fix on the two grids below. */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {untrackedSaved.map((s) => (
               <div key={s.scholarship.id} className="bg-white rounded-xl border border-hairline p-4 flex items-center gap-3">
                 <ProviderMonogram name={s.scholarship.provider_name} size={40} />
@@ -238,7 +232,6 @@ export function ApplicationsClient({
       )}
 
       <h2 className="font-display text-lg font-semibold text-navy mb-5">Tracked applications</h2>
-
       {applications.length === 0 ? (
         <div className="bg-white rounded-xl border border-hairline p-8 text-center">
           <p className="text-sm text-navy-light">
@@ -246,7 +239,7 @@ export function ApplicationsClient({
           </p>
         </div>
       ) : (
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {applications.map((a) => {
             const days = daysUntil(a.scholarship.deadline);
             return (
@@ -267,7 +260,6 @@ export function ApplicationsClient({
                       Remove
                     </button>
                   </div>
-
                   <div className="flex flex-wrap items-center gap-2 mt-3">
                     {days !== null && (
                       <span className={`text-xs font-mono font-medium px-2 py-1 rounded-full ${DEADLINE_TONE_CLASSES[deadlineTone(days)]}`}>
@@ -278,7 +270,6 @@ export function ApplicationsClient({
                       {STATUS_LABELS[a.status]}
                     </span>
                   </div>
-
                   <label className="block mt-3">
                     <span className="sr-only">Status</span>
                     <select
@@ -294,7 +285,6 @@ export function ApplicationsClient({
                       ))}
                     </select>
                   </label>
-
                   {a.scholarship.application_url ? (
                     <button
                       type="button"
@@ -312,7 +302,6 @@ export function ApplicationsClient({
                       {a.scholarship.how_to_apply}
                     </p>
                   ) : null}
-
                   <DraftPanel
                     applicationId={a.id}
                     scholarshipTitle={a.scholarship.title}
@@ -335,7 +324,6 @@ export function ApplicationsClient({
       <h2 id="saved" className="font-display text-lg font-semibold text-navy mb-5 scroll-mt-20">
         Saved ({saved.length})
       </h2>
-
       {saved.length === 0 ? (
         <div className="bg-white rounded-xl border border-hairline p-8 text-center">
           <p className="text-sm text-navy-light">
@@ -343,7 +331,7 @@ export function ApplicationsClient({
           </p>
         </div>
       ) : (
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {saved.map((s) => (
             <div key={s.scholarship.id} className="bg-white rounded-xl border border-hairline p-5 flex gap-4 shadow-card">
               <ProviderMonogram name={s.scholarship.provider_name} size={52} />
