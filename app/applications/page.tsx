@@ -34,7 +34,14 @@ type SavedApiItem = {
 const SCHOLARSHIP_COLUMNS =
   "id, title, provider_name, description, amount, deadline, application_url, how_to_apply, level, discipline, verified";
 
-const APPLICATION_COLUMNS = `id, status, notes, created_at, updated_at, draft_statement, draft_summary, draft_generated_at, draft_confirmed_at, scholarship:scholarships ( ${SCHOLARSHIP_COLUMNS} )`;
+// scholarships!inner -- an application or saved-scholarship row whose
+// joined scholarship has since failed RLS (e.g. an admin unverified it)
+// must not come back as { scholarship: null }. ApplicationsClient reads
+// a.scholarship.title / a.scholarship.application_url unconditionally,
+// so !inner drops the unjoinable row entirely instead of crashing the
+// render. Same fix applied to app/dashboard/page.tsx,
+// app/api/applications/route.ts, and app/api/applications/[id]/route.ts.
+const APPLICATION_COLUMNS = `id, status, notes, created_at, updated_at, draft_statement, draft_summary, draft_generated_at, draft_confirmed_at, scholarship:scholarships!inner ( ${SCHOLARSHIP_COLUMNS} )`;
 
 // Server Component: fetches tracked applications and saved scholarships
 // in parallel and hands them to ApplicationsClient as initial props.
@@ -60,7 +67,7 @@ export default async function ApplicationsPage() {
       .order("updated_at", { ascending: false }),
     supabase
       .from("saved_scholarships")
-      .select(`id, saved_at, scholarship:scholarships ( ${SCHOLARSHIP_COLUMNS} )`)
+      .select(`id, saved_at, scholarship:scholarships!inner ( ${SCHOLARSHIP_COLUMNS} )`)
       .eq("profile_id", user.id)
       .order("saved_at", { ascending: false }),
   ]);
