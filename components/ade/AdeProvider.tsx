@@ -391,7 +391,11 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
     <AdeContext.Provider value={{ confirmApply }}>
       {children}
       {confettiColors && <Confetti colors={confettiColors} pieceCount={70} durationMs={2600} />}
-      <div className="fixed bottom-4 right-4 z-[90] flex flex-col items-end gap-2">
+      {/* AUDIT FIX (batch 4): bottom-20 on mobile lifts the avatar clear
+          of the new bottom tab bar (see components/Sidebar.tsx);
+          md:bottom-4 restores the original position where there is no
+          tab bar. */}
+      <div className="fixed bottom-20 md:bottom-4 right-4 z-[90] flex flex-col items-end gap-2">
         {open && (
           <div
             // aria-live="polite" so screen readers announce prompt text
