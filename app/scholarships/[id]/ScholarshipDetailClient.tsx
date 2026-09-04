@@ -7,16 +7,7 @@ import { MatchSeal } from "@/components/MatchSeal";
 import { BackLink } from "@/components/BackLink";
 import { ShareButton } from "@/components/ShareButton";
 import { CompetitivenessBadge, type CompetitivenessTier } from "@/components/CompetitivenessBadge";
-
-type RequirementStatus = "met" | "not_met" | "missing_data" | "unverifiable";
-
-type Requirement = {
-  field: string;
-  label: string;
-  status: RequirementStatus;
-  requirement: string;
-  detail: string;
-};
+import { RequirementsList, type Requirement } from "@/components/RequirementsList";
 
 type ScholarshipDetail = {
   id: string;
@@ -49,20 +40,6 @@ const TIER_LABELS: Record<ScholarshipDetail["tier"], string> = {
   good: "Worth a look",
   possible: "Possible",
   unlikely: "Long shot",
-};
-
-const REQ_STATUS_LABELS: Record<RequirementStatus, string> = {
-  met: "Met",
-  not_met: "Not met",
-  missing_data: "Add this to your profile",
-  unverifiable: "Verify with provider",
-};
-
-const REQ_STATUS_TONE: Record<RequirementStatus, string> = {
-  met: "bg-emerald-light text-emerald",
-  not_met: "bg-rose-light text-rose",
-  missing_data: "bg-amber-light text-amber",
-  unverifiable: "bg-navy-50 text-navy-light",
 };
 
 const DEADLINE_TONE_CLASSES: Record<ReturnType<typeof deadlineTone>, string> = {
@@ -107,15 +84,12 @@ export function ScholarshipDetailClient({
   const [actionError, setActionError] = useState<string | null>(null);
 
   const days = daysUntil(scholarship.deadline);
-  const metCount = scholarship.requirements.filter((r) => r.status === "met").length;
-  const totalCount = scholarship.requirements.filter((r) => r.status !== "unverifiable").length;
 
   async function toggleSave() {
     setActionError(null);
     const wasSaved = saved;
     setSaved(!wasSaved);
     setSavePending(true);
-
     const res = wasSaved
       ? await fetch("/api/scholarships/save?scholarship_id=" + scholarship.id, { method: "DELETE" })
       : await fetch("/api/scholarships/save", {
@@ -123,7 +97,6 @@ export function ScholarshipDetailClient({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ scholarship_id: scholarship.id }),
         });
-
     if (!res.ok) {
       setSaved(wasSaved);
       setActionError("Couldn't update saved status. Try again.");
@@ -134,13 +107,11 @@ export function ScholarshipDetailClient({
   async function startTracking() {
     setActionError(null);
     setTrackPending(true);
-
     const res = await fetch("/api/applications", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ scholarship_id: scholarship.id }),
     });
-
     if (res.ok) {
       const data = await res.json();
       setApplication(data.application ?? { id: "", status: "in_progress" });
@@ -198,7 +169,6 @@ export function ScholarshipDetailClient({
           competitivenessTier={scholarship.competitiveness_tier}
           historicalAcceptanceRate={scholarship.historical_acceptance_rate}
         />
-
         {scholarship.competitivenessFactor < 1 && (
           <p className="text-xs text-navy-light mt-2">
             You meet <span className="font-mono text-ink">{scholarship.eligibilityScore}%</span> of this
@@ -224,7 +194,6 @@ export function ScholarshipDetailClient({
               Apply on provider&apos;s site &rarr;
             </a>
           )}
-
           <button
             type="button"
             onClick={toggleSave}
@@ -236,7 +205,6 @@ export function ScholarshipDetailClient({
           >
             {saved ? "Saved \u2713" : "Save"}
           </button>
-
           {application ? (
             <span className="text-sm font-medium text-navy-light px-2">
               Tracking &middot; {STATUS_LABELS[application.status]}
@@ -251,7 +219,6 @@ export function ScholarshipDetailClient({
               {trackPending ? "Adding\u2026" : "+ Track application"}
             </button>
           )}
-
           <ShareButton
             variant="full"
             scholarshipId={scholarship.id}
@@ -261,32 +228,13 @@ export function ScholarshipDetailClient({
         </div>
 
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display text-lg font-semibold text-navy">Eligibility requirements</h2>
-            {totalCount > 0 && (
-              <p className="text-xs text-navy-light font-mono">{metCount}/{totalCount} met</p>
-            )}
-          </div>
-
-          {scholarship.requirements.length === 0 ? (
-            <p className="text-sm text-navy-light">
-              No specific requirements set for this scholarship yet -- everyone gets a neutral match score.
-            </p>
-          ) : (
-            <ul className="space-y-3">
-              {scholarship.requirements.map((r, i) => (
-                <li key={r.field + "-" + i} className="flex items-start justify-between gap-3 bg-navy-50 rounded-lg p-3.5">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-ink">{r.requirement}</p>
-                    <p className="text-xs text-navy-light mt-0.5">{r.detail}</p>
-                  </div>
-                  <span className={"shrink-0 text-xs font-medium px-2 py-1 rounded-full " + REQ_STATUS_TONE[r.status]}>
-                    {REQ_STATUS_LABELS[r.status]}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
+          <h2 className="font-display text-lg font-semibold text-navy mb-4">Eligibility requirements</h2>
+          {/* Grouped, color-coded requirements (product audit, Section 12:
+              the old flat <ul> gave met / not-met / missing rows identical
+              visual weight). RequirementsList orders the actionable
+              "missing from your profile" group first, gives it one shared
+              CTA, and truncates long multi-value requirement strings. */}
+          <RequirementsList requirements={scholarship.requirements} />
         </div>
       </div>
     </div>
