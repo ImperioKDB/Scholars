@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Manrope } from "next/font/google";
+import { AdeProvider } from "@/components/ade/AdeProvider";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -42,7 +43,18 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${fraunces.variable} ${manrope.variable}`}>
-      <body className="font-sans bg-parchment text-ink antialiased">{children}</body>
+      <body className="font-sans bg-parchment text-ink antialiased">
+        {/* AUDIT FIX (batch 2): AdeProvider lifted here from the four
+            section layouts (dashboard/applications/achievements/
+            scholarships). It used to remount on every route change
+            between those sections, silently resetting Ade's dismissed
+            prompts and seen-prompt tracking. At the root layout the
+            instance survives navigation; the provider self-gates to the
+            authenticated app routes via usePathname, so it renders (and
+            polls) nothing on public pages like the landing, auth,
+            /s/[id] share links, and the admin shell. */}
+        <AdeProvider>{children}</AdeProvider>
+      </body>
     </html>
   );
 }
