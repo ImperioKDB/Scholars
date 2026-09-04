@@ -21,8 +21,13 @@ export function AuthShell({
         />
         <Logo className="relative" />
         <div className="relative max-w-sm">
+          {/* Was a fabricated "12,000+ scholarships tracked" stat -- the
+              live seed data is nowhere near that number, and claiming it
+              here is exactly the kind of thing that breaks trust the
+              moment a new signup sees 5 real matches. Replaced with a
+              true, still-differentiating claim instead of a fake count. */}
           <p className="font-mono text-xs uppercase tracking-widest text-emerald mb-4">
-            12,000+ scholarships tracked
+            Matched to real eligibility, not keywords
           </p>
           <h2 className="font-display text-4xl font-semibold leading-tight">
             Your pathway to opportunity starts with one profile.
