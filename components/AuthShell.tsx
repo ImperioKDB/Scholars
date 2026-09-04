@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Logo } from "@/components/Logo";
 
 export function AuthShell({
@@ -38,7 +39,6 @@ export function AuthShell({
           scholarships alike.
         </p>
       </div>
-
       <div className="flex items-center justify-center p-6 md:p-12">
         <div className="w-full max-w-sm">
           <div className="md:hidden mb-8">
@@ -49,6 +49,22 @@ export function AuthShell({
           </h1>
           <p className="text-sm text-navy-light mb-8">{sub}</p>
           {children}
+          {/* AUDIT FIX (batch 3): the audit flagged that no privacy policy
+              or terms were visible anywhere in the product. Auth is where
+              that consent conversation belongs -- this one line covers
+              login, signup, and both reset-password screens, since they
+              all render through this shell. */}
+          <p className="text-xs text-navy-light mt-8 leading-relaxed">
+            By continuing, you agree to our{" "}
+            <Link href="/legal/terms" className="text-navy font-medium hover:underline">
+              Terms of Service
+            </Link>{" "}
+            and{" "}
+            <Link href="/legal/privacy" className="text-navy font-medium hover:underline">
+              Privacy Policy
+            </Link>
+            .
+          </p>
         </div>
       </div>
     </div>
