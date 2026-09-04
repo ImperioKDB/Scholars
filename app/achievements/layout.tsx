@@ -6,6 +6,10 @@ import { Sidebar } from "@/components/Sidebar";
 // lifted to the root layout (app/layout.tsx) so Ade's dismissed-prompt
 // state survives navigation between sections instead of resetting on
 // every route change.
+//
+// AUDIT FIX (batch 4): pb-24 on mobile keeps the last content on the page
+// clear of the fixed bottom tab bar (see components/Sidebar.tsx). Desktop
+// keeps the original pb-10 since there is no tab bar at md:+.
 export default async function AchievementsLayout({ children }: { children: React.ReactNode }) {
   const { profile } = await getCurrentUserAndProfile();
   const fullName = profile?.full_name ?? null;
@@ -17,7 +21,7 @@ export default async function AchievementsLayout({ children }: { children: React
     <div className="min-h-screen bg-parchment">
       <Sidebar fullName={fullName} isAdmin={isAdmin} profileCompleteness={profileCompleteness} xpTotal={xpTotal} />
       <main className="md:pl-60">
-        <div className="mx-auto max-w-5xl px-6 pt-20 pb-10 md:pt-10">{children}</div>
+        <div className="mx-auto max-w-5xl px-6 pt-20 pb-24 md:pt-10 md:pb-10">{children}</div>
       </main>
     </div>
   );
