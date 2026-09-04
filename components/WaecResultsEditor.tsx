@@ -12,6 +12,11 @@ export function emptyWaecRow(): WaecRow {
 
 const SUBJECT_OPTIONS = WAEC_SUBJECTS.map((s) => ({ value: s, label: s }));
 
+// AUDIT FIX (batch 5): the five subjects nearly every Nigerian
+// scholarship gates on. Adding them one row at a time was the tedious
+// part of onboarding step 2 -- one tap adds whichever are still missing.
+const CORE_SUBJECTS = ["English Language", "Mathematics", "Biology", "Chemistry", "Physics"];
+
 // Row editor for WAEC/NECO/NABTEB subject + grade pairs. Deliberately does
 // not ask a separate "do you have credit in English and Maths" question --
 // that's derived automatically by the sync_waec_summary_fields() Postgres
@@ -31,6 +36,7 @@ export function WaecResultsEditor({
   onChange: (rows: WaecRow[]) => void;
 }) {
   const usedSubjects = new Set(rows.map((r) => r.subject).filter(Boolean));
+  const missingCore = CORE_SUBJECTS.filter((s) => !usedSubjects.has(s));
 
   function update(key: string, patch: Partial<WaecRow>) {
     onChange(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -43,6 +49,17 @@ export function WaecResultsEditor({
   function add() {
     if (rows.length >= WAEC_SUBJECTS.length) return;
     onChange([...rows, emptyWaecRow()]);
+  }
+
+  function addCoreSubjects() {
+    if (missingCore.length === 0) return;
+    const capacity = WAEC_SUBJECTS.length - rows.length;
+    const toAdd = missingCore.slice(0, capacity).map((subject) => ({
+      key: crypto.randomUUID(),
+      subject,
+      grade: "",
+    }));
+    onChange([...rows, ...toAdd]);
   }
 
   return (
@@ -95,15 +112,26 @@ export function WaecResultsEditor({
         })}
       </div>
 
-      {rows.length < WAEC_SUBJECTS.length && (
-        <button
-          type="button"
-          onClick={add}
-          className="mt-3 text-sm font-medium text-navy hover:text-navy-light"
-        >
-          + Add subject
-        </button>
-      )}
+      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+        {rows.length < WAEC_SUBJECTS.length && (
+          <button
+            type="button"
+            onClick={add}
+            className="text-sm font-medium text-navy hover:text-navy-light"
+          >
+            + Add subject
+          </button>
+        )}
+        {missingCore.length > 0 && rows.length < WAEC_SUBJECTS.length && (
+          <button
+            type="button"
+            onClick={addCoreSubjects}
+            className="text-sm font-medium text-navy hover:text-navy-light"
+          >
+            + Add core subjects (English, Maths, Biology, Chemistry, Physics)
+          </button>
+        )}
+      </div>
     </div>
   );
 }
