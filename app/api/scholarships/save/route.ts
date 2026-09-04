@@ -8,6 +8,14 @@
 // and there's nowhere else in the planned API surface to get it from. Flagging
 // as a deliberate addition, not silent scope creep — remove if you'd rather
 // fold this into the dashboard route later.
+//
+// scholarship:scholarships!inner on GET -- a saved scholarship that has
+// since been unverified by an admin fails the scholarships_select_verified
+// RLS policy on the join. Without !inner, PostgREST returns the
+// saved_scholarships row with scholarship: null instead of dropping it,
+// and any consumer reading scholarship.* unconditionally crashes. Same
+// fix as app/dashboard/page.tsx, app/applications/page.tsx,
+// app/api/applications/route.ts, and app/api/applications/[id]/route.ts.
 
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -33,7 +41,7 @@ export async function GET() {
     .from('saved_scholarships')
     .select(
       `id, saved_at,
-       scholarship:scholarships ( id, title, provider_name, description, amount, deadline, application_url, level, discipline, verified )`
+       scholarship:scholarships!inner ( id, title, provider_name, description, amount, deadline, application_url, level, discipline, verified )`
     )
     .eq('profile_id', user.id)
     .order('saved_at', { ascending: false })
