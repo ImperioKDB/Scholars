@@ -1,20 +1,31 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AuthShell } from "@/components/AuthShell";
 import { FormField, inputClass } from "@/components/FormField";
+import { validatePasswordStrength } from "@/lib/auth/password";
 
 // Shown after a successful signUp() call when Supabase did NOT return a
 // live session -- i.e. email confirmation is required. Sending someone to
 // /onboarding at this point is a dead end: it's a protected route, there's
 // no session yet, and middleware.ts just bounces them to /login, a page
 // that can't do anything for an account that isn't confirmed yet.
+//
+// AUTH SECURITY AUDIT (OTP verification): also accepts a 6-digit code via
+// supabase.auth.verifyOtp(type: "signup"), so the flow works when the
+// project is configured for email OTP instead of (or alongside) magic
+// links. With link-only config the code form simply errors gracefully and
+// the link path still works.
 function CheckEmailScreen({ email, onResend }: { email: string; onResend: () => Promise<void> }) {
+  const router = useRouter();
+  const supabase = createClient();
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
+  const [code, setCode] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
 
   async function handleResend() {
     setResending(true);
@@ -24,24 +35,60 @@ function CheckEmailScreen({ email, onResend }: { email: string; onResend: () => 
     setResent(true);
   }
 
+  async function handleVerify(e: React.FormEvent) {
+    e.preventDefault();
+    if (!code.trim()) return;
+    setVerifying(true);
+    setVerifyError(null);
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token: code.trim(),
+      type: "signup",
+    });
+    setVerifying(false);
+    if (error) {
+      setVerifyError("That code didn't match. Check the email and try again, or use the link it contains.");
+      return;
+    }
+    router.push("/onboarding");
+  }
+
   return (
     <AuthShell heading="Check your email" sub="One more step before you can sign in.">
       <div className="rounded-xl border border-hairline bg-navy-50 p-5 mb-6">
         <p className="text-sm text-ink">
-          We sent a confirmation link to <span className="font-medium">{email}</span>. Click it
-          to activate your account, then come back and log in.
+          We sent a confirmation to <span className="font-medium">{email}</span>. Click the link in it,
+          or enter the code it contains below.
         </p>
       </div>
-
+      <form onSubmit={handleVerify} noValidate>
+        <FormField label="Confirmation code" error={verifyError ?? undefined}>
+          <input
+            className={inputClass}
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="6-digit code"
+          />
+        </FormField>
+        <button
+          type="submit"
+          disabled={verifying || !code.trim()}
+          className="w-full rounded-lg bg-navy text-white font-medium py-3 mt-2 hover:bg-navy-light transition-colors disabled:opacity-60"
+        >
+          {verifying ? "Verifying\u2026" : "Verify code"}
+        </button>
+      </form>
       <button
         type="button"
         onClick={handleResend}
         disabled={resending}
-        className="w-full rounded-lg border border-hairline bg-white py-2.5 text-sm font-medium text-ink hover:bg-navy-50 transition-colors disabled:opacity-60"
+        className="w-full rounded-lg border border-hairline bg-white py-2.5 mt-3 text-sm font-medium text-ink hover:bg-navy-50 transition-colors disabled:opacity-60"
       >
-        {resending ? "Sending…" : resent ? "Sent again ✓" : "Resend confirmation email"}
+        {resending ? "Sending\u2026" : resent ? "Sent again \u2713" : "Resend confirmation email"}
       </button>
-
       <p className="text-sm text-navy-light mt-8 text-center">
         Already confirmed?{" "}
         <Link href="/login" className="text-navy font-medium hover:underline">
@@ -55,7 +102,6 @@ function CheckEmailScreen({ email, onResend }: { email: string; onResend: () => 
 export default function SignupPage() {
   const router = useRouter();
   const supabase = createClient();
-
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -68,12 +114,37 @@ export default function SignupPage() {
     e.preventDefault();
     setError(null);
 
-    if (password.length < 8) {
-      setError("Password needs at least 8 characters.");
+    // AUTH SECURITY AUDIT (password strength): client-side enforcement of
+    // the shared policy; Supabase's own policy is the server backstop.
+    const issues = validatePasswordStrength(password);
+    if (issues.length > 0) {
+      setError("Password needs " + issues.join(", ") + ".");
       return;
     }
 
     setLoading(true);
+
+    // AUTH SECURITY AUDIT (breach check): fail-open -- a HIBP outage must
+    // never block signup, and the strength rules still apply either way.
+    let breached = false;
+    try {
+      const leakRes = await fetch("/api/auth/password-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (leakRes.ok) {
+        breached = (await leakRes.json()).leaked === true;
+      }
+    } catch {
+      // fail open
+    }
+    if (breached) {
+      setLoading(false);
+      setError("This password appears in known breach data. Pick something less common.");
+      return;
+    }
+
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -83,12 +154,10 @@ export default function SignupPage() {
       },
     });
     setLoading(false);
-
     if (signUpError) {
       setError(signUpError.message);
       return;
     }
-
     // A session on the response means email confirmation is off for this
     // project -- the account is immediately usable, so go straight in.
     // No session means a confirmation link was sent instead.
@@ -96,7 +165,6 @@ export default function SignupPage() {
       router.push("/onboarding");
       return;
     }
-
     setAwaitingConfirmation(true);
   }
 
@@ -134,7 +202,6 @@ export default function SignupPage() {
             autoComplete="name"
           />
         </FormField>
-
         <FormField label="Email">
           <input
             className={inputClass}
@@ -146,8 +213,11 @@ export default function SignupPage() {
             autoComplete="email"
           />
         </FormField>
-
-        <FormField label="Password" error={error ?? undefined}>
+        <FormField
+          label="Password"
+          error={error ?? undefined}
+          hint="At least 8 characters, with an uppercase letter, a lowercase letter, and a number."
+        >
           <input
             className={inputClass}
             type="password"
@@ -159,7 +229,6 @@ export default function SignupPage() {
             autoComplete="new-password"
           />
         </FormField>
-
         <button
           type="submit"
           disabled={loading}
@@ -171,16 +240,14 @@ export default function SignupPage() {
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
           )}
-          {loading ? "Creating account…" : "Create account"}
+          {loading ? "Creating account\u2026" : "Create account"}
         </button>
       </form>
-
       <div className="flex items-center gap-3 my-6">
         <div className="h-px flex-1 bg-hairline" />
         <span className="text-xs text-navy-light">or continue with</span>
         <div className="h-px flex-1 bg-hairline" />
       </div>
-
       <button
         onClick={handleGoogle}
         disabled={googleLoading}
@@ -192,9 +259,8 @@ export default function SignupPage() {
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
         )}
-        {googleLoading ? "Redirecting…" : "Continue with Google"}
+        {googleLoading ? "Redirecting\u2026" : "Continue with Google"}
       </button>
-
       <p className="text-sm text-navy-light mt-8 text-center">
         Already have an account?{" "}
         <Link href="/login" className="text-navy font-medium hover:underline">
@@ -204,3 +270,7 @@ export default function SignupPage() {
     </AuthShell>
   );
 }
+
+// CheckEmailScreen and this page both use Link; keep the import local to
+// the JSX scope like the rest of the auth pages.
+import Link from "next/link";
