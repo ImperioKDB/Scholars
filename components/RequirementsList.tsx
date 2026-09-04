@@ -15,6 +15,11 @@ import Link from "next/link";
 // instead of a repeated pill per row, and truncates long requirement
 // strings (e.g. "Field of study must be one of: <15 disciplines>") behind
 // a "Show all" toggle instead of rendering the full list inline.
+//
+// Rows also carry a left-border color code per status (emerald = met,
+// rose = not met, amber = missing data, hairline = verify with provider)
+// on top of the pill -- the product audit flagged that status shouldn't
+// require reading the pill text before the eye can scan a long list.
 
 export type RequirementStatus = "met" | "not_met" | "missing_data" | "unverifiable";
 
@@ -40,6 +45,13 @@ const REQ_STATUS_LABELS: Record<RequirementStatus, string> = {
   unverifiable: "Verify with provider",
 };
 
+const REQ_BORDER_TONE: Record<RequirementStatus, string> = {
+  met: "border-l-emerald",
+  not_met: "border-l-rose",
+  missing_data: "border-l-amber",
+  unverifiable: "border-l-hairline",
+};
+
 // Requirement strings built from long "must be one of: A, B, C..." lists
 // (discipline, state_of_origin, etc.) can run past 300 characters. Truncate
 // at a length that still fits 2-3 lines on a phone, with an inline toggle
@@ -50,7 +62,6 @@ function RequirementText({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false);
   const isLong = text.length > TRUNCATE_AT;
   const shown = expanded || !isLong ? text : `${text.slice(0, TRUNCATE_AT)}\u2026`;
-
   return (
     <p className="text-sm font-medium text-ink">
       {shown}
@@ -69,7 +80,12 @@ function RequirementText({ text }: { text: string }) {
 
 function RequirementRow({ r }: { r: Requirement }) {
   return (
-    <li className="flex items-start justify-between gap-3 bg-navy-50 rounded-lg p-3.5">
+    <li
+      className={
+        "flex items-start justify-between gap-3 bg-navy-50 rounded-lg p-3.5 border-l-4 " +
+        REQ_BORDER_TONE[r.status]
+      }
+    >
       <div className="min-w-0">
         <RequirementText text={r.requirement} />
         <p className="text-xs text-navy-light mt-0.5">{r.detail}</p>
@@ -94,7 +110,6 @@ export function RequirementsList({ requirements }: { requirements: Requirement[]
   const notMet = requirements.filter((r) => r.status === "not_met");
   const met = requirements.filter((r) => r.status === "met");
   const unverifiable = requirements.filter((r) => r.status === "unverifiable");
-
   const checkable = missing.length + notMet.length + met.length;
 
   if (requirements.length === 0) {
