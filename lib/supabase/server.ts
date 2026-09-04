@@ -14,10 +14,27 @@ export function createClient() {
           return cookieStore.get(name)?.value;
         },
         set(name: string, value: string, options: CookieOptions) {
-          cookieStore.set({ name, value, ...options });
+          // Can throw if this client is used during a Server Component
+          // render (not a Route Handler / Server Action) -- Next.js
+          // disallows setting cookies there. Supabase's auth client can
+          // trigger this mid-render when it silently refreshes an expired
+          // access token and tries to persist the new session. Safe to
+          // swallow: middleware.ts already refreshes and persists the
+          // session cookie on every request, so a failed write here just
+          // means this render keeps using the pre-refresh cookie, and the
+          // next request (through middleware) picks up the refreshed one.
+          try {
+            cookieStore.set({ name, value, ...options });
+          } catch {
+            // no-op -- see comment above
+          }
         },
         remove(name: string, options: CookieOptions) {
-          cookieStore.set({ name, value: "", ...options });
+          try {
+            cookieStore.set({ name, value: "", ...options });
+          } catch {
+            // no-op -- see comment above
+          }
         },
       },
     }
