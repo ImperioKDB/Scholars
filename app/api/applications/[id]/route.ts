@@ -8,6 +8,18 @@
 //
 // SCHOLARSHIP_COLUMNS also includes how_to_apply now, for consistency with
 // GET /api/applications -- see migration: add_how_to_apply_fallback.
+//
+// scholarship:scholarships!inner on the PATCH select -- same reasoning as
+// app/api/applications/route.ts and app/applications/page.tsx: an
+// application whose scholarship has since failed RLS (e.g. unverified by
+// an admin) must not come back as { scholarship: null } for a client that
+// reads application.scholarship.* unconditionally.
+//
+// NOTE: with !inner, if the scholarship attached to this application has
+// been unverified since it was last fetched, this PATCH's .single() can
+// return no rows, which the branch below reports as 'Application not
+// found' (404). That's a slightly misleading message in that rare case --
+// not fixed here, flagged as a known edge case.
 
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -54,7 +66,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     .update(parsed.data)
     .eq('id', id)
     .eq('profile_id', user.id)
-    .select(`id, status, notes, created_at, updated_at, scholarship:scholarships ( ${SCHOLARSHIP_COLUMNS} )`)
+    .select(`id, status, notes, created_at, updated_at, scholarship:scholarships!inner ( ${SCHOLARSHIP_COLUMNS} )`)
     .single()
 
   if (error) {
