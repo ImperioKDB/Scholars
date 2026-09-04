@@ -55,20 +55,6 @@ function DiscoverIcon() {
   );
 }
 
-// AUDIT FIX (batch 5): the audit flagged that there was no way to see or
-// edit your own profile outside the onboarding flow. /settings (added in
-// this batch) is that surface; this is its nav entry.
-function SettingsIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-      <path d="M4 7h9M17.5 7H20M4 12h3.5M12 12h8M4 17h11M19.5 17H20" strokeLinecap="round" />
-      <circle cx="15" cy="7" r="2" />
-      <circle cx="9.5" cy="12" r="2" />
-      <circle cx="17" cy="17" r="2" />
-    </svg>
-  );
-}
-
 function MenuIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -138,7 +124,6 @@ export function Sidebar({
     { href: "/discover", label: "Browse", Icon: DiscoverIcon },
     { href: "/applications", label: "Applications", Icon: ApplicationsIcon },
     { href: "/achievements", label: "Achievements", Icon: AchievementsIcon },
-    { href: "/settings", label: "Profile", Icon: SettingsIcon },
     ...(isAdmin ? [{ href: "/admin", label: "Admin", Icon: AdminIcon }] : []),
   ];
 
@@ -217,7 +202,7 @@ export function Sidebar({
       {/* AUDIT FIX (batch 5): skip link for keyboard users -- first tab
           stop on every section page, jumps past the navigation straight
           to the content. id="main" lives on each section layout's
-          <main> (plus admin's). */}
+          <main>. */}
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:rounded-lg focus:bg-navy focus:px-4 focus:py-2.5 focus:text-sm focus:font-medium focus:text-white"
@@ -272,7 +257,18 @@ export function Sidebar({
           reachable above the iOS home indicator. The matching bottom
           padding on each section's content lives in the section layouts
           (pb-24 md:pb-10), and Ade's floating avatar lifts clear of
-          this bar on mobile too (see components/ade/AdeProvider.tsx). */}
+          this bar on mobile too (see components/ade/AdeProvider.tsx).
+          LIVE FIX (this push): the active tab was previously told apart
+          only by text-navy vs text-navy-light, which is invisible at
+          11px. The active icon now sits in a filled navy pill with a
+          white glyph (the same active language as the desktop nav's
+          bg-navy treatment), the label goes full navy, and
+          aria-current="page" announces it to screen readers. Press
+          physics too: these are Links, so the global
+          button:not(:disabled):active rule in app/globals.css never
+          reached them -- they now carry active:scale-[0.96] with a
+          transform-aware transition, and motion-reduce users get the
+          color change without the scale. */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-hairline pb-[env(safe-area-inset-bottom)]">
         <div className="grid grid-cols-3">
           {MOBILE_TABS.map(({ href, label, Icon }) => {
@@ -282,12 +278,21 @@ export function Sidebar({
                 key={href}
                 href={href}
                 onClick={() => setMobileOpen(false)}
+                aria-current={active ? "page" : undefined}
                 className={[
-                  "flex flex-col items-center justify-center gap-1 min-h-[56px] py-2 text-[11px] font-medium transition-colors",
+                  "flex flex-col items-center justify-center gap-1 min-h-[56px] py-2 text-[11px] font-medium",
+                  "transition active:scale-[0.96] motion-reduce:active:scale-100 motion-reduce:transition-none",
                   active ? "text-navy" : "text-navy-light",
                 ].join(" ")}
               >
-                <Icon />
+                <span
+                  className={[
+                    "flex items-center justify-center rounded-full px-4 py-1 transition-colors",
+                    active ? "bg-navy text-white" : "bg-transparent",
+                  ].join(" ")}
+                >
+                  <Icon />
+                </span>
                 {label}
               </Link>
             );
