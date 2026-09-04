@@ -47,7 +47,6 @@ export function ShareButton({ scholarshipId, title, sharerId, variant = "full" }
   async function handleShare(e?: React.MouseEvent) {
     e?.preventDefault();
     e?.stopPropagation();
-
     if (sharerId) {
       fetch("/api/xp/share", {
         method: "POST",
@@ -55,7 +54,6 @@ export function ShareButton({ scholarshipId, title, sharerId, variant = "full" }
         body: JSON.stringify({ scholarship_id: scholarshipId }),
       }).catch(() => {});
     }
-
     const url = buildShareUrl(scholarshipId, sharerId);
     await performShare(url, title + " -- check if you qualify on Scholars");
   }
@@ -66,7 +64,11 @@ export function ShareButton({ scholarshipId, title, sharerId, variant = "full" }
         type="button"
         onClick={handleShare}
         aria-label="Share this scholarship"
-        className="shrink-0 rounded-full p-1.5 bg-white/90 backdrop-blur-sm text-navy-light hover:text-navy transition-colors"
+        // 44x44 tap target (product audit / WCAG 2.5.5): visible circle
+        // stays 30px; the ::after pseudo extends the hit area to 44px
+        // without touching layout. ScholarshipCard's gap-3.5 corner
+        // spacing keeps the two expanded hit areas from overlapping.
+        className="relative shrink-0 rounded-full p-1.5 bg-white/90 backdrop-blur-sm text-navy-light hover:text-navy transition-colors after:absolute after:-inset-[7px] after:rounded-full after:content-['']"
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
           <circle cx="18" cy="5" r="3" />
