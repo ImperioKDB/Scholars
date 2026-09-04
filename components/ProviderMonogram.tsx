@@ -4,7 +4,6 @@
 // left slot visually consistent (MatchSeal for scored cards, this for
 // unscored ones, e.g. the Saved section) without adding a second
 // competing signature element.
-
 const PALETTE = [
   { bg: "bg-navy-50", text: "text-navy" },
   { bg: "bg-emerald-light", text: "text-emerald" },
@@ -30,10 +29,14 @@ function toneFor(name: string) {
 export function ProviderMonogram({ name, size = 52 }: { name: string; size?: number }) {
   const tone = toneFor(name);
   return (
+    // AUDIT FIX (batch 5): was aria-hidden with no alternative. It now
+    // exposes itself as a labelled graphic; the visible provider name
+    // next to it still carries the information for everyone.
     <div
       className={`shrink-0 rounded-full flex items-center justify-center font-display font-semibold ${tone.bg} ${tone.text}`}
       style={{ width: size, height: size, fontSize: size * 0.32 }}
-      aria-hidden="true"
+      role="img"
+      aria-label={`${name} monogram`}
     >
       {initialsFor(name)}
     </div>
