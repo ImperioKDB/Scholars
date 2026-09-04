@@ -22,6 +22,12 @@ import { Confetti } from "@/components/Confetti";
 // a full page reload -- persisting seen ids to localStorage is the
 // follow-up if that ever becomes annoying.
 //
+// AUDIT FIX (batch 5): the panel is now a real dialog (role="dialog",
+// aria-modal) with proper keyboard behavior -- Escape closes it, Tab is
+// trapped inside while it's open, focus moves to the close button on
+// open and back to the avatar on close. Previously it was a plain <div>
+// that keyboard and screen-reader users couldn't parse or escape from.
+//
 // ALWAYS VISIBLE as a small round avatar button, bottom-right. Tapping it
 // toggles an expanded panel open/closed at any time.
 //
@@ -187,6 +193,10 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
   const confettiShownRef = useRef<Set<string>>(new Set());
   const [confettiColors, setConfettiColors] = useState<string[] | undefined>(undefined);
   const confettiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // AUDIT FIX (batch 5): dialog focus management refs.
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const avatarRef = useRef<HTMLButtonElement | null>(null);
 
   // Where Ade is actually active. The provider mounts on every page
   // (root layout), but renders and polls only on the authenticated app
@@ -259,6 +269,13 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
       if (confettiTimeoutRef.current) clearTimeout(confettiTimeoutRef.current);
     };
   }, []);
+
+  // AUDIT FIX (batch 5): move focus into the panel when it opens so
+  // keyboard users land inside the dialog instead of staying stranded on
+  // the page behind it.
+  useEffect(() => {
+    if (open) closeButtonRef.current?.focus();
+  }, [open]);
 
   async function answerCheckin(applicationId: string, status: "submitted" | "in_progress" | "rejected") {
     setSubmitting(true);
@@ -358,6 +375,43 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
     setOpen(false);
   }
 
+  // AUDIT FIX (batch 5): closing via the X and closing via Escape share
+  // one path, and both return focus to the avatar so keyboard users
+  // aren't dropped into the void where the dialog used to be.
+  function closePanel() {
+    setOpen(false);
+    avatarRef.current?.focus();
+  }
+
+  // AUDIT FIX (batch 5): real dialog keyboard behavior -- Escape closes,
+  // Tab cycles within the panel instead of escaping to the page behind
+  // it. The panel holds focus while open (see the open-effect above), so
+  // keydown reliably fires here.
+  function handlePanelKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      closePanel();
+      return;
+    }
+    if (e.key !== "Tab" || !panelRef.current) return;
+    const focusables = Array.from(
+      panelRef.current.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )
+    ).filter((el) => !el.hasAttribute("disabled"));
+    if (focusables.length === 0) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    const active = document.activeElement;
+    if (e.shiftKey && (active === first || active === panelRef.current)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+
   const prompt: AdePromptState = activePrompt ?? passivePrompt;
   const hasPending = Boolean(prompt);
 
@@ -398,6 +452,14 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
       <div className="fixed bottom-20 md:bottom-4 right-4 z-[90] flex flex-col items-end gap-2">
         {open && (
           <div
+            ref={panelRef}
+            // AUDIT FIX (batch 5): this used to be an unlabelled <div> --
+            // screen readers couldn't tell a dialog had appeared and
+            // keyboard focus could wander off behind it.
+            role="dialog"
+            aria-modal="true"
+            aria-label="Ade, your application guide"
+            onKeyDown={handlePanelKeyDown}
             // aria-live="polite" so screen readers announce prompt text
             // that appears or changes while the panel is open (product
             // audit: prompts previously appeared with no announcement).
@@ -533,8 +595,9 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                 )}
               </div>
               <button
+                ref={closeButtonRef}
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={closePanel}
                 aria-label="Close"
                 // 44x44 tap target (product audit / WCAG 2.5.5): was p-1
                 // (~24px). The visible icon stays 16px; the ::after
@@ -549,9 +612,11 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
           </div>
         )}
         <button
+          ref={avatarRef}
           type="button"
           onClick={handleAvatarClick}
           aria-label={open ? "Close Ade" : "Open Ade"}
+          aria-expanded={open}
           className={[
             "relative w-14 h-14 rounded-full shadow-card border border-hairline bg-white flex items-center justify-center hover:scale-105 active:scale-95 transition-transform",
             attention ? "ade-attention" : "",
