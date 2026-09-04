@@ -15,6 +15,7 @@ import {
   NATIONALITY_SUGGESTIONS,
   NIGERIAN_STATES,
   YEAR_OF_STUDY_OPTIONS,
+  INSTITUTION_TYPE_OPTIONS,
   EMPTY_PROFILE_FORM,
   type ProfileForm,
 } from "@/lib/profile";
@@ -35,6 +36,10 @@ type OnboardingDraft = {
   form: ProfileForm;
   waecRows: WaecRow[];
   step: number;
+  // AUDIT FIX (batch 4): which institution input mode was active, so a
+  // refresh mid-way through the "my school isn't listed" path restores
+  // the manual fields instead of dropping back to the curated search.
+  manualInstitution: boolean;
 };
 
 function readDraft(): OnboardingDraft | null {
@@ -50,6 +55,7 @@ function readDraft(): OnboardingDraft | null {
       form: { ...EMPTY_PROFILE_FORM, ...parsed.form },
       waecRows: Array.isArray(parsed.waecRows) ? parsed.waecRows : [],
       step: typeof parsed.step === "number" ? parsed.step : 0,
+      manualInstitution: Boolean(parsed.manualInstitution),
     };
   } catch {
     return null;
@@ -81,6 +87,9 @@ function OnboardingForm() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<ProfileForm>(EMPTY_PROFILE_FORM);
   const [waecRows, setWaecRows] = useState<WaecRow[]>([]);
+  // false = curated Combobox search (default), true = free-text "my
+  // school isn't listed" mode. See toggleManualInstitution below.
+  const [manualInstitution, setManualInstitution] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -170,9 +179,16 @@ function OnboardingForm() {
         if (!hasStepParam) {
           setStep(Math.min(Math.max(draft.step, 0), STEPS.length - 1));
         }
+        setManualInstitution(draft.manualInstitution);
       } else {
         setForm(serverForm);
         setWaecRows(serverWaecRows);
+        // AUDIT FIX (batch 4): a saved institution that isn't in the
+        // curated list must have been entered through the manual path --
+        // restore that mode so the name stays visible and editable.
+        if (serverForm.institution_name && !institutionTypeFor(serverForm.institution_name)) {
+          setManualInstitution(true);
+        }
       }
       setLoading(false);
     }
@@ -187,8 +203,8 @@ function OnboardingForm() {
   // draft.
   useEffect(() => {
     if (loading) return;
-    writeDraft({ form, waecRows, step });
-  }, [form, waecRows, step, loading]);
+    writeDraft({ form, waecRows, step, manualInstitution });
+  }, [form, waecRows, step, manualInstitution, loading]);
 
   function update<K extends keyof ProfileForm>(key: K, value: ProfileForm[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -206,8 +222,20 @@ function OnboardingForm() {
     }));
   }
 
+  // AUDIT FIX (batch 4): escape hatch for schools missing from the
+  // curated list (lib/data/institutions.ts). Swapping modes clears both
+  // institution fields on purpose -- a half-typed value carried across
+  // modes could silently save the wrong thing on Finish.
+  function toggleManualInstitution() {
+    setManualInstitution((m) => !m);
+    setForm((f) => ({ ...f, institution_name: "", institution_type: "" }));
+  }
+
   function validateStep(): string | null {
     if (step === 0 && !form.full_name.trim()) return "We need your name to personalize matches.";
+    if (step === 1 && manualInstitution && form.institution_name.trim() && !form.institution_type) {
+      return "Pick your institution type so your matches stay accurate.";
+    }
     return null;
   }
 
@@ -463,14 +491,56 @@ function OnboardingForm() {
                   placeholder="Search a course, e.g. Computer Science"
                 />
               </FormField>
-              <FormField label="Institution" hint="Search and select -- this sets your institution type automatically, so there's nothing else to fill in here.">
-                <Combobox
-                  options={INSTITUTION_OPTIONS}
-                  value={form.institution_name}
-                  onChange={selectInstitution}
-                  placeholder="Search your university, polytechnic, or college"
-                />
+              <FormField
+                label="Institution"
+                hint={
+                  manualInstitution
+                    ? "Type your school's official name and pick its type -- we use both for matching."
+                    : "Search and select -- this sets your institution type automatically, so there's nothing else to fill in here."
+                }
+              >
+                {manualInstitution ? (
+                  <div className="space-y-2">
+                    <input
+                      className={inputClass}
+                      type="text"
+                      value={form.institution_name}
+                      onChange={(e) => update("institution_name", e.target.value)}
+                      placeholder="e.g. Federal University of Technology, Akure"
+                    />
+                    <select
+                      className={selectClass}
+                      value={form.institution_type}
+                      onChange={(e) => update("institution_type", e.target.value as ProfileForm["institution_type"])}
+                    >
+                      <option value="">Select institution type</option>
+                      {INSTITUTION_TYPE_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <Combobox
+                    options={INSTITUTION_OPTIONS}
+                    value={form.institution_name}
+                    onChange={selectInstitution}
+                    placeholder="Search your university, polytechnic, or college"
+                  />
+                )}
               </FormField>
+              {/* AUDIT FIX (batch 4): the curated institution list will
+                  never cover every school, and a hard stop here was a
+                  documented onboarding drop-off. The escape hatch swaps
+                  in a free-text name + explicit type select. */}
+              <button
+                type="button"
+                onClick={toggleManualInstitution}
+                className="-mt-2 mb-4 text-xs font-medium text-navy hover:underline"
+              >
+                {manualInstitution ? "Search the list instead" : "Can't find your school? Enter it manually"}
+              </button>
               <FormField label="Year of study" hint="Some scholarships only cover early or final years.">
                 <select
                   className={selectClass}
