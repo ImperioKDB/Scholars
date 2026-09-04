@@ -24,6 +24,55 @@ const STEPS = ["Personal", "Academic", "Eligibility", "Documents"];
 
 const DISCIPLINE_COMBO_OPTIONS = DISCIPLINE_OPTIONS.map((d) => ({ value: d, label: d }));
 
+// AUDIT FIX (batch 2): in-progress answers are persisted here on every
+// change. A refresh, an accidental tab close, or "Skip for now" used to
+// throw away everything typed since the last server save. The server
+// profile stays the source of truth once saved -- this only bridges
+// unsaved input. Cleared the moment handleFinish() succeeds.
+const ONBOARDING_DRAFT_KEY = "scholars.onboarding.draft.v1";
+
+type OnboardingDraft = {
+  form: ProfileForm;
+  waecRows: WaecRow[];
+  step: number;
+};
+
+function readDraft(): OnboardingDraft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(ONBOARDING_DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<OnboardingDraft>;
+    if (!parsed || typeof parsed !== "object" || !parsed.form) return null;
+    return {
+      // Spread over the empty form so keys added to ProfileForm later
+      // don't leave a restored draft with undefined fields.
+      form: { ...EMPTY_PROFILE_FORM, ...parsed.form },
+      waecRows: Array.isArray(parsed.waecRows) ? parsed.waecRows : [],
+      step: typeof parsed.step === "number" ? parsed.step : 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeDraft(draft: OnboardingDraft) {
+  try {
+    window.localStorage.setItem(ONBOARDING_DRAFT_KEY, JSON.stringify(draft));
+  } catch {
+    // Storage blocked or full -- persistence is best-effort, never worth
+    // breaking the form over.
+  }
+}
+
+function clearDraft() {
+  try {
+    window.localStorage.removeItem(ONBOARDING_DRAFT_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 function OnboardingForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -39,12 +88,13 @@ function OnboardingForm() {
   // Nudge CTAs (dashboard gap banner, scholarship card "Update profile"
   // links) can deep-link straight to the step that collects the field
   // they're pointing at, e.g. /onboarding?step=2 for WAEC results,
-  // instead of dropping every visitor on step 0.
+  // instead of dropping every visitor on step 0. A deep link always
+  // beats a restored draft's saved step -- the link is the newer intent.
+  const stepParam = Number(searchParams.get("step"));
+  const hasStepParam = !Number.isNaN(stepParam) && stepParam >= 0 && stepParam < STEPS.length;
+
   useEffect(() => {
-    const stepParam = Number(searchParams.get("step"));
-    if (!Number.isNaN(stepParam) && stepParam >= 0 && stepParam < STEPS.length) {
-      setStep(stepParam);
-    }
+    if (hasStepParam) setStep(stepParam);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -53,7 +103,6 @@ function OnboardingForm() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-
       if (!user) {
         router.replace("/login");
         return;
@@ -69,9 +118,10 @@ function OnboardingForm() {
         return;
       }
 
+      let serverForm: ProfileForm = { ...EMPTY_PROFILE_FORM };
       if (profileRes.ok) {
         const { profile } = await profileRes.json();
-        setForm({
+        serverForm = {
           full_name: profile.full_name ?? "",
           nationality: profile.nationality ?? "Nigerian",
           gender: profile.gender ?? "",
@@ -94,26 +144,51 @@ function OnboardingForm() {
           has_recommendation_letter: profile.has_recommendation_letter ?? false,
           has_personal_statement: profile.has_personal_statement ?? false,
           has_lga_certificate: profile.has_lga_certificate ?? false,
-        });
+        };
       }
       // 404 just means no profile row saved yet -- keep the empty form, not an error.
 
+      let serverWaecRows: WaecRow[] = [];
       if (waecRes.ok) {
         const { results } = await waecRes.json();
-        setWaecRows(
-          (results ?? []).map((r: { subject: string; grade: string }) => ({
-            key: crypto.randomUUID(),
-            subject: r.subject,
-            grade: r.grade,
-          }))
-        );
+        serverWaecRows = (results ?? []).map((r: { subject: string; grade: string }) => ({
+          key: crypto.randomUUID(),
+          subject: r.subject,
+          grade: r.grade,
+        }));
       }
 
+      // Local draft wins over the server copy: it holds whatever was
+      // typed most recently on this device, including fields never
+      // saved. No draft -> seed from the server profile. Restoring the
+      // draft does NOT depend on the profile fetch succeeding, so a
+      // flaky network can't wipe out local input either.
+      const draft = readDraft();
+      if (draft) {
+        setForm({ ...serverForm, ...draft.form });
+        setWaecRows(draft.waecRows.length > 0 ? draft.waecRows : serverWaecRows);
+        if (!hasStepParam) {
+          setStep(Math.min(Math.max(draft.step, 0), STEPS.length - 1));
+        }
+      } else {
+        setForm(serverForm);
+        setWaecRows(serverWaecRows);
+      }
       setLoading(false);
     }
+
     loadExistingProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Persist every change once the initial load has completed, so a
+  // refresh mid-flow restores exactly what was on screen. Gated on
+  // `loading` so the pre-hydration empty state never overwrites a real
+  // draft.
+  useEffect(() => {
+    if (loading) return;
+    writeDraft({ form, waecRows, step });
+  }, [form, waecRows, step, loading]);
 
   function update<K extends keyof ProfileForm>(key: K, value: ProfileForm[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -157,7 +232,6 @@ function OnboardingForm() {
       setError(err);
       return;
     }
-
     setSaving(true);
     setError(null);
 
@@ -199,7 +273,6 @@ function OnboardingForm() {
       router.replace("/login");
       return;
     }
-
     if (!res.ok) {
       setSaving(false);
       setError("Couldn't save your profile. Please try again.");
@@ -216,17 +289,21 @@ function OnboardingForm() {
     });
 
     setSaving(false);
-
     if (!waecRes.ok) {
       setError("Your profile saved, but your WAEC results didn't. You can retry from this page.");
       return;
     }
 
+    // Everything is safely server-side now -- the local bridge draft has
+    // done its job.
+    clearDraft();
     router.push("/dashboard");
     router.refresh();
   }
 
   async function handleSkip() {
+    // Deliberately does NOT clear the draft -- skipping is "later," not
+    // "never," and the next visit restores right where this one stopped.
     router.push("/dashboard");
   }
 
@@ -242,7 +319,6 @@ function OnboardingForm() {
             <Skeleton className="h-4 w-20" />
           </div>
         </header>
-
         <main className="mx-auto max-w-2xl px-6 py-12">
           <div className="flex items-center w-full mb-10">
             {STEPS.map((_, i) => (
@@ -252,11 +328,9 @@ function OnboardingForm() {
               </div>
             ))}
           </div>
-
           <div className="bg-white rounded-2xl border border-hairline shadow-card p-8">
             <Skeleton className="h-7 w-48 mb-2" />
             <Skeleton className="h-4 w-64 mb-8" />
-
             <div className="space-y-4">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i}>
@@ -265,7 +339,6 @@ function OnboardingForm() {
                 </div>
               ))}
             </div>
-
             <div className="flex items-center justify-between mt-6 pt-6 border-t border-hairline">
               <Skeleton className="h-4 w-10" />
               <Skeleton className="h-10 w-28 rounded-seal" />
@@ -318,7 +391,6 @@ function OnboardingForm() {
                   placeholder="Enter your full name"
                 />
               </FormField>
-
               <FormField label="Date of birth" hint="Used to check age-based eligibility rules.">
                 <input
                   className={inputClass}
@@ -327,7 +399,6 @@ function OnboardingForm() {
                   onChange={(e) => update("date_of_birth", e.target.value)}
                 />
               </FormField>
-
               <FormField label="Nationality">
                 <input
                   className={inputClass}
@@ -342,7 +413,6 @@ function OnboardingForm() {
                   ))}
                 </datalist>
               </FormField>
-
               <FormField label="State of origin" hint="Many state government scholarships require an exact match.">
                 <select
                   className={selectClass}
@@ -357,7 +427,6 @@ function OnboardingForm() {
                   ))}
                 </select>
               </FormField>
-
               <FormField label="LGA of origin">
                 <input
                   className={inputClass}
@@ -367,7 +436,6 @@ function OnboardingForm() {
                   placeholder="e.g. Ikeja"
                 />
               </FormField>
-
               <FormField label="Gender (optional)">
                 <select
                   className={selectClass}
@@ -387,7 +455,7 @@ function OnboardingForm() {
 
           {step === 1 && (
             <>
-              <FormField label="Field of study / discipline" hint="Search and select -- typing alone won't set it.">
+              <FormField label="Field of study / discipline" hint="Search and select -- typing the exact course name works too.">
                 <Combobox
                   options={DISCIPLINE_COMBO_OPTIONS}
                   value={form.discipline}
@@ -395,7 +463,6 @@ function OnboardingForm() {
                   placeholder="Search a course, e.g. Computer Science"
                 />
               </FormField>
-
               <FormField label="Institution" hint="Search and select -- this sets your institution type automatically, so there's nothing else to fill in here.">
                 <Combobox
                   options={INSTITUTION_OPTIONS}
@@ -404,7 +471,6 @@ function OnboardingForm() {
                   placeholder="Search your university, polytechnic, or college"
                 />
               </FormField>
-
               <FormField label="Year of study" hint="Some scholarships only cover early or final years.">
                 <select
                   className={selectClass}
@@ -419,7 +485,6 @@ function OnboardingForm() {
                   ))}
                 </select>
               </FormField>
-
               <FormField label="GPA / CGPA (optional)" hint="Enter it on your institution's own scale, e.g. 3.72.">
                 <input
                   className={inputClass}
@@ -448,14 +513,12 @@ function OnboardingForm() {
                   placeholder="e.g. 280"
                 />
               </FormField>
-
               <FormField
                 label="WAEC / NECO / NABTEB results"
                 hint="Add each subject and the grade you got -- your credit count and English/Maths status are worked out from this automatically."
               >
                 <WaecResultsEditor rows={waecRows} onChange={setWaecRows} />
               </FormField>
-
               <FormField label="Do you have significant financial need?">
                 <div className="grid grid-cols-2 gap-3">
                   {[
@@ -478,7 +541,6 @@ function OnboardingForm() {
                   ))}
                 </div>
               </FormField>
-
               <FormField label="Do you live with a disability?">
                 <div className="grid grid-cols-2 gap-3">
                   {[
@@ -529,7 +591,6 @@ function OnboardingForm() {
                   </label>
                 ))}
               </div>
-
               <FormField label="Career goals (optional)" hint="A sentence or two -- helps us surface relevant awards.">
                 <textarea
                   className={textareaClass}
@@ -552,7 +613,6 @@ function OnboardingForm() {
             >
               Back
             </button>
-
             {step < STEPS.length - 1 ? (
               <button
                 type="button"
