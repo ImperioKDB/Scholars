@@ -2,7 +2,6 @@
 // Reuses the same stroke-dasharray ring technique as MatchSeal, extended
 // to multiple colored segments -- no charting library needed for a single
 // 4-category donut.
-
 type StatusCounts = {
   in_progress: number;
   submitted: number;
@@ -34,8 +33,13 @@ export function StatusDonut({ counts }: { counts: StatusCounts }) {
           return arc;
         });
 
+  // AUDIT FIX (batch 5): screen readers used to get raw SVG circles with
+  // no meaning. role="img" + a spoken summary replaces that; the visible
+  // legend still renders for sighted users.
+  const ariaSummary = `Application status: ${counts.in_progress} in progress, ${counts.submitted} submitted, ${counts.accepted} accepted, ${counts.rejected} rejected, ${total} total`;
+
   return (
-    <div className="flex items-center gap-6 flex-wrap">
+    <div className="flex items-center gap-6 flex-wrap" role="img" aria-label={ariaSummary}>
       <div className="relative shrink-0" style={{ width: 96, height: 96 }}>
         <svg viewBox="0 0 40 40" width={96} height={96} className="-rotate-90">
           <circle cx="20" cy="20" r={r} fill="none" stroke="#E4E1D8" strokeWidth="5" />
