@@ -45,7 +45,6 @@ const DEADLINE_TONE_CLASSES: Record<ReturnType<typeof deadlineTone>, string> = {
 function DeadlineBadge({ deadline }: { deadline: string | null }) {
   const days = daysUntil(deadline);
   if (days === null) return null;
-
   return (
     <span
       className={`text-xs font-mono font-medium px-2 py-1 rounded-full ${DEADLINE_TONE_CLASSES[deadlineTone(days)]}`}
@@ -72,7 +71,12 @@ function SaveButton({
       aria-label={saved ? "Remove from saved scholarships" : "Save scholarship"}
       aria-pressed={saved}
       className={[
-        "shrink-0 rounded-full p-1.5 bg-white/90 backdrop-blur-sm transition-colors disabled:opacity-50",
+        // 44x44 tap target (product audit / WCAG 2.5.5): the visible
+        // circle stays a compact 30px so the card corner doesn't get
+        // visually heavier, but the ::after pseudo extends the real
+        // clickable area by 7px on every side (30 + 14 = 44).
+        "relative shrink-0 rounded-full p-1.5 bg-white/90 backdrop-blur-sm transition-colors disabled:opacity-50",
+        "after:absolute after:-inset-[7px] after:rounded-full after:content-['']",
         saved ? "text-emerald" : "text-navy-light hover:text-navy",
       ].join(" ")}
     >
@@ -90,8 +94,17 @@ function SaveButton({
 // a <button> inside an <a> is invalid HTML and would break keyboard/
 // screen-reader semantics. ShareButton calls stopPropagation/
 // preventDefault internally so tapping it never also triggers the card's
-// own Link navigation underneath. pr-14 (was pr-8) makes room for the
-// second icon now sitting in that corner.
+// own Link navigation underneath.
+//
+// Keyboard focus: the Link's `display: contents` box model means it can't
+// paint a focus outline of its own, so the card div paints one instead
+// via focus-within (product audit -- the old setup had no visible focus
+// indicator for keyboard users at all).
+//
+// Corner geometry: both icon buttons carry invisible 44px hit areas
+// (::after, -inset-[7px]) -- gap-3.5 (14px) keeps those expanded areas
+// from overlapping each other, and pr-24 on the title block keeps the
+// first lines clear of the corner.
 export function ScholarshipCard({
   scholarship,
   score,
@@ -119,20 +132,18 @@ export function ScholarshipCard({
   sharerId?: string;
 }) {
   return (
-    <div className="relative bg-white rounded-xl border border-hairline p-5 flex gap-4 shadow-card">
+    <div className="relative bg-white rounded-xl border border-hairline p-5 flex gap-4 shadow-card focus-within:ring-2 focus-within:ring-emerald focus-within:ring-offset-2 focus-within:ring-offset-parchment">
       <Link href={`/scholarships/${scholarship.id}`} className="contents">
         {score !== undefined ? (
           <MatchSeal score={score} size={52} />
         ) : (
           <ProviderMonogram name={scholarship.provider_name} size={52} />
         )}
-
         <div className="min-w-0 flex-1">
-          <div className="pr-14">
+          <div className="pr-24">
             <p className="font-medium text-ink leading-snug hover:text-navy transition-colors">{scholarship.title}</p>
             <p className="text-xs text-navy-light mt-0.5">{scholarship.provider_name}</p>
           </div>
-
           <div className="flex flex-wrap items-center gap-2 mt-3">
             <DeadlineBadge deadline={scholarship.deadline} />
             {scholarship.isOpenNow && (
@@ -151,13 +162,11 @@ export function ScholarshipCard({
             </span>
             {scholarship.discipline && <span className="text-xs text-navy-light">&middot; {scholarship.discipline}</span>}
           </div>
-
           {totalCount !== undefined && totalCount > 0 && (
             <p className="text-xs text-navy-light mt-2 font-mono">
               {metCount}/{totalCount} requirements met
             </p>
           )}
-
           {missingLabels && missingLabels.length > 0 && (
             <p className="text-xs text-amber mt-1.5">
               Missing: {missingLabels.join(", ")}
@@ -165,8 +174,7 @@ export function ScholarshipCard({
           )}
         </div>
       </Link>
-
-      <div className="absolute top-5 right-5 flex items-center gap-1">
+      <div className="absolute top-5 right-5 flex items-center gap-3.5">
         {sharerId && (
           <ShareButton
             variant="icon"
