@@ -4,6 +4,9 @@
 // Optional query params:
 //   level        'undergrad' | 'both'  (filters within the undergrad-eligible set)
 //   discipline   string, case-insensitive partial match
+//   q            free-text keyword search across title + provider name
+//                (added in audit-fix batch 4 for the student-facing
+//                Browse page, app/discover)
 //   limit        default 50, max 100
 //   offset       default 0
 //
@@ -14,7 +17,6 @@
 // This route is deliberately dumb (no eligibility logic) -- it's for
 // browsing/search, not matching. Use POST /api/scholarships/match for
 // personalized ranked results.
-
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -22,18 +24,21 @@ import { createClient } from '@/lib/supabase/server'
 const querySchema = z.object({
   level: z.enum(['undergrad', 'both']).optional(),
   discipline: z.string().trim().min(1).max(200).optional(),
+  // AUDIT FIX (batch 4): keyword search for the Browse page. Commas and
+  // parentheses are stripped below before reaching PostgREST's .or()
+  // syntax -- they'd otherwise be parsed as filter delimiters and
+  // corrupt the expression.
+  q: z.string().trim().min(1).max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 })
 
 export async function GET(request: Request) {
   const supabase = await createClient()
-
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
-
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
@@ -42,10 +47,10 @@ export async function GET(request: Request) {
   const parsed = querySchema.safeParse({
     level: searchParams.get('level') ?? undefined,
     discipline: searchParams.get('discipline') ?? undefined,
+    q: searchParams.get('q') ?? undefined,
     limit: searchParams.get('limit') ?? undefined,
     offset: searchParams.get('offset') ?? undefined,
   })
-
   if (!parsed.success) {
     return NextResponse.json(
       { error: 'Invalid query params', issues: parsed.error.issues },
@@ -53,7 +58,7 @@ export async function GET(request: Request) {
     )
   }
 
-  const { level, discipline, limit, offset } = parsed.data
+  const { level, discipline, q, limit, offset } = parsed.data
 
   let query = supabase
     .from('scholarships')
@@ -68,9 +73,14 @@ export async function GET(request: Request) {
 
   if (level) query = query.eq('level', level)
   if (discipline) query = query.ilike('discipline', `%${discipline}%`)
+  if (q) {
+    const safe = q.replace(/[%,()]/g, ' ').trim()
+    if (safe) {
+      query = query.or(`title.ilike.%${safe}%,provider_name.ilike.%${safe}%`)
+    }
+  }
 
   const { data: scholarships, error, count } = await query
-
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
