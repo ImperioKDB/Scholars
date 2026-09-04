@@ -164,7 +164,6 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
   const lastSeenPromptIdRef = useRef<string | null>(null);
   const [attention, setAttention] = useState(false);
   const attentionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   // Achievement-unlock celebration state -- see the ACHIEVEMENT
   // CELEBRATION note above the type definitions for why this fires on
   // open() rather than the moment the poll first sees the prompt.
@@ -181,7 +180,6 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
         const { prompt } = await res.json();
         if (prompt) {
           const key = prompt.type === "achievement" ? `ach:${prompt.achievementId}` : `chk:${prompt.applicationId}`;
-
           if (!dismissedRef.current.has(key)) {
             const next: PassivePrompt =
               prompt.type === "achievement"
@@ -199,9 +197,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                     scholarshipTitle: prompt.scholarshipTitle,
                     reason: prompt.reason,
                   };
-
             setPassivePrompt(next);
-
             if (lastSeenPromptIdRef.current !== key) {
               lastSeenPromptIdRef.current = key;
               setAttention(true);
@@ -293,7 +289,6 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
       window.open(args.applicationUrl, "_blank", "noreferrer");
       return;
     }
-
     setTrackError(null);
     setActivePrompt({
       kind: "apply_guard",
@@ -310,7 +305,6 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
     setTrackingInFlight(true);
     const result = await activePrompt.onTrack();
     setTrackingInFlight(false);
-
     if (result?.id) {
       setActivePrompt({
         kind: "ready_to_open",
@@ -343,7 +337,6 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
   function handleAvatarClick() {
     setOpen((wasOpen) => {
       const nextOpen = !wasOpen;
-
       if (
         nextOpen &&
         passivePrompt?.kind === "achievement" &&
@@ -354,7 +347,6 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
         if (confettiTimeoutRef.current) clearTimeout(confettiTimeoutRef.current);
         confettiTimeoutRef.current = setTimeout(() => setConfettiColors(undefined), 2600);
       }
-
       return nextOpen;
     });
     setAttention(false);
@@ -363,17 +355,20 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
   return (
     <AdeContext.Provider value={{ confirmApply }}>
       {children}
-
       {confettiColors && <Confetti colors={confettiColors} pieceCount={70} durationMs={2600} />}
-
       <div className="fixed bottom-4 right-4 z-[90] flex flex-col items-end gap-2">
         {open && (
-          <div className="w-[calc(100vw-2rem)] max-w-80 bg-white rounded-2xl border border-hairline shadow-card p-4">
+          <div
+            // aria-live="polite" so screen readers announce prompt text
+            // that appears or changes while the panel is open (product
+            // audit: prompts previously appeared with no announcement).
+            aria-live="polite"
+            className="w-[calc(100vw-2rem)] max-w-80 bg-white rounded-2xl border border-hairline shadow-card p-4"
+          >
             <div className="flex items-start gap-3">
               <AdeAvatar />
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium text-emerald mb-0.5">Ade</p>
-
                 {!prompt && (
                   <p className="text-sm text-ink leading-snug">
                     Hi, I&apos;m Ade! I&apos;ll remind you to track a scholarship before you head to a
@@ -382,7 +377,6 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                     caught up.
                   </p>
                 )}
-
                 {prompt?.kind === "apply_guard" && (
                   <>
                     <p className="text-sm text-ink leading-snug">
@@ -410,7 +404,6 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                     {trackError && <p className="text-xs text-rose mt-2">{trackError}</p>}
                   </>
                 )}
-
                 {prompt?.kind === "ready_to_open" && (
                   <>
                     <p className="text-sm text-ink leading-snug">
@@ -428,7 +421,6 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                     </div>
                   </>
                 )}
-
                 {prompt?.kind === "checkin" && (
                   <>
                     <p className="text-sm text-ink leading-snug">
@@ -475,7 +467,6 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                     </button>
                   </>
                 )}
-
                 {prompt?.kind === "achievement" && (
                   <div className="badge-pop-in">
                     <p className="text-sm text-ink leading-snug">
@@ -502,12 +493,14 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                   </div>
                 )}
               </div>
-
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label="Close"
-                className="shrink-0 text-navy-light hover:text-navy -mt-1 -mr-1 p-1"
+                // 44x44 tap target (product audit / WCAG 2.5.5): was p-1
+                // (~24px). The visible icon stays 16px; the ::after
+                // pseudo extends the clickable area to 44px.
+                className="relative shrink-0 text-navy-light hover:text-navy -mt-1 -mr-1 p-1 after:absolute after:-inset-[10px] after:rounded-full after:content-['']"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
@@ -516,7 +509,6 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         )}
-
         <button
           type="button"
           onClick={handleAvatarClick}
