@@ -12,7 +12,6 @@ type Achievement = {
 };
 
 type UnlockedRow = { achievement_id: string; unlocked_at: string };
-
 type Filter = "all" | "unlocked" | "locked";
 
 // Deliberately stays inside the app's existing locked palette (navy /
@@ -90,7 +89,6 @@ export function AchievementsClient({
           Earned from using Scholars -- completing your profile, tracking applications, and helping
           other students find scholarships.
         </p>
-
         <div className="bg-white rounded-xl border border-hairline p-5">
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-medium text-ink">Level {level}</p>
@@ -117,7 +115,9 @@ export function AchievementsClient({
             type="button"
             onClick={() => setFilter(t.value)}
             className={
-              "text-sm font-medium px-3 py-1.5 rounded-full transition-colors " +
+              // min-h-[44px]: touch-target floor from the product audit --
+              // the old px-3 py-1.5 pill was only ~32px tall.
+              "inline-flex min-h-[44px] items-center rounded-full px-4 text-sm font-medium transition-colors " +
               (filter === t.value ? "bg-navy text-white" : "text-navy-light hover:bg-navy-50")
             }
           >
@@ -136,7 +136,6 @@ export function AchievementsClient({
             const unlockedAt = unlockedMap.get(a.id);
             const isUnlocked = Boolean(unlockedAt);
             const isNew = isUnlocked && Date.now() - new Date(unlockedAt!).getTime() < NEW_WINDOW_MS;
-
             return (
               <div
                 key={a.id}
