@@ -7,6 +7,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="min-h-screen bg-parchment">
+      {/* AUDIT FIX (batch 5): keyboard skip link -- admin doesn't render
+          the Sidebar that carries it everywhere else, so it gets its
+          own. Target is the <main id="main"> below. */}
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:rounded-lg focus:bg-navy focus:px-4 focus:py-2.5 focus:text-sm focus:font-medium focus:text-white"
+      >
+        Skip to content
+      </a>
       <header className="border-b border-hairline bg-white">
         <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -29,7 +38,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>
+      <main id="main" className="mx-auto max-w-6xl px-6 py-10">{children}</main>
     </div>
   );
 }
