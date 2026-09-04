@@ -100,60 +100,66 @@ export default function AdminScholarshipsPage() {
 
       <div className="bg-white rounded-xl border border-hairline overflow-hidden">
         {loading ? (
-          <p className="text-sm text-navy-light p-5">Loading…</p>
+          <p className="text-sm text-navy-light p-5">Loading&hellip;</p>
         ) : loadError ? (
           <p className="text-sm text-rose p-5">{loadError}</p>
         ) : filtered.length === 0 ? (
           <p className="text-sm text-navy-light p-5">No scholarships match this filter.</p>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-hairline text-left text-xs uppercase tracking-wide text-navy-light">
-                <th className="px-5 py-3 font-medium">Title</th>
-                <th className="px-5 py-3 font-medium">Level</th>
-                <th className="px-5 py-3 font-medium">Discipline</th>
-                <th className="px-5 py-3 font-medium">Rules</th>
-                <th className="px-5 py-3 font-medium">Deadline</th>
-                <th className="px-5 py-3 font-medium">Status</th>
-                <th className="px-5 py-3 font-medium text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((s) => (
-                <tr key={s.id} className="border-b border-hairline last:border-0">
-                  <td className="px-5 py-3">
-                    <Link href={`/admin/scholarships/${s.id}/edit`} className="font-medium text-ink hover:text-navy">
-                      {s.title}
-                    </Link>
-                    <p className="text-xs text-navy-light">{s.provider_name}</p>
-                  </td>
-                  <td className="px-5 py-3 text-navy-light capitalize">{s.level}</td>
-                  <td className="px-5 py-3 text-navy-light">{s.discipline ?? "Any"}</td>
-                  <td className="px-5 py-3 text-navy-light font-mono">{s.scholarship_rules?.length ?? 0}</td>
-                  <td className="px-5 py-3 text-navy-light">{s.deadline}</td>
-                  <td className="px-5 py-3">
-                    <button
-                      onClick={() => toggleVerified(s)}
-                      className={
-                        "text-xs font-medium px-2 py-1 rounded-full transition-colors " +
-                        (s.verified ? "bg-emerald-light text-emerald" : "bg-amber-light text-amber")
-                      }
-                    >
-                      {s.verified ? "Verified" : "Pending review"}
-                    </button>
-                  </td>
-                  <td className="px-5 py-3 text-right space-x-3">
-                    <Link href={`/admin/scholarships/${s.id}/edit`} className="text-navy hover:underline">
-                      Edit
-                    </Link>
-                    <button onClick={() => remove(s)} className="text-rose hover:underline">
-                      Delete
-                    </button>
-                  </td>
+          /* AUDIT FIX (batch 5): the table used to overflow the viewport
+             on phones with no way to reach the last columns. It now
+             scrolls horizontally inside its card; min-w keeps the
+             columns readable instead of crushing them. */
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[760px]">
+              <thead>
+                <tr className="border-b border-hairline text-left text-xs uppercase tracking-wide text-navy-light">
+                  <th className="px-5 py-3 font-medium">Title</th>
+                  <th className="px-5 py-3 font-medium">Level</th>
+                  <th className="px-5 py-3 font-medium">Discipline</th>
+                  <th className="px-5 py-3 font-medium">Rules</th>
+                  <th className="px-5 py-3 font-medium">Deadline</th>
+                  <th className="px-5 py-3 font-medium">Status</th>
+                  <th className="px-5 py-3 font-medium text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map((s) => (
+                  <tr key={s.id} className="border-b border-hairline last:border-0">
+                    <td className="px-5 py-3">
+                      <Link href={`/admin/scholarships/${s.id}/edit`} className="font-medium text-ink hover:text-navy">
+                        {s.title}
+                      </Link>
+                      <p className="text-xs text-navy-light">{s.provider_name}</p>
+                    </td>
+                    <td className="px-5 py-3 text-navy-light capitalize">{s.level}</td>
+                    <td className="px-5 py-3 text-navy-light">{s.discipline ?? "Any"}</td>
+                    <td className="px-5 py-3 text-navy-light font-mono">{s.scholarship_rules?.length ?? 0}</td>
+                    <td className="px-5 py-3 text-navy-light">{s.deadline}</td>
+                    <td className="px-5 py-3">
+                      <button
+                        onClick={() => toggleVerified(s)}
+                        className={
+                          "text-xs font-medium px-2 py-1 rounded-full transition-colors " +
+                          (s.verified ? "bg-emerald-light text-emerald" : "bg-amber-light text-amber")
+                        }
+                      >
+                        {s.verified ? "Verified" : "Pending review"}
+                      </button>
+                    </td>
+                    <td className="px-5 py-3 text-right space-x-3">
+                      <Link href={`/admin/scholarships/${s.id}/edit`} className="text-navy hover:underline">
+                        Edit
+                      </Link>
+                      <button onClick={() => remove(s)} className="text-rose hover:underline">
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
