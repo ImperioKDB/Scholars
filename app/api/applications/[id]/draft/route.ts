@@ -12,6 +12,19 @@
 // application forms across dozens of different providers. Confirming a
 // draft here means "this is what I'll use" -- the student copies it into
 // the scholarship's own application_url.
+//
+// scholarship:scholarships!inner in loadContext() -- found on the same
+// audit that caught the null-scholarship crash elsewhere (see
+// app/dashboard/page.tsx, app/applications/page.tsx,
+// app/api/applications/route.ts, app/api/applications/[id]/route.ts,
+// app/api/scholarships/save/route.ts). Without !inner, an application
+// whose scholarship has since failed RLS (e.g. an admin unverified it)
+// would come back with scholarship: null, and the code below reads
+// scholarship.id / .title / .discipline unconditionally with no null
+// check -- a crash mid-draft-generation instead of a clean error. With
+// !inner, the unjoinable row makes the whole select return zero rows,
+// .single() fails with PGRST116, and that already maps to the existing
+// { error: 'not_found' } -> 404 branch below. No new branch needed.
 
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -50,7 +63,7 @@ async function loadContext(
 > {
   const { data: application, error: appError } = await supabase
     .from('applications')
-    .select('id, profile_id, scholarship:scholarships ( id, title, provider_name, description, amount, discipline )')
+    .select('id, profile_id, scholarship:scholarships!inner ( id, title, provider_name, description, amount, discipline )')
     .eq('id', applicationId)
     .eq('profile_id', userId)
     .single()
