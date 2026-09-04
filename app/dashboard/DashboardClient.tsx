@@ -60,7 +60,6 @@ function GapNudgeBanner({ gaps }: { gaps: GapNudge[] }) {
   if (gaps.length === 0) return null;
   const top = gaps[0];
   const rest = gaps.slice(1, 3);
-
   return (
     <div className="bg-emerald-light border border-emerald/20 rounded-xl p-5 mb-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -124,7 +123,6 @@ function DeadlineCard({ scholarship, days }: { scholarship: CardScholarship; day
         <p className="text-sm font-medium text-ink leading-snug line-clamp-2">{scholarship.title}</p>
         <p className="text-xs text-navy-light mt-1">{scholarship.provider_name}</p>
       </div>
-
       {showSpinner && (
         <div
           className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/70 backdrop-blur-[1px] pointer-events-none"
@@ -158,7 +156,6 @@ export function DashboardClient({
   gaps: GapNudge[];
 }) {
   const router = useRouter();
-
   const [loadError, setLoadError] = useState<string | null>(initialError);
   const [matches] = useState<MatchApiItem[]>(initialMatches);
   const [profileCompleteness] = useState(initialProfileCompleteness);
@@ -187,7 +184,6 @@ export function DashboardClient({
     const map = new Map<string, CardScholarship>();
     for (const m of matches) map.set(m.id, m);
     for (const s of saved) map.set(s.scholarship.id, s.scholarship);
-
     return [...map.values()]
       .filter((s) => {
         const days = daysUntil(s.deadline);
@@ -212,7 +208,6 @@ export function DashboardClient({
 
   async function toggleSave(scholarshipId: string) {
     const wasSaved = savedIds.has(scholarshipId);
-
     setSavedIds((prev) => {
       const next = new Set(prev);
       if (wasSaved) next.delete(scholarshipId);
@@ -239,7 +234,6 @@ export function DashboardClient({
     } else {
       await refreshSaved();
     }
-
     setPendingIds((prev) => {
       const next = new Set(prev);
       next.delete(scholarshipId);
@@ -325,7 +319,9 @@ export function DashboardClient({
             type="button"
             onClick={() => setTab(t.value)}
             className={
-              "text-sm font-medium px-3 py-1.5 rounded-full transition-colors " +
+              // min-h-[44px]: touch-target floor from the product audit --
+              // the old px-3 py-1.5 pill was only ~32px tall.
+              "inline-flex min-h-[44px] items-center rounded-full px-4 text-sm font-medium transition-colors " +
               (tab === t.value ? "bg-navy text-white" : "text-navy-light hover:bg-navy-50")
             }
           >
@@ -369,7 +365,6 @@ export function DashboardClient({
       <h2 id="saved" className="font-display text-lg font-semibold text-navy mb-5 scroll-mt-20">
         Saved ({saved.length})
       </h2>
-
       {saved.length === 0 ? (
         <div className="bg-white rounded-xl border border-hairline p-8 text-center">
           <p className="text-sm text-navy-light">
