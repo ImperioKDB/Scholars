@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Confetti } from "@/components/Confetti";
 
@@ -8,9 +9,18 @@ import { Confetti } from "@/components/Confetti";
 //
 // Ade -- Scholars' persistent guide character (an owl; "Ade" reads as a
 // real Nigerian name prefix meaning "crown," not a generic mascot name).
-// One instance wraps each authenticated layout's children, so any page can
-// trigger a prompt via useAde(), while a single floating avatar owns the
-// UI so two prompts never stack on screen at once.
+// One instance wraps the ROOT layout's children (app/layout.tsx) and
+// self-gates to the authenticated app routes via usePathname, so any page
+// can trigger a prompt via useAde(), while a single floating avatar owns
+// the UI so two prompts never stack on screen at once.
+//
+// AUDIT FIX (batch 2): this provider used to be mounted separately inside
+// each section layout (dashboard/applications/achievements/scholarships),
+// so navigating between sections remounted it and silently reset Ade's
+// dismissed prompts, seen-prompt tracking, and panel state. Mounted once
+// at the root, that state now survives route changes. It still resets on
+// a full page reload -- persisting seen ids to localStorage is the
+// follow-up if that ever becomes annoying.
 //
 // ALWAYS VISIBLE as a small round avatar button, bottom-right. Tapping it
 // toggles an expanded panel open/closed at any time.
@@ -38,12 +48,11 @@ import { Confetti } from "@/components/Confetti";
 // ATTENTION SHAKE: when a genuinely new passive prompt (checkin OR
 // achievement) shows up, the avatar plays a brief rotation shake (see
 // .ade-attention in app/globals.css) and, where supported,
-// navigator.vibrate(). lastSeenPromptIdRef is now keyed by a prefixed id
+// navigator.vibrate(). lastSeenPromptIdRef is keyed by a prefixed id
 // ("chk:<applicationId>" or "ach:<achievementId>") so the two kinds don't
-// collide in the same ref. Resets on remount, same caveat as before:
-// AdeProvider remounts per authenticated layout, so bouncing between
-// sections can re-shake a prompt already seen elsewhere. Acceptable for
-// now; fix is persisting seen ids to localStorage if it becomes annoying.
+// collide in the same ref. Resets on remount -- since the root-layout
+// lift (see above) that now only happens on a full page reload, not on
+// section-to-section navigation.
 //
 // AUTO-OPEN RULES (deliberately asymmetric):
 //   - Passive prompts (checkin AND achievement) do NOT auto-open the
@@ -120,6 +129,13 @@ export function useAde(): AdeContextValue {
   return ctx;
 }
 
+// Routes where Ade is visible. The provider lives in the root layout now
+// (app/layout.tsx) so its state survives navigation between these
+// sections; this list keeps it off public pages (landing, auth, /s/[id]
+// share links) and the admin shell, exactly matching where the old
+// per-section layout wrappers used to mount it.
+const ADE_ROUTES = ["/dashboard", "/applications", "/achievements", "/scholarships"];
+
 const STATUS_OPTIONS: { value: "submitted" | "in_progress" | "rejected"; label: string }[] = [
   { value: "submitted", label: "I applied" },
   { value: "in_progress", label: "Still working on it" },
@@ -153,6 +169,7 @@ function AdeAvatar({ size = 36 }: { size?: number }) {
 }
 
 export function AdeProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [passivePrompt, setPassivePrompt] = useState<PassivePrompt | null>(null);
   const [activePrompt, setActivePrompt] = useState<ActivePrompt | null>(null);
   const [open, setOpen] = useState(false);
@@ -170,6 +187,13 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
   const confettiShownRef = useRef<Set<string>>(new Set());
   const [confettiColors, setConfettiColors] = useState<string[] | undefined>(undefined);
   const confettiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Where Ade is actually active. The provider mounts on every page
+  // (root layout), but renders and polls only on the authenticated app
+  // sections.
+  const isActive = Boolean(pathname) && ADE_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(route + "/")
+  );
 
   const pollNextPrompt = useCallback(async () => {
     if (pollingRef.current) return;
@@ -218,13 +242,16 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // No session (and no visible Ade) outside the app sections, so don't
+    // poll there either.
+    if (!isActive) return;
     pollNextPrompt();
     function onFocus() {
       pollNextPrompt();
     }
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [pollNextPrompt]);
+  }, [pollNextPrompt, isActive]);
 
   useEffect(() => {
     return () => {
@@ -350,6 +377,14 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
       return nextOpen;
     });
     setAttention(false);
+  }
+
+  // Public pages (landing, auth, /s/[id] share links, admin) mount this
+  // provider too since it lives in the root layout now -- render nothing
+  // there. Placed below every hook call so hook order stays stable no
+  // matter which route is rendering.
+  if (!isActive) {
+    return <>{children}</>;
   }
 
   return (
