@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -98,6 +98,14 @@ const MOBILE_TABS = [
   { href: "/achievements", label: "Achievements", Icon: AchievementsIcon },
 ];
 
+// LIVE FIX: the bar no longer sits on top of the content permanently.
+// It rests hidden below the screen edge; any touch on the screen slides
+// it up, and it slides back down after BAR_HIDE_MS of no touching. Taps
+// on the bar itself are screen touches too, so it stays up while it's
+// being used. One brief reveal on load teaches first-time users that
+// the bar exists. Transform-only, so it stays on the compositor.
+const BAR_HIDE_MS = 2500;
+
 export function Sidebar({
   fullName,
   isAdmin,
@@ -116,6 +124,22 @@ export function Sidebar({
   const supabase = createClient();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [barVisible, setBarVisible] = useState(false);
+  const barHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    function reveal() {
+      setBarVisible(true);
+      if (barHideTimer.current) clearTimeout(barHideTimer.current);
+      barHideTimer.current = setTimeout(() => setBarVisible(false), BAR_HIDE_MS);
+    }
+    reveal(); // brief on-load reveal so the pattern is discoverable
+    document.addEventListener("pointerdown", reveal);
+    return () => {
+      document.removeEventListener("pointerdown", reveal);
+      if (barHideTimer.current) clearTimeout(barHideTimer.current);
+    };
+  }, []);
 
   const { level } = levelForXp(xpTotal);
 
@@ -251,25 +275,24 @@ export function Sidebar({
         </div>
       </div>
 
-      {/* AUDIT FIX (batch 4): bottom tab bar, mobile only. min-h-[56px]
-          per tab clears the audit's 44px touch-target floor with room
-          for the label; pb-[env(safe-area-inset-bottom)] keeps the taps
-          reachable above the iOS home indicator. The matching bottom
-          padding on each section's content lives in the section layouts
-          (pb-24 md:pb-10), and Ade's floating avatar lifts clear of
-          this bar on mobile too (see components/ade/AdeProvider.tsx).
-          LIVE FIX (this push): the active tab was previously told apart
-          only by text-navy vs text-navy-light, which is invisible at
-          11px. The active icon now sits in a filled navy pill with a
-          white glyph (the same active language as the desktop nav's
-          bg-navy treatment), the label goes full navy, and
-          aria-current="page" announces it to screen readers. Press
-          physics too: these are Links, so the global
-          button:not(:disabled):active rule in app/globals.css never
-          reached them -- they now carry active:scale-[0.96] with a
-          transform-aware transition, and motion-reduce users get the
-          color change without the scale. */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-hairline pb-[env(safe-area-inset-bottom)]">
+      {/* Bottom tab bar, mobile only. min-h-[56px] per tab clears the
+          audit's 44px touch-target floor with room for the label;
+          pb-[env(safe-area-inset-bottom)] keeps the taps reachable above
+          the iOS home indicator. The matching bottom padding on each
+          section's content lives in the section layouts (pb-24
+          md:pb-10), and Ade's floating avatar lifts clear of this bar
+          on mobile too (see components/ade/AdeProvider.tsx).
+          LIVE FIX: hidden by default (translate-y-full), revealed on
+          any screen touch, auto-hidden after BAR_HIDE_MS. Deliberately
+          NOT aria-hidden while translated away -- keyboard users can
+          still tab to it, which is the accessible behavior. */}
+      <nav
+        className={[
+          "md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-hairline pb-[env(safe-area-inset-bottom)]",
+          "transition-transform duration-300 motion-reduce:transition-none",
+          barVisible ? "translate-y-0" : "translate-y-full",
+        ].join(" ")}
+      >
         <div className="grid grid-cols-3">
           {MOBILE_TABS.map(({ href, label, Icon }) => {
             const active = pathname === href;
