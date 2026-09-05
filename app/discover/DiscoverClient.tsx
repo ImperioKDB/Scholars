@@ -203,10 +203,12 @@ export function DiscoverClient({
 
           {!loading && !hasMore && items.length > 0 && (
             // COPY FIX (live feedback): the old end-of-list line read like
-            // a debug readout ("That's everything for this search: 5
-            // scholarships."). The catalog case now speaks like the
-            // product, and the filtered case points at the filters
-            // instead of promising notifications about a filtered view.
+            // a debug readout. The catalog case now states the promise the
+            // product actually keeps -- phase 3 of the daily cron emails
+            // students when a new scholarship goes live (see
+            // app/api/cron/deadline-check/route.ts, notification_type
+            // 'new_scholarship'). A filtered view isn't "all there is," so
+            // it points at the filters instead.
             <p className="text-sm text-navy-light text-center mt-8 leading-relaxed">
               {filtersActive
                 ? "That is every match for these filters. Try clearing one to see more."
