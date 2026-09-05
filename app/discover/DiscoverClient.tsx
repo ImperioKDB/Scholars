@@ -44,6 +44,8 @@ export function DiscoverClient({
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const requestIdRef = useRef(0);
 
+  const filtersActive = keyword.trim() !== "" || level !== "" || discipline.trim() !== "";
+
   async function load(offset: number, replace: boolean) {
     const requestId = ++requestIdRef.current;
     setLoading(true);
@@ -200,8 +202,15 @@ export function DiscoverClient({
           )}
 
           {!loading && !hasMore && items.length > 0 && (
-            <p className="text-xs text-navy-light text-center mt-6">
-              That&apos;s everything for this search: {total} scholarship{total === 1 ? "" : "s"}.
+            // COPY FIX (live feedback): the old end-of-list line read like
+            // a debug readout ("That's everything for this search: 5
+            // scholarships."). The catalog case now speaks like the
+            // product, and the filtered case points at the filters
+            // instead of promising notifications about a filtered view.
+            <p className="text-sm text-navy-light text-center mt-8 leading-relaxed">
+              {filtersActive
+                ? "That is every match for these filters. Try clearing one to see more."
+                : "That is all the scholarships for now. We'll notify you once a new one is available."}
             </p>
           )}
         </>
