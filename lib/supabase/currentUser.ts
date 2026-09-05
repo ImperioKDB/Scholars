@@ -8,7 +8,6 @@
 // Route Handlers (app/api/**) are NOT part of the React render tree, so
 // this cache() dedup doesn't extend to them -- calling this from a route
 // handler just runs once per handler invocation, same as before.
-
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { InstitutionType } from "@/lib/matching/types";
@@ -31,6 +30,9 @@ export type CurrentUserProfile = {
   waec_credit_count: number | null;
   has_english_maths_credit: boolean;
   disability_status: boolean;
+  // Public URL of the student's uploaded profile photo (Supabase Storage,
+  // see migration 0010). Null = no photo, UI falls back to initials.
+  avatar_url: string | null;
   // Trigger-maintained cache of sum(xp_events.points) for this profile --
   // see migration add_xp_and_achievements / lib/xp/level.ts. Never write
   // to this column directly from application code.
@@ -39,22 +41,18 @@ export type CurrentUserProfile = {
 
 export const getCurrentUserAndProfile = cache(async () => {
   const supabase = createClient();
-
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
   if (!user) {
     return { user: null as typeof user, profile: null as CurrentUserProfile | null };
   }
-
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "full_name, is_admin, profile_completeness, discipline, gpa, nationality, gender, financial_need, date_of_birth, state_of_origin, lga_of_origin, year_of_study, institution_type, jamb_score, waec_credit_count, has_english_maths_credit, disability_status, xp_total"
+      "full_name, is_admin, profile_completeness, discipline, gpa, nationality, gender, financial_need, date_of_birth, state_of_origin, lga_of_origin, year_of_study, institution_type, jamb_score, waec_credit_count, has_english_maths_credit, disability_status, avatar_url, xp_total"
     )
     .eq("id", user.id)
     .maybeSingle();
-
   return { user, profile: profile as CurrentUserProfile | null };
 });
