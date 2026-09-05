@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -144,9 +143,6 @@ export function DashboardClient({
   initialError,
   gaps,
 }: {
-  // Threaded down to ScholarshipCard as `sharerId` so cards rendered here
-  // can build referral share links (?ref=<userId>). See
-  // components/ShareButton.tsx and app/auth/callback/route.ts.
   userId: string;
   fullName: string | null;
   initialMatches: MatchApiItem[];
@@ -175,9 +171,18 @@ export function DashboardClient({
     setSavedIds(new Set(list.map((s) => s.scholarship.id)));
   }
 
+  // Open-now vs coming-soon split. The engine evaluates every verified
+  // undergrad scholarship regardless of whether it's accepting right now,
+  // so during the off-season the match grid would otherwise be full of
+  // "Closed" rows that read as dead weight. Splitting keeps the tabbed
+  // grid honest ("what can I apply to now") and gives verified-but-closed
+  // rows their own "Coming soon" home instead of hiding them.
+  const openMatches = useMemo(() => matches.filter((m) => m.isOpenNow), [matches]);
+  const comingSoon = useMemo(() => matches.filter((m) => !m.isOpenNow), [matches]);
+
   const filteredMatches = useMemo(
-    () => (tab === "all" ? matches : matches.filter((m) => m.tier === tab)),
-    [matches, tab]
+    () => (tab === "all" ? openMatches : openMatches.filter((m) => m.tier === tab)),
+    [openMatches, tab]
   );
 
   const upcomingDeadlines = useMemo(() => {
@@ -215,7 +220,6 @@ export function DashboardClient({
       return next;
     });
     setPendingIds((prev) => new Set(prev).add(scholarshipId));
-
     const res = wasSaved
       ? await fetch(`/api/scholarships/save?scholarship_id=${scholarshipId}`, { method: "DELETE" })
       : await fetch("/api/scholarships/save", {
@@ -223,7 +227,6 @@ export function DashboardClient({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ scholarship_id: scholarshipId }),
         });
-
     if (!res.ok) {
       setSavedIds((prev) => {
         const next = new Set(prev);
@@ -251,7 +254,7 @@ export function DashboardClient({
           {firstName ? `, ${firstName}` : ""}
         </h1>
         <p className="text-sm text-navy-light mt-1 mb-6">
-          {matches.length} eligible scholarship{matches.length === 1 ? "" : "s"} found.
+          {openMatches.length} open scholarship{openMatches.length === 1 ? "" : "s"} you can apply to now.
         </p>
 
         {profileCompleteness < 100 && (
@@ -274,14 +277,10 @@ export function DashboardClient({
         <GapNudgeBanner gaps={gaps} />
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatTile value={matches.length} label="Matches found" />
+          <StatTile value={openMatches.length} label="Open now" />
+          <StatTile value={comingSoon.length} label="Coming soon" tone={comingSoon.length > 0 ? "amber" : "navy"} />
           <StatTile value={closingSoonCount} label="Closing within 30 days" tone={closingSoonCount > 0 ? "amber" : "navy"} />
           <StatTile value={saved.length} label="Saved" />
-          <StatTile
-            value={`${profileCompleteness}%`}
-            label="Profile complete"
-            tone={profileCompleteness === 100 ? "emerald" : "amber"}
-          />
         </div>
       </div>
 
@@ -319,8 +318,6 @@ export function DashboardClient({
             type="button"
             onClick={() => setTab(t.value)}
             className={
-              // min-h-[44px]: touch-target floor from the product audit --
-              // the old px-3 py-1.5 pill was only ~32px tall.
               "inline-flex min-h-[44px] items-center rounded-full px-4 text-sm font-medium transition-colors " +
               (tab === t.value ? "bg-navy text-white" : "text-navy-light hover:bg-navy-50")
             }
@@ -333,7 +330,9 @@ export function DashboardClient({
       {filteredMatches.length === 0 ? (
         <div className="bg-white rounded-xl border border-hairline p-8 text-center mb-12">
           <p className="text-sm text-navy-light">
-            {matches.length === 0
+            {openMatches.length === 0 && comingSoon.length > 0
+              ? "Nothing you can apply to right now, but the scholarships below are verified and return regularly. Save one and get your documents ready."
+              : openMatches.length === 0
               ? "No eligible matches yet. Fill in a few more profile details, or check back as new scholarships are added."
               : "No matches in this category."}
           </p>
@@ -359,6 +358,37 @@ export function DashboardClient({
               />
             );
           })}
+        </div>
+      )}
+
+      {comingSoon.length > 0 && (
+        <div className="mb-12">
+          <h2 className="font-display text-lg font-semibold text-navy mb-1">Coming soon</h2>
+          <p className="text-sm text-navy-light mb-4">
+            Verified scholarships that aren&apos;t accepting applications right now. Save one to keep it on
+            your radar while you get ready.
+          </p>
+          <div className="grid md:grid-cols-2 gap-4">
+            {comingSoon.map((m) => {
+              const met = m.requirements.filter((r) => r.status === "met").length;
+              const total = m.requirements.filter((r) => r.status !== "unverifiable").length;
+              const missingLabels = m.requirements.filter((r) => r.status === "missing_data").map((r) => r.label);
+              return (
+                <ScholarshipCard
+                  key={m.id}
+                  scholarship={m}
+                  score={m.score}
+                  metCount={met}
+                  totalCount={total}
+                  missingLabels={missingLabels}
+                  saved={savedIds.has(m.id)}
+                  pending={pendingIds.has(m.id)}
+                  onToggleSave={() => toggleSave(m.id)}
+                  sharerId={userId}
+                />
+              );
+            })}
+          </div>
         </div>
       )}
 
