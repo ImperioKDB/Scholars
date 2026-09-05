@@ -55,8 +55,6 @@ function DiscoverIcon() {
   );
 }
 
-// AUDIT FIX (batch 8): /settings shipped without a nav entry, so the only
-// way to reach it was typing the URL. This is its sidebar/drawer item.
 function SettingsIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -101,22 +99,12 @@ function initialsFor(name: string | null): string {
   return (words[0][0] + words[1][0]).toUpperCase();
 }
 
-// The three primary destinations get a fixed bottom tab bar on mobile --
-// reaching them through the hamburger drawer every time was the audit's
-// top mobile-nav complaint. Browse, Profile, Admin, and Log out stay in
-// the drawer as secondary items.
 const MOBILE_TABS = [
   { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
   { href: "/applications", label: "Applications", Icon: ApplicationsIcon },
   { href: "/achievements", label: "Achievements", Icon: AchievementsIcon },
 ];
 
-// The bar no longer sits on top of the content permanently. It rests
-// hidden below the screen edge; any touch on the screen slides it up, and
-// it slides back down after BAR_HIDE_MS of no touching. Taps on the bar
-// itself are screen touches too, so it stays up while it's being used.
-// One brief reveal on load teaches first-time users that the bar exists.
-// Transform-only, so it stays on the compositor.
 const BAR_HIDE_MS = 2500;
 
 export function Sidebar({
@@ -124,13 +112,15 @@ export function Sidebar({
   isAdmin,
   profileCompleteness,
   xpTotal,
+  avatarUrl,
 }: {
   fullName: string | null;
   isAdmin: boolean;
   profileCompleteness: number;
-  // Trigger-maintained total from profiles.xp_total (see
-  // lib/supabase/currentUser.ts, migration add_xp_and_achievements).
   xpTotal: number;
+  // Public profile photo URL (profiles.avatar_url, migration 0010).
+  // Null falls back to the initials avatar.
+  avatarUrl: string | null;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -146,7 +136,7 @@ export function Sidebar({
       if (barHideTimer.current) clearTimeout(barHideTimer.current);
       barHideTimer.current = setTimeout(() => setBarVisible(false), BAR_HIDE_MS);
     }
-    reveal(); // brief on-load reveal so the pattern is discoverable
+    reveal();
     document.addEventListener("pointerdown", reveal);
     return () => {
       document.removeEventListener("pointerdown", reveal);
@@ -175,9 +165,13 @@ export function Sidebar({
   const profileBlock = (
     <div className="px-4 py-4 border-b border-hairline">
       <div className="flex items-center gap-3 mb-2.5">
-        <span className="w-9 h-9 rounded-full bg-navy text-white flex items-center justify-center font-display font-semibold text-sm shrink-0">
-          {initialsFor(fullName)}
-        </span>
+        {avatarUrl ? (
+          <img src={avatarUrl} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
+        ) : (
+          <span className="w-9 h-9 rounded-full bg-navy text-white flex items-center justify-center font-display font-semibold text-sm shrink-0">
+            {initialsFor(fullName)}
+          </span>
+        )}
         <div className="min-w-0">
           <p className="text-sm font-medium text-ink truncate">{fullName || "Welcome"}</p>
           <p className="text-xs text-navy-light">{profileCompleteness}% profile complete</p>
@@ -237,9 +231,6 @@ export function Sidebar({
 
   return (
     <>
-      {/* Skip link for keyboard users -- first tab stop on every section
-          page, jumps past the navigation straight to the content.
-          id="main" lives on each section layout's <main>. */}
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:rounded-lg focus:bg-navy focus:px-4 focus:py-2.5 focus:text-sm focus:font-medium focus:text-white"
@@ -288,17 +279,6 @@ export function Sidebar({
         </div>
       </div>
 
-      {/* Bottom tab bar, mobile only. min-h-[56px] per tab clears the
-          audit's 44px touch-target floor with room for the label;
-          pb-[env(safe-area-inset-bottom)] keeps the taps reachable above
-          the iOS home indicator. The matching bottom padding on each
-          section's content lives in the section layouts (pb-24
-          md:pb-10), and Ade's floating avatar lifts clear of this bar
-          on mobile too (see components/ade/AdeProvider.tsx).
-          Hidden by default (translate-y-full), revealed on any screen
-          touch, auto-hidden after BAR_HIDE_MS. Deliberately NOT
-          aria-hidden while translated away -- keyboard users can still
-          tab to it, which is the accessible behavior. */}
       <nav
         className={[
           "md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-hairline pb-[env(safe-area-inset-bottom)]",
