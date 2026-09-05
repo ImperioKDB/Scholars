@@ -31,8 +31,9 @@ export type CurrentUserProfile = {
   has_english_maths_credit: boolean;
   disability_status: boolean;
   // Public URL of the student's uploaded profile photo (Supabase Storage,
-  // see migration 0010). Null = no photo, UI falls back to initials.
-  avatar_url: string | null;
+  // migration 0010). Optional: the column only exists once 0010 is applied.
+  // Null/absent = no photo, UI falls back to initials.
+  avatar_url?: string | null;
   // Trigger-maintained cache of sum(xp_events.points) for this profile --
   // see migration add_xp_and_achievements / lib/xp/level.ts. Never write
   // to this column directly from application code.
@@ -47,11 +48,17 @@ export const getCurrentUserAndProfile = cache(async () => {
   if (!user) {
     return { user: null as typeof user, profile: null as CurrentUserProfile | null };
   }
+  // DISPLAY FIX: select("*") instead of a fixed column list. A fixed list
+  // hard-fails the WHOLE read if ANY listed column is missing from the live
+  // schema (previously avatar_url, before migration 0010 was applied), which
+  // nulled the entire profile and zeroed every downstream display
+  // (completeness, matches, gaps, saved) even though the rows were intact.
+  // "*" returns whatever columns exist, so the display works regardless of
+  // which optional migrations have been applied. Same pattern the settings
+  // page already uses successfully.
   const { data: profile } = await supabase
     .from("profiles")
-    .select(
-      "full_name, is_admin, profile_completeness, discipline, gpa, nationality, gender, financial_need, date_of_birth, state_of_origin, lga_of_origin, year_of_study, institution_type, jamb_score, waec_credit_count, has_english_maths_credit, disability_status, avatar_url, xp_total"
-    )
+    .select("*")
     .eq("id", user.id)
     .maybeSingle();
   return { user, profile: profile as CurrentUserProfile | null };
