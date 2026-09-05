@@ -1,5 +1,4 @@
 "use client";
-
 import Link from "next/link";
 import { MatchSeal } from "@/components/MatchSeal";
 import { ProviderMonogram } from "@/components/ProviderMonogram";
@@ -12,16 +11,11 @@ export type CardScholarship = {
   provider_name: string;
   amount: string | null;
   deadline: string | null;
-  // Date applications open; null = no restriction. Only used to compute
-  // isOpenNow server-side (see lib/discovery.ts) -- not rendered directly.
   opens_at?: string | null;
   level: "undergrad" | "postgrad" | "both";
   discipline: string | null;
   application_url: string | null;
   how_to_apply?: string | null;
-  // Computed server-side (see lib/discovery.ts) -- real signals, not
-  // fabricated. isOpenNow checks opens_at/deadline; isTrending checks
-  // actual recent save counts via get_trending_scholarship_ids().
   isOpenNow?: boolean;
   isTrending?: boolean;
 };
@@ -71,10 +65,6 @@ function SaveButton({
       aria-label={saved ? "Remove from saved scholarships" : "Save scholarship"}
       aria-pressed={saved}
       className={[
-        // 44x44 tap target (product audit / WCAG 2.5.5): the visible
-        // circle stays a compact 30px so the card corner doesn't get
-        // visually heavier, but the ::after pseudo extends the real
-        // clickable area by 7px on every side (30 + 14 = 44).
         "relative shrink-0 rounded-full p-1.5 bg-white/90 backdrop-blur-sm transition-colors disabled:opacity-50",
         "after:absolute after:-inset-[7px] after:rounded-full after:content-['']",
         saved ? "text-emerald" : "text-navy-light hover:text-navy",
@@ -87,31 +77,6 @@ function SaveButton({
   );
 }
 
-// Card title/avatar/badges are wrapped in a Link to /scholarships/[id]
-// via `className="contents"` so the wrapper doesn't affect the existing
-// flex layout. ShareButton and SaveButton are siblings, absolutely
-// positioned in the top-right corner -- NOT nested inside the Link, since
-// a <button> inside an <a> is invalid HTML and would break keyboard/
-// screen-reader semantics. ShareButton calls stopPropagation/
-// preventDefault internally so tapping it never also triggers the card's
-// own Link navigation underneath.
-//
-// Keyboard focus: the Link's `display: contents` box model means it can't
-// paint a focus outline of its own, so the card div paints one instead
-// via focus-within (product audit -- the old setup had no visible focus
-// indicator for keyboard users at all).
-//
-// Corner geometry: both icon buttons carry invisible 44px hit areas
-// (::after, -inset-[7px]) -- gap-3.5 (14px) keeps those expanded areas
-// from overlapping each other, and sm:pr-24 on the title block keeps the
-// first lines clear of the corner at sm:+ where the avatar sits beside
-// the text.
-//
-// MOBILE (audit + live screenshot review): below sm: the avatar stacks
-// ABOVE the text so the title and badges get the card's full width
-// instead of a squeezed column next to a 52px circle. The stacked text
-// starts ~88px from the card top, clear of the corner icons (which end
-// ~64px down), so the pr-24 clearance is only needed at sm:+.
 export function ScholarshipCard({
   scholarship,
   score,
@@ -131,13 +96,14 @@ export function ScholarshipCard({
   saved: boolean;
   onToggleSave: () => void;
   pending?: boolean;
-  // Current user's profile id, threaded down from the page-level Server
-  // Component so a generated share link carries ?ref=<sharerId> for
-  // referral attribution (middleware.ts + app/auth/callback/route.ts).
-  // Optional so this component doesn't break wherever it hasn't been
-  // wired through yet -- the share icon simply doesn't render without it.
   sharerId?: string;
 }) {
+  // Verified but not yet accepting: opens_at is still in the future. Show
+  // an honest "Opens in X days" chip and suppress the deadline chip, which
+  // would otherwise read as "you have time to apply" when you can't yet.
+  const opensIn = scholarship.opens_at ? daysUntil(scholarship.opens_at) : null;
+  const opensSoon = scholarship.isOpenNow === false && opensIn !== null && opensIn > 0;
+
   return (
     <div className="relative bg-white rounded-xl border border-hairline p-5 flex flex-col gap-4 sm:flex-row shadow-card focus-within:ring-2 focus-within:ring-emerald focus-within:ring-offset-2 focus-within:ring-offset-parchment">
       <Link href={`/scholarships/${scholarship.id}`} className="contents">
@@ -152,7 +118,13 @@ export function ScholarshipCard({
             <p className="text-xs text-navy-light mt-0.5">{scholarship.provider_name}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 mt-3">
-            <DeadlineBadge deadline={scholarship.deadline} />
+            {opensSoon ? (
+              <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-light text-amber">
+                Opens in {opensIn} day{opensIn === 1 ? "" : "s"}
+              </span>
+            ) : (
+              <DeadlineBadge deadline={scholarship.deadline} />
+            )}
             {scholarship.isOpenNow && (
               <span className="text-xs font-medium px-2 py-1 rounded-full bg-emerald-light text-emerald">
                 Open now
