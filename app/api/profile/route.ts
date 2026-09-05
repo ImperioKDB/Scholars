@@ -6,11 +6,16 @@
 // in Postgres (see calculate_profile_completeness()) so it can't be spoofed by
 // a client sending a high number to game the matching score.
 //
+// avatar_url IS accepted but only as a URL string: the actual bytes go to
+// Supabase Storage straight from the browser (storage RLS scopes writes to
+// the owner's folder, see migration 0010), and this route only records the
+// resulting public URL. A client can therefore only point its own avatar at
+// a URL, never write to someone else's row (RLS) or store arbitrary data.
+//
 // Undergrad-only pivot: academic_level is gone. Added the eligibility fields
 // most Nigerian scholarships actually gate on (state/LGA of origin, DOB,
 // JAMB/WAEC results, year of study, institution type) plus a document-
 // readiness checklist (booleans only -- no file storage).
-
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -45,67 +50,56 @@ const profileSchema = z.object({
   has_recommendation_letter: z.boolean().optional(),
   has_personal_statement: z.boolean().optional(),
   has_lga_certificate: z.boolean().optional(),
+  avatar_url: z.string().url().nullable().optional(),
 })
 
 export async function GET() {
   const supabase = await createClient()
-
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
-
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
-
   const { data: profile, error } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', user.id)
     .single()
-
   if (error) {
     if (error.code === 'PGRST116') {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
   return NextResponse.json({ profile })
 }
 
 export async function POST(request: Request) {
   const supabase = await createClient()
-
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
-
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
-
   const raw = await request.json().catch(() => null)
   const parsed = profileSchema.safeParse(raw)
-
   if (!parsed.success) {
     return NextResponse.json(
       { error: 'Invalid profile data', issues: parsed.error.issues },
       { status: 400 }
     )
   }
-
   const { data: profile, error } = await supabase
     .from('profiles')
     .upsert({ id: user.id, ...parsed.data }, { onConflict: 'id' })
     .select('*')
     .single()
-
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
   return NextResponse.json({ profile })
 }
