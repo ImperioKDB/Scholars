@@ -15,24 +15,32 @@
 //   opens the app again; this covers someone who doesn't come back on
 //   their own.
 //
-//   Phase 3 -- new-scholarship alerts (new): for every scholarship created
-//   or flipped to verified inside the last 7 days, emails every student
-//   with a profile. This is the promise the Browse page makes ("We'll
-//   notify you once a new one is available"), so it must be real, not
-//   aspirational. "New" keys off updated_at because it is now() on insert
-//   AND bumped by the set_updated_at trigger on every edit, including the
-//   verified flip -- so both "just added" and "just verified" count, while
-//   old rows never re-notify. Dedupe per (profile, scholarship) via
-//   notifications.type='new_scholarship' (enum value added by a manual
-//   ALTER TYPE in the Supabase SQL editor) means a row edited again later
-//   never emails the same student twice. Capped at 5 scholarships per run;
-//   anything beyond that is picked up by the next daily run while still
-//   inside the window.
+//   Phase 3 -- new-scholarship alerts (unchanged): for every scholarship
+//   created or flipped to verified inside the last 7 days, emails every
+//   student with a profile. This is the promise the Browse page makes
+//   ("We'll notify you once a new one is available"), so it must be real,
+//   not aspirational. "New" keys off updated_at because it is now() on
+//   insert AND bumped by the set_updated_at trigger on every edit,
+//   including the verified flip -- so both "just added" and "just
+//   verified" count, while old rows never re-notify. Dedupe per (profile,
+//   scholarship) via notifications.type='new_scholarship' (enum value
+//   added by a manual ALTER TYPE in the Supabase SQL editor) means a row
+//   edited again later never emails the same student twice. Capped at 5
+//   scholarships per run; anything beyond that is picked up by the next
+//   daily run while still inside the window.
 //
 // All phases dedupe against `notifications` by (profile_id, scholarship_id,
 // type), so a row already in the window on multiple consecutive cron runs
 // only sends once, and all phases share the same CRON_SECRET auth and the
 // same BREVO_API_KEY / REMINDER_FROM_EMAIL dry-run behavior.
+//
+// SECURITY HARDENING (phase 4): failures are now visible. Every query
+// failure is structured-logged via lib/logging.ts, and if email is
+// configured and any phase ends with a non-empty `failed` array, a
+// one-line summary is POSTed to CRON_ALERT_WEBHOOK_URL (Slack incoming-
+// webhook format). Webhook unset = skipped silently, same dry-run-safe
+// pattern as BREVO_API_KEY. A webhook failure never fails the cron
+// response.
 //
 // AUTH: protected by CRON_SECRET, not by user session (there is no user
 // session in a cron trigger). Set CRON_SECRET as a normal env var in
@@ -54,9 +62,13 @@
 //   DEADLINE_REMINDER_DAYS -- optional, defaults to 7 if unset
 //   NEXT_PUBLIC_APP_URL    -- optional, used in email links;
 //                              falls back to the production URL if unset
+//   CRON_ALERT_WEBHOOK_URL -- optional, Slack-style incoming webhook for
+//                              failure summaries; unset = skipped silently
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
+import { logError, logWarn } from '@/lib/logging'
 
+const ROUTE = '/api/cron/deadline-check'
 const DEFAULT_REMINDER_DAYS = 7
 const NEW_WINDOW_DAYS = 7
 const MAX_NEW_PER_RUN = 5
@@ -126,7 +138,7 @@ async function sendReminderEmail(params: {
 ${params.provider}<br/>
 Deadline: <strong>${deadlineFormatted}</strong>
 </p>
-${params.applicationUrl ? `<p><a href=\"${params.applicationUrl}\">Go to application</a></p>` : ''}
+${params.applicationUrl ? `<p><a href="${params.applicationUrl}">Go to application</a></p>` : ''}
 <p>- Ade, from Scholars</p>
 `,
     }),
@@ -137,10 +149,6 @@ ${params.applicationUrl ? `<p><a href=\"${params.applicationUrl}\">Go to applica
   }
 }
 
-// Same provider/shape as sendReminderEmail but a distinct template -- this
-// one is Ade asking "did you hear back?", not a deadline countdown, so it
-// links to the Applications page (to update status) rather than the
-// provider's application_url.
 async function sendCheckinEmail(params: { to: string; title: string; provider: string }) {
   const apiKey = process.env.BREVO_API_KEY
   const from = process.env.REMINDER_FROM_EMAIL
@@ -160,7 +168,7 @@ The deadline for <strong>${params.title}</strong> (${params.provider}) has passe
 it's still marked "in progress" on your Applications page.
 </p>
 <p>Could you let us know what happened? It only takes a tap, and it helps us match you to better scholarships going forward.</p>
-<p><a href=\"${appUrl}/applications\">Update it on Scholars</a></p>
+<p><a href="${appUrl}/applications">Update it on Scholars</a></p>
 <p>- Ade, from Scholars</p>
 `,
     }),
@@ -171,9 +179,6 @@ it's still marked "in progress" on your Applications page.
   }
 }
 
-// Phase 3 template: a new scholarship went live. Links to the scholarship's
-// detail page so the student sees their own match score for it, not just a
-// bare listing.
 async function sendNewScholarshipEmail(params: { to: string; scholarship: NewScholarshipRow }) {
   const apiKey = process.env.BREVO_API_KEY
   const from = process.env.REMINDER_FROM_EMAIL
@@ -202,7 +207,7 @@ ${params.scholarship.provider_name}<br/>
 ${params.scholarship.amount ? `Award: ${params.scholarship.amount}<br/>` : ''}
 Deadline: <strong>${deadlineFormatted}</strong>
 </p>
-<p><a href=\"${appUrl}/scholarships/${params.scholarship.id}\">See if you qualify</a></p>
+<p><a href="${appUrl}/scholarships/${params.scholarship.id}">See if you qualify</a></p>
 <p>- Ade, from Scholars</p>
 `,
     }),
@@ -210,6 +215,23 @@ Deadline: <strong>${deadlineFormatted}</strong>
   if (!resp.ok) {
     const body = await resp.text().catch(() => '')
     throw new Error(`Brevo API error ${resp.status}: ${body.slice(0, 300)}`)
+  }
+}
+
+// Phase 4 failure alerting. Slack incoming-webhook format is just
+// { text: string }, which most ops tools (Slack, Discord, Teams, generic
+// webhook receivers) accept or adapt trivially. Never throws.
+async function sendFailureAlert(summary: string) {
+  const webhook = process.env.CRON_ALERT_WEBHOOK_URL
+  if (!webhook) return // unset = skip silently, same pattern as BREVO dry-run
+  try {
+    await fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: summary }),
+    })
+  } catch (err) {
+    logWarn(ROUTE, 'failure alert webhook unreachable', undefined, err)
   }
 }
 
@@ -249,6 +271,7 @@ export async function GET(request: Request) {
     .gte('scholarships.deadline', todayStr)
     .lte('scholarships.deadline', cutoffStr)
   if (savedError) {
+    logError(ROUTE, 'phase 1 query failed', undefined, savedError)
     return NextResponse.json({ error: savedError.message }, { status: 500 })
   }
   const candidates = ((saved ?? []) as unknown as SavedRow[]).filter((row) => row.scholarships !== null)
@@ -264,7 +287,10 @@ export async function GET(request: Request) {
       .select('profile_id, scholarship_id')
       .eq('type', 'deadline_reminder')
       .in('scholarship_id', candidates.map((c) => c.scholarship_id))
-    if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 })
+    if (existingError) {
+      logError(ROUTE, 'phase 1 dedupe query failed', undefined, existingError)
+      return NextResponse.json({ error: existingError.message }, { status: 500 })
+    }
     const alreadyNotified = new Set((existing ?? []).map((n) => `${n.profile_id}:${n.scholarship_id}`))
     const toNotify = candidates.filter((c) => !alreadyNotified.has(`${c.profile_id}:${c.scholarship_id}`))
 
@@ -315,6 +341,7 @@ export async function GET(request: Request) {
     .eq('status', 'in_progress')
     .lt('scholarships.deadline', todayStr)
   if (overdueError) {
+    logError(ROUTE, 'phase 2 query failed', undefined, overdueError)
     return NextResponse.json({ error: overdueError.message }, { status: 500 })
   }
   const overdueCandidates = ((overdueApps ?? []) as unknown as OverdueApplicationRow[]).filter(
@@ -333,6 +360,7 @@ export async function GET(request: Request) {
       .eq('type', 'checkin_reminder')
       .in('scholarship_id', overdueCandidates.map((c) => c.scholarship_id))
     if (existingCheckinsError) {
+      logError(ROUTE, 'phase 2 dedupe query failed', undefined, existingCheckinsError)
       return NextResponse.json({ error: existingCheckinsError.message }, { status: 500 })
     }
     const alreadyChecked = new Set((existingCheckins ?? []).map((n) => `${n.profile_id}:${n.scholarship_id}`))
@@ -383,6 +411,7 @@ export async function GET(request: Request) {
     .order('updated_at', { ascending: false })
     .limit(MAX_NEW_PER_RUN)
   if (freshError) {
+    logError(ROUTE, 'phase 3 query failed', undefined, freshError)
     return NextResponse.json({ error: freshError.message }, { status: 500 })
   }
 
@@ -395,6 +424,7 @@ export async function GET(request: Request) {
   if (freshRows.length > 0) {
     const { data: allProfiles, error: profilesError } = await supabase.from('profiles').select('id')
     if (profilesError) {
+      logError(ROUTE, 'phase 3 profiles query failed', undefined, profilesError)
       return NextResponse.json({ error: profilesError.message }, { status: 500 })
     }
     const { data: alreadyAlerted, error: alreadyAlertedError } = await supabase
@@ -403,6 +433,7 @@ export async function GET(request: Request) {
       .eq('type', 'new_scholarship')
       .in('scholarship_id', freshRows.map((s) => s.id))
     if (alreadyAlertedError) {
+      logError(ROUTE, 'phase 3 dedupe query failed', undefined, alreadyAlertedError)
       return NextResponse.json({ error: alreadyAlertedError.message }, { status: 500 })
     }
     const alertedSet = new Set((alreadyAlerted ?? []).map((n) => `${n.profile_id}:${n.scholarship_id}`))
@@ -439,6 +470,32 @@ export async function GET(request: Request) {
         }
       }
     }
+  }
+
+  // ---- Phase 4: failure alerting ----------------------------------------
+  // Only meaningful when email is actually configured (dry-run failures
+  // are expected noise), and only when something actually failed.
+  const failedCount =
+    reminderResults.failed.length + checkinResults.failed.length + alertResults.failed.length
+  if (emailConfigured && failedCount > 0) {
+    const firstFailures = [
+      reminderResults.failed[0],
+      checkinResults.failed[0],
+      alertResults.failed[0],
+    ].filter(Boolean)
+    const summary =
+      `:warning: Scholars cron ${ROUTE}: ` +
+      `${reminderResults.failed.length} deadline-reminder failure(s), ` +
+      `${checkinResults.failed.length} check-in failure(s), ` +
+      `${alertResults.failed.length} new-scholarship alert failure(s). ` +
+      `First errors: ` +
+      firstFailures.map((f) => `${f!.scholarship_id.slice(0, 8)}: ${f!.error}`).join(' | ')
+    logError(ROUTE, 'run completed with failures', {
+      reminder_failures: reminderResults.failed.length,
+      checkin_failures: checkinResults.failed.length,
+      new_scholarship_failures: alertResults.failed.length,
+    })
+    await sendFailureAlert(summary)
   }
 
   return NextResponse.json({
