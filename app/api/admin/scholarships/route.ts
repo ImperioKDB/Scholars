@@ -27,10 +27,10 @@
 // -- see migration: add_competitiveness_fields. All optional/nullable; the
 // client (app/admin/scholarships/new/page.tsx) sends already-converted
 // numbers or null, not raw form strings.
-
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { checkRateLimit } from '@/lib/ratelimit'
 
 const ruleSchema = z.object({
   field: z.enum(['gpa', 'nationality', 'gender', 'financial_need', 'academic_level', 'discipline', 'career_goals']),
@@ -67,73 +67,68 @@ async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>) 
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
-
   if (authError || !user) {
     return { error: NextResponse.json({ error: 'Not authenticated' }, { status: 401 }) }
   }
-
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('is_admin')
     .eq('id', user.id)
     .single()
-
   if (profileError || !profile?.is_admin) {
     return { error: NextResponse.json({ error: 'Admin access required' }, { status: 403 }) }
   }
-
   return { user }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  // SECURITY HARDENING (phase 1): admin surface gets a higher ceiling
+  // (60/min) because is_admin + middleware already gate it; the limiter
+  // is a brute-force brake, not the primary control.
+  const limited = await checkRateLimit(request, { route: 'admin-scholarships', limit: 60 })
+  if (limited) return limited
+
   const supabase = await createClient()
   const check = await requireAdmin(supabase)
   if (check.error) return check.error
-
   const { data: scholarships, error } = await supabase
     .from('scholarships')
     .select('*, scholarship_rules ( id, field, operator, value )')
     .order('created_at', { ascending: false })
-
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
   return NextResponse.json({ scholarships })
 }
 
 export async function POST(request: Request) {
+  const limited = await checkRateLimit(request, { route: 'admin-scholarships', limit: 60 })
+  if (limited) return limited
+
   const supabase = await createClient()
   const check = await requireAdmin(supabase)
   if (check.error) return check.error
-
   const raw = await request.json().catch(() => null)
   const parsed = scholarshipSchema.safeParse(raw)
-
   if (!parsed.success) {
     return NextResponse.json(
       { error: 'Invalid scholarship data', issues: parsed.error.issues },
       { status: 400 }
     )
   }
-
   const { rules, ...scholarshipFields } = parsed.data
-
   const { data: scholarship, error: insertError } = await supabase
     .from('scholarships')
     .insert({ ...scholarshipFields, created_by: check.user!.id })
     .select('*')
     .single()
-
   if (insertError) {
     return NextResponse.json({ error: insertError.message }, { status: 500 })
   }
-
   if (rules.length > 0) {
     const { error: rulesError } = await supabase.from('scholarship_rules').insert(
       rules.map((r) => ({ ...r, scholarship_id: scholarship.id }))
     )
-
     if (rulesError) {
       // Scholarship was created but rules failed — surface this clearly
       // rather than silently leaving a scholarship with no rules.
@@ -147,12 +142,10 @@ export async function POST(request: Request) {
       )
     }
   }
-
   const { data: full } = await supabase
     .from('scholarships')
     .select('*, scholarship_rules ( id, field, operator, value )')
     .eq('id', scholarship.id)
     .single()
-
   return NextResponse.json({ scholarship: full ?? scholarship }, { status: 201 })
 }
