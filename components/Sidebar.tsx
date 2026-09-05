@@ -55,6 +55,19 @@ function DiscoverIcon() {
   );
 }
 
+// AUDIT FIX (batch 8): /settings shipped without a nav entry, so the only
+// way to reach it was typing the URL. This is its sidebar/drawer item.
+function SettingsIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <path d="M4 7h9M17.5 7H20M4 12h3.5M12 12h8M4 17h11M19.5 17H20" strokeLinecap="round" />
+      <circle cx="15" cy="7" r="2" />
+      <circle cx="9.5" cy="12" r="2" />
+      <circle cx="17" cy="17" r="2" />
+    </svg>
+  );
+}
+
 function MenuIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -88,22 +101,22 @@ function initialsFor(name: string | null): string {
   return (words[0][0] + words[1][0]).toUpperCase();
 }
 
-// AUDIT FIX (batch 4): the three primary destinations get a fixed bottom
-// tab bar on mobile -- reaching them through the hamburger drawer every
-// time was the audit's top mobile-nav complaint. Browse, Admin, and Log
-// out stay in the drawer as secondary items.
+// The three primary destinations get a fixed bottom tab bar on mobile --
+// reaching them through the hamburger drawer every time was the audit's
+// top mobile-nav complaint. Browse, Profile, Admin, and Log out stay in
+// the drawer as secondary items.
 const MOBILE_TABS = [
   { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
   { href: "/applications", label: "Applications", Icon: ApplicationsIcon },
   { href: "/achievements", label: "Achievements", Icon: AchievementsIcon },
 ];
 
-// LIVE FIX: the bar no longer sits on top of the content permanently.
-// It rests hidden below the screen edge; any touch on the screen slides
-// it up, and it slides back down after BAR_HIDE_MS of no touching. Taps
-// on the bar itself are screen touches too, so it stays up while it's
-// being used. One brief reveal on load teaches first-time users that
-// the bar exists. Transform-only, so it stays on the compositor.
+// The bar no longer sits on top of the content permanently. It rests
+// hidden below the screen edge; any touch on the screen slides it up, and
+// it slides back down after BAR_HIDE_MS of no touching. Taps on the bar
+// itself are screen touches too, so it stays up while it's being used.
+// One brief reveal on load teaches first-time users that the bar exists.
+// Transform-only, so it stays on the compositor.
 const BAR_HIDE_MS = 2500;
 
 export function Sidebar({
@@ -148,6 +161,7 @@ export function Sidebar({
     { href: "/discover", label: "Browse", Icon: DiscoverIcon },
     { href: "/applications", label: "Applications", Icon: ApplicationsIcon },
     { href: "/achievements", label: "Achievements", Icon: AchievementsIcon },
+    { href: "/settings", label: "Profile", Icon: SettingsIcon },
     ...(isAdmin ? [{ href: "/admin", label: "Admin", Icon: AdminIcon }] : []),
   ];
 
@@ -223,10 +237,9 @@ export function Sidebar({
 
   return (
     <>
-      {/* AUDIT FIX (batch 5): skip link for keyboard users -- first tab
-          stop on every section page, jumps past the navigation straight
-          to the content. id="main" lives on each section layout's
-          <main>. */}
+      {/* Skip link for keyboard users -- first tab stop on every section
+          page, jumps past the navigation straight to the content.
+          id="main" lives on each section layout's <main>. */}
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:rounded-lg focus:bg-navy focus:px-4 focus:py-2.5 focus:text-sm focus:font-medium focus:text-white"
@@ -282,10 +295,10 @@ export function Sidebar({
           section's content lives in the section layouts (pb-24
           md:pb-10), and Ade's floating avatar lifts clear of this bar
           on mobile too (see components/ade/AdeProvider.tsx).
-          LIVE FIX: hidden by default (translate-y-full), revealed on
-          any screen touch, auto-hidden after BAR_HIDE_MS. Deliberately
-          NOT aria-hidden while translated away -- keyboard users can
-          still tab to it, which is the accessible behavior. */}
+          Hidden by default (translate-y-full), revealed on any screen
+          touch, auto-hidden after BAR_HIDE_MS. Deliberately NOT
+          aria-hidden while translated away -- keyboard users can still
+          tab to it, which is the accessible behavior. */}
       <nav
         className={[
           "md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-hairline pb-[env(safe-area-inset-bottom)]",
