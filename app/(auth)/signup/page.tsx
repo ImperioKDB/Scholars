@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AuthShell } from "@/components/AuthShell";
@@ -13,19 +14,14 @@ import { validatePasswordStrength } from "@/lib/auth/password";
 // no session yet, and middleware.ts just bounces them to /login, a page
 // that can't do anything for an account that isn't confirmed yet.
 //
-// AUTH SECURITY AUDIT (OTP verification): also accepts a 6-digit code via
-// supabase.auth.verifyOtp(type: "signup"), so the flow works when the
-// project is configured for email OTP instead of (or alongside) magic
-// links. With link-only config the code form simply errors gracefully and
-// the link path still works.
+// Confirmation is link-only (product decision): the email carries a magic
+// link that lands on /auth/callback and establishes the session there. An
+// OTP code entry was prototyped during the auth audit and removed -- with
+// the project configured for links, the code form could only ever error,
+// so it added friction without a working path.
 function CheckEmailScreen({ email, onResend }: { email: string; onResend: () => Promise<void> }) {
-  const router = useRouter();
-  const supabase = createClient();
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
-  const [code, setCode] = useState("");
-  const [verifying, setVerifying] = useState(false);
-  const [verifyError, setVerifyError] = useState<string | null>(null);
 
   async function handleResend() {
     setResending(true);
@@ -35,57 +31,19 @@ function CheckEmailScreen({ email, onResend }: { email: string; onResend: () => 
     setResent(true);
   }
 
-  async function handleVerify(e: React.FormEvent) {
-    e.preventDefault();
-    if (!code.trim()) return;
-    setVerifying(true);
-    setVerifyError(null);
-    const { error } = await supabase.auth.verifyOtp({
-      email,
-      token: code.trim(),
-      type: "signup",
-    });
-    setVerifying(false);
-    if (error) {
-      setVerifyError("That code didn't match. Check the email and try again, or use the link it contains.");
-      return;
-    }
-    router.push("/onboarding");
-  }
-
   return (
     <AuthShell heading="Check your email" sub="One more step before you can sign in.">
       <div className="rounded-xl border border-hairline bg-navy-50 p-5 mb-6">
         <p className="text-sm text-ink">
-          We sent a confirmation to <span className="font-medium">{email}</span>. Click the link in it,
-          or enter the code it contains below.
+          We sent a confirmation link to <span className="font-medium">{email}</span>. Click it to
+          activate your account, then come back and log in.
         </p>
       </div>
-      <form onSubmit={handleVerify} noValidate>
-        <FormField label="Confirmation code" error={verifyError ?? undefined}>
-          <input
-            className={inputClass}
-            type="text"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            placeholder="6-digit code"
-          />
-        </FormField>
-        <button
-          type="submit"
-          disabled={verifying || !code.trim()}
-          className="w-full rounded-lg bg-navy text-white font-medium py-3 mt-2 hover:bg-navy-light transition-colors disabled:opacity-60"
-        >
-          {verifying ? "Verifying\u2026" : "Verify code"}
-        </button>
-      </form>
       <button
         type="button"
         onClick={handleResend}
         disabled={resending}
-        className="w-full rounded-lg border border-hairline bg-white py-2.5 mt-3 text-sm font-medium text-ink hover:bg-navy-50 transition-colors disabled:opacity-60"
+        className="w-full rounded-lg border border-hairline bg-white py-2.5 text-sm font-medium text-ink hover:bg-navy-50 transition-colors disabled:opacity-60"
       >
         {resending ? "Sending\u2026" : resent ? "Sent again \u2713" : "Resend confirmation email"}
       </button>
@@ -113,7 +71,6 @@ export default function SignupPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-
     // AUTH SECURITY AUDIT (password strength): client-side enforcement of
     // the shared policy; Supabase's own policy is the server backstop.
     const issues = validatePasswordStrength(password);
@@ -121,9 +78,7 @@ export default function SignupPage() {
       setError("Password needs " + issues.join(", ") + ".");
       return;
     }
-
     setLoading(true);
-
     // AUTH SECURITY AUDIT (breach check): fail-open -- a HIBP outage must
     // never block signup, and the strength rules still apply either way.
     let breached = false;
@@ -144,7 +99,6 @@ export default function SignupPage() {
       setError("This password appears in known breach data. Pick something less common.");
       return;
     }
-
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -270,7 +224,3 @@ export default function SignupPage() {
     </AuthShell>
   );
 }
-
-// CheckEmailScreen and this page both use Link; keep the import local to
-// the JSX scope like the rest of the auth pages.
-import Link from "next/link";
