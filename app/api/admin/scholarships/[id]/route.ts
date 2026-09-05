@@ -20,10 +20,10 @@
 // historical_acceptance_rate / competitiveness_notes added: competitiveness
 // inputs consumed by lib/matching/engine.ts's computeCompetitivenessFactor
 // -- see migration: add_competitiveness_fields.
-
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { checkRateLimit } from '@/lib/ratelimit'
 
 const updateSchema = z
   .object({
@@ -55,68 +55,63 @@ async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>) 
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
-
   if (authError || !user) {
     return { error: NextResponse.json({ error: 'Not authenticated' }, { status: 401 }) }
   }
-
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('is_admin')
     .eq('id', user.id)
     .single()
-
   if (profileError || !profile?.is_admin) {
     return { error: NextResponse.json({ error: 'Admin access required' }, { status: 403 }) }
   }
-
   return { user }
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  // SECURITY HARDENING (phase 1): see the 60/min note on the list route.
+  const limited = await checkRateLimit(request, { route: 'admin-scholarships-id', limit: 60 })
+  if (limited) return limited
+
   const { id } = await params
   const supabase = await createClient()
   const check = await requireAdmin(supabase)
   if (check.error) return check.error
-
   const raw = await request.json().catch(() => null)
   const parsed = updateSchema.safeParse(raw)
-
   if (!parsed.success) {
     return NextResponse.json(
       { error: 'Invalid update data', issues: parsed.error.issues },
       { status: 400 }
     )
   }
-
   const { data: scholarship, error } = await supabase
     .from('scholarships')
     .update(parsed.data)
     .eq('id', id)
     .select('*, scholarship_rules ( id, field, operator, value )')
     .single()
-
   if (error) {
     if (error.code === 'PGRST116') {
       return NextResponse.json({ error: 'Scholarship not found' }, { status: 404 })
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
   return NextResponse.json({ scholarship })
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const limited = await checkRateLimit(request, { route: 'admin-scholarships-id', limit: 60 })
+  if (limited) return limited
+
   const { id } = await params
   const supabase = await createClient()
   const check = await requireAdmin(supabase)
   if (check.error) return check.error
-
   const { error } = await supabase.from('scholarships').delete().eq('id', id)
-
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
   return NextResponse.json({ message: 'Scholarship deleted' })
 }
