@@ -31,7 +31,9 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "Scholars — Find scholarships you're actually eligible for",
+  // AUDIT FIX (batch 8): em dash removed from the tab title per the
+  // design-taste doc's hard ban.
+  title: "Scholars | Find scholarships you're actually eligible for",
   description:
     "Scholars matches your academic profile with scholarships you can realistically win, and keeps every deadline in one place.",
 };
@@ -44,12 +46,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${fraunces.variable} ${manrope.variable}`}>
       <body className="font-sans bg-parchment text-ink antialiased">
-        {/* AUDIT FIX (batch 2): AdeProvider lifted here from the four
-            section layouts (dashboard/applications/achievements/
-            scholarships). It used to remount on every route change
-            between those sections, silently resetting Ade's dismissed
-            prompts and seen-prompt tracking. At the root layout the
-            instance survives navigation; the provider self-gates to the
+        {/* AdeProvider lifted here from the four section layouts (batch
+            2). It used to remount on every route change between those
+            sections, silently resetting Ade's dismissed prompts and
+            seen-prompt tracking. At the root layout the instance
+            survives navigation; the provider self-gates to the
             authenticated app routes via usePathname, so it renders (and
             polls) nothing on public pages like the landing, auth,
             /s/[id] share links, and the admin shell. */}
