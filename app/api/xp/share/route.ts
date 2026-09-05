@@ -34,6 +34,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
+import { checkRateLimit } from '@/lib/ratelimit'
 
 const bodySchema = z.object({
   scholarship_id: z.string().uuid(),
@@ -52,17 +53,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
 
+  // SECURITY HARDENING (phase 1): on top of the daily XP cap, an IP
+  // bucket AND a per-user bucket (20/min each) so neither a scripted IP
+  // nor a compromised session can hammer this endpoint. Placed after
+  // auth because the user bucket needs the uid.
+  const limited = await checkRateLimit(request, {
+    route: 'xp-share',
+    limit: 20,
+    extraKeys: [`user:${user.id}`],
+  })
+  if (limited) return limited
+
   const raw = await request.json().catch(() => null)
   const parsed = bodySchema.safeParse(raw)
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
-
   const today = new Date().toISOString().slice(0, 10)
   const dedupeKey = 'share_click:' + parsed.data.scholarship_id + ':' + today
-
   const service = createServiceClient()
-
   // Per-profile daily cap. dedupe_key always ends with ":<YYYY-MM-DD>"
   // for share_click events, so suffix-matching counts today's awards
   // without depending on columns beyond the ones award_xp already
@@ -73,14 +82,12 @@ export async function POST(request: Request) {
     .eq('profile_id', user.id)
     .eq('event_type', 'share_click')
     .like('dedupe_key', `%:${today}`)
-
   if (countError) {
     return NextResponse.json({ error: countError.message }, { status: 500 })
   }
   if ((awardedToday ?? 0) >= MAX_SHARE_CLICKS_PER_DAY) {
     return NextResponse.json({ awarded: false, points: 0 })
   }
-
   const { error } = await service.rpc('award_xp', {
     p_profile_id: user.id,
     p_event_type: 'share_click',
@@ -91,6 +98,5 @@ export async function POST(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
   return NextResponse.json({ awarded: true, points: SHARE_CLICK_POINTS })
 }
