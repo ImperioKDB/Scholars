@@ -16,10 +16,10 @@
 // and any consumer reading scholarship.* unconditionally crashes. Same
 // fix as app/dashboard/page.tsx, app/applications/page.tsx,
 // app/api/applications/route.ts, and app/api/applications/[id]/route.ts.
-
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { checkRateLimit } from '@/lib/ratelimit'
 
 const saveSchema = z.object({
   scholarship_id: z.string().uuid(),
@@ -27,16 +27,13 @@ const saveSchema = z.object({
 
 export async function GET() {
   const supabase = await createClient()
-
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
-
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
-
   const { data, error } = await supabase
     .from('saved_scholarships')
     .select(
@@ -45,42 +42,39 @@ export async function GET() {
     )
     .eq('profile_id', user.id)
     .order('saved_at', { ascending: false })
-
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
   return NextResponse.json({ saved: data })
 }
 
 export async function POST(request: Request) {
-  const supabase = await createClient()
+  // SECURITY HARDENING (phase 1): save/unsave are the most spammable
+  // student-facing writes; 20/min per IP per method bucket key.
+  const limited = await checkRateLimit(request, { route: 'save', limit: 20 })
+  if (limited) return limited
 
+  const supabase = await createClient()
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
-
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
-
   const raw = await request.json().catch(() => null)
   const parsed = saveSchema.safeParse(raw)
-
   if (!parsed.success) {
     return NextResponse.json(
       { error: 'Invalid request body', issues: parsed.error.issues },
       { status: 400 }
     )
   }
-
   const { data, error } = await supabase
     .from('saved_scholarships')
     .insert({ profile_id: user.id, scholarship_id: parsed.data.scholarship_id })
     .select('*')
     .single()
-
   if (error) {
     // 23505 = unique_violation — already saved. Not really an error from the
     // client's point of view, so return success rather than a 500/409 fight.
@@ -93,43 +87,38 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
   return NextResponse.json({ saved: data }, { status: 201 })
 }
 
 export async function DELETE(request: Request) {
-  const supabase = await createClient()
+  const limited = await checkRateLimit(request, { route: 'save', limit: 20 })
+  if (limited) return limited
 
+  const supabase = await createClient()
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
-
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
-
   const { searchParams } = new URL(request.url)
   const parsed = saveSchema.safeParse({
     scholarship_id: searchParams.get('scholarship_id'),
   })
-
   if (!parsed.success) {
     return NextResponse.json(
       { error: 'Invalid or missing scholarship_id query param', issues: parsed.error.issues },
       { status: 400 }
     )
   }
-
   const { error } = await supabase
     .from('saved_scholarships')
     .delete()
     .eq('profile_id', user.id)
     .eq('scholarship_id', parsed.data.scholarship_id)
-
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
   return NextResponse.json({ message: 'Unsaved' })
 }
