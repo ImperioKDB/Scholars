@@ -1,0 +1,24 @@
+# Dependabot config (security hardening, phase 3).
+# Works with zero extra setup because the repo lives on GitHub: Dependabot
+# is a native GitHub feature, enabled by merging this file. It opens PRs
+# against main; merging them triggers the usual Vercel deploy.
+#
+# Policy: minor + patch updates are grouped into a single weekly PR to cut
+# noise; major versions are deliberately NOT grouped, so each arrives as
+# its own PR for manual review (majors can carry breaking changes, e.g.
+# Next 15 or zod 4).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: "deps"
