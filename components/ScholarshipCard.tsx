@@ -103,8 +103,15 @@ function SaveButton({
 //
 // Corner geometry: both icon buttons carry invisible 44px hit areas
 // (::after, -inset-[7px]) -- gap-3.5 (14px) keeps those expanded areas
-// from overlapping each other, and pr-24 on the title block keeps the
-// first lines clear of the corner.
+// from overlapping each other, and sm:pr-24 on the title block keeps the
+// first lines clear of the corner at sm:+ where the avatar sits beside
+// the text.
+//
+// MOBILE (audit + live screenshot review): below sm: the avatar stacks
+// ABOVE the text so the title and badges get the card's full width
+// instead of a squeezed column next to a 52px circle. The stacked text
+// starts ~88px from the card top, clear of the corner icons (which end
+// ~64px down), so the pr-24 clearance is only needed at sm:+.
 export function ScholarshipCard({
   scholarship,
   score,
@@ -132,7 +139,7 @@ export function ScholarshipCard({
   sharerId?: string;
 }) {
   return (
-    <div className="relative bg-white rounded-xl border border-hairline p-5 flex gap-4 shadow-card focus-within:ring-2 focus-within:ring-emerald focus-within:ring-offset-2 focus-within:ring-offset-parchment">
+    <div className="relative bg-white rounded-xl border border-hairline p-5 flex flex-col gap-4 sm:flex-row shadow-card focus-within:ring-2 focus-within:ring-emerald focus-within:ring-offset-2 focus-within:ring-offset-parchment">
       <Link href={`/scholarships/${scholarship.id}`} className="contents">
         {score !== undefined ? (
           <MatchSeal score={score} size={52} />
@@ -140,7 +147,7 @@ export function ScholarshipCard({
           <ProviderMonogram name={scholarship.provider_name} size={52} />
         )}
         <div className="min-w-0 flex-1">
-          <div className="pr-24">
+          <div className="sm:pr-24">
             <p className="font-medium text-ink leading-snug hover:text-navy transition-colors">{scholarship.title}</p>
             <p className="text-xs text-navy-light mt-0.5">{scholarship.provider_name}</p>
           </div>
