@@ -30,12 +30,12 @@
 // NOTE: with !inner, if a scholarship_id passed to POST references a
 // scholarship that is not (or no longer) RLS-visible, the immediate
 // .select(APPLICATION_COLUMNS).single() below can come back empty even
-// though the insert/lookup itself succeeded. Not fixed here -- flagged
-// as a known edge case, not a crash, just a less specific error surface.
-
+// though the insert/lookup itself succeeded. Not fixed here -- flagged as
+// a known edge case, not a crash, just a less specific error surface.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { checkRateLimit } from '@/lib/ratelimit'
 
 const createSchema = z.object({
   scholarship_id: z.string().uuid(),
@@ -43,62 +43,56 @@ const createSchema = z.object({
 
 const SCHOLARSHIP_COLUMNS =
   'id, title, provider_name, description, amount, deadline, application_url, how_to_apply, level, discipline, verified'
-
 const APPLICATION_COLUMNS = `id, status, notes, created_at, updated_at, draft_statement, draft_summary, draft_generated_at, draft_confirmed_at, scholarship:scholarships!inner ( ${SCHOLARSHIP_COLUMNS} )`
 
 export async function GET() {
   const supabase = await createClient()
-
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
-
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
-
   const { data, error } = await supabase
     .from('applications')
     .select(APPLICATION_COLUMNS)
     .eq('profile_id', user.id)
     .order('updated_at', { ascending: false })
-
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
   return NextResponse.json({ applications: data })
 }
 
 export async function POST(request: Request) {
-  const supabase = await createClient()
+  // SECURITY HARDENING (phase 1): Redis-backed sliding window, shared
+  // across serverless instances (see lib/ratelimit.ts). Placed before
+  // auth so flood traffic never reaches Supabase.
+  const limited = await checkRateLimit(request, { route: 'applications', limit: 20 })
+  if (limited) return limited
 
+  const supabase = await createClient()
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
-
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
-
   const raw = await request.json().catch(() => null)
   const parsed = createSchema.safeParse(raw)
-
   if (!parsed.success) {
     return NextResponse.json(
       { error: 'Invalid request body', issues: parsed.error.issues },
       { status: 400 }
     )
   }
-
   const { data, error } = await supabase
     .from('applications')
     .insert({ profile_id: user.id, scholarship_id: parsed.data.scholarship_id })
     .select(APPLICATION_COLUMNS)
     .single()
-
   if (error) {
     // 23505 = unique_violation — already tracking this scholarship. Return
     // the existing row instead of erroring, same pattern as /save.
@@ -117,6 +111,5 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
   return NextResponse.json({ application: data }, { status: 201 })
 }
