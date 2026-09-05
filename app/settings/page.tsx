@@ -3,16 +3,14 @@ import { getCurrentUserAndProfile } from "@/lib/supabase/currentUser";
 import { createClient } from "@/lib/supabase/server";
 import { INSTITUTION_TYPE_OPTIONS } from "@/lib/profile";
 import { levelForXp } from "@/lib/xp/level";
+import { AvatarUploader } from "@/components/AvatarUploader";
 
 // app/settings/page.tsx
 // GET /settings
 //
-// AUDIT FIX (batch 5): the audit flagged that students had nowhere to
-// see their own data outside the four-step onboarding flow. This is a
-// read-only overview of the profile + WAEC results with one clear path
-// back into onboarding to change anything. Deliberately NOT a second
-// edit form -- two editing surfaces for the same data is how profiles
-// drift out of sync.
+// Read-only overview of the profile + WAEC results with one clear path
+// back into onboarding to change anything, plus the profile photo upload
+// (the one self-serve edit surface, since a photo has no onboarding home).
 type ProfileRow = {
   full_name: string | null;
   nationality: string | null;
@@ -36,6 +34,7 @@ type ProfileRow = {
   has_recommendation_letter: boolean;
   has_personal_statement: boolean;
   has_lga_certificate: boolean;
+  avatar_url: string | null;
   profile_completeness: number;
   xp_total: number;
 };
@@ -44,9 +43,6 @@ type WaecRow = { subject: string; grade: string };
 
 function formatDate(value: string | null): string {
   if (!value) return "";
-  // profiles.date_of_birth is a Postgres date ("YYYY-MM-DD"); pin it to
-  // UTC midnight so the displayed day can't shift with the viewer's
-  // timezone.
   const iso = value.length === 10 ? `${value}T00:00:00Z` : value;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return value;
@@ -83,7 +79,6 @@ export default async function SettingsPage() {
   if (!user) {
     return null;
   }
-
   const supabase = createClient();
   const [{ data: profile }, { data: waec }] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
@@ -93,7 +88,6 @@ export default async function SettingsPage() {
       .eq("profile_id", user.id)
       .order("subject", { ascending: true }),
   ]);
-
   const p = profile as ProfileRow | null;
   const waecRows = (waec ?? []) as WaecRow[];
 
@@ -154,6 +148,13 @@ export default async function SettingsPage() {
           A fuller profile means more accurate match scores.
         </p>
       </div>
+
+      <Section title="Profile photo">
+        <AvatarUploader initialUrl={p.avatar_url} />
+        <p className="text-xs text-navy-light mt-3">
+          Shown next to your name instead of the initials avatar. JPG, PNG, or WebP, up to 2MB.
+        </p>
+      </Section>
 
       <Section title="Personal">
         <dl>
