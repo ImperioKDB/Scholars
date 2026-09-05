@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 
 async function getStats() {
   const supabase = createClient();
-
   const [{ count: totalScholarships }, { count: verifiedScholarships }, { count: totalProfiles }, { count: totalSaved }] =
     await Promise.all([
       supabase.from("scholarships").select("*", { count: "exact", head: true }),
@@ -11,13 +10,11 @@ async function getStats() {
       supabase.from("profiles").select("*", { count: "exact", head: true }),
       supabase.from("saved_scholarships").select("*", { count: "exact", head: true }),
     ]);
-
   const { data: recent } = await supabase
     .from("scholarships")
     .select("id, title, provider_name, deadline, verified, level")
     .order("created_at", { ascending: false })
     .limit(6);
-
   return {
     totalScholarships: totalScholarships ?? 0,
     verifiedScholarships: verifiedScholarships ?? 0,
@@ -29,7 +26,6 @@ async function getStats() {
 
 export default async function AdminOverviewPage() {
   const stats = await getStats();
-
   const cards = [
     { label: "Scholarships", value: stats.totalScholarships },
     { label: "Verified & live", value: stats.verifiedScholarships },
@@ -71,31 +67,37 @@ export default async function AdminOverviewPage() {
         {stats.recent.length === 0 ? (
           <p className="text-sm text-navy-light p-5">No scholarships yet.</p>
         ) : (
-          <table className="w-full text-sm">
-            <tbody>
-              {stats.recent.map((s) => (
-                <tr key={s.id} className="border-b border-hairline last:border-0">
-                  <td className="px-5 py-3">
-                    <Link href={`/admin/scholarships/${s.id}/edit`} className="font-medium text-ink hover:text-navy">
-                      {s.title}
-                    </Link>
-                    <p className="text-xs text-navy-light">{s.provider_name}</p>
-                  </td>
-                  <td className="px-5 py-3 text-navy-light">{s.deadline}</td>
-                  <td className="px-5 py-3">
-                    <span
-                      className={
-                        "text-xs font-medium px-2 py-1 rounded-full " +
-                        (s.verified ? "bg-emerald-light text-emerald" : "bg-amber-light text-amber")
-                      }
-                    >
-                      {s.verified ? "Verified" : "Pending review"}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          // AUDIT FIX (batch 8): same overflow treatment as the
+          // scholarships list -- the table used to bleed off the right
+          // edge on phones with no way to reach the last columns.
+          // min-w keeps the columns readable; the wrapper scrolls.
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <tbody>
+                {stats.recent.map((s) => (
+                  <tr key={s.id} className="border-b border-hairline last:border-0">
+                    <td className="px-5 py-3">
+                      <Link href={`/admin/scholarships/${s.id}/edit`} className="font-medium text-ink hover:text-navy">
+                        {s.title}
+                      </Link>
+                      <p className="text-xs text-navy-light">{s.provider_name}</p>
+                    </td>
+                    <td className="px-5 py-3 text-navy-light">{s.deadline}</td>
+                    <td className="px-5 py-3">
+                      <span
+                        className={
+                          "text-xs font-medium px-2 py-1 rounded-full " +
+                          (s.verified ? "bg-emerald-light text-emerald" : "bg-amber-light text-amber")
+                        }
+                      >
+                        {s.verified ? "Verified" : "Pending review"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
