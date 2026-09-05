@@ -39,6 +39,8 @@ function ChecklistIcon() {
   );
 }
 
+// AUDIT FIX (batch 8): em-dash sweep in the step copy per the design-
+// taste doc's hard ban. Punctuation restructured, meaning unchanged.
 const STEPS = [
   {
     name: "Build your profile",
@@ -47,7 +49,7 @@ const STEPS = [
   },
   {
     name: "See your matches",
-    detail: "A ranked list, scored against real eligibility rules — not a keyword search.",
+    detail: "A ranked list, scored against real eligibility rules, not a keyword search.",
     Icon: TargetIcon,
   },
   {
@@ -57,7 +59,7 @@ const STEPS = [
   },
   {
     name: "Track your applications",
-    detail: "See status at a glance — in progress, submitted, accepted, or rejected.",
+    detail: "See status at a glance: in progress, submitted, accepted, or rejected.",
     Icon: ChecklistIcon,
   },
 ];
@@ -75,7 +77,6 @@ export function HowItWorksRotator() {
   useEffect(() => {
     const track = trackRef.current;
     if (!track) return;
-
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -87,7 +88,6 @@ export function HowItWorksRotator() {
       },
       { root: track, threshold: 0.6 }
     );
-
     cardRefs.current.forEach((el) => el && observer.observe(el));
     return () => observer.disconnect();
   }, []);
@@ -117,20 +117,17 @@ export function HowItWorksRotator() {
             >
               0{i + 1}
             </span>
-
             <div className="relative flex items-center gap-2 mb-3">
               <span className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-light text-emerald shrink-0">
                 <step.Icon />
               </span>
               <p className="font-mono text-xs text-emerald">0{i + 1}</p>
             </div>
-
             <h3 className="relative font-display text-lg font-semibold text-navy mb-2">{step.name}</h3>
             <p className="relative text-sm text-navy-light leading-relaxed">{step.detail}</p>
           </div>
         ))}
       </div>
-
       <div className="flex md:hidden items-center gap-1.5 mt-6 px-1" role="tablist" aria-label="How it works steps">
         {STEPS.map((step, i) => (
           <button
