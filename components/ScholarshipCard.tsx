@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import Link from "next/link";
 import { MatchSeal } from "@/components/MatchSeal";
 import { ProviderMonogram } from "@/components/ProviderMonogram";
@@ -40,14 +41,16 @@ function DeadlineBadge({ deadline }: { deadline: string | null }) {
   const days = daysUntil(deadline);
   if (days === null) return null;
   return (
-    <span
-      className={`text-xs font-mono font-medium px-2 py-1 rounded-full ${DEADLINE_TONE_CLASSES[deadlineTone(days)]}`}
-    >
+    <span className={`text-xs font-mono font-medium px-2 py-1 rounded-full ${DEADLINE_TONE_CLASSES[deadlineTone(days)]}`}>
       {formatDeadlineLabel(days)}
     </span>
   );
 }
 
+// AUDIT item 1: one-shot scale "pop" on save/unsave so the highest-frequency
+// action gets physical acknowledgment. The class is applied for a single
+// animation run and cleared on animationend; reduced-motion disables it in
+// motion.css.
 function SaveButton({
   saved,
   pending,
@@ -57,10 +60,15 @@ function SaveButton({
   pending?: boolean;
   onToggle: () => void;
 }) {
+  const [pop, setPop] = useState(false);
   return (
     <button
       type="button"
-      onClick={onToggle}
+      onClick={() => {
+        setPop(true);
+        onToggle();
+      }}
+      onAnimationEnd={() => setPop(false)}
       disabled={pending}
       aria-label={saved ? "Remove from saved scholarships" : "Save scholarship"}
       aria-pressed={saved}
@@ -68,6 +76,7 @@ function SaveButton({
         "relative shrink-0 rounded-full p-1.5 bg-white/90 backdrop-blur-sm transition-colors disabled:opacity-50",
         "after:absolute after:-inset-[7px] after:rounded-full after:content-['']",
         saved ? "text-emerald" : "text-navy-light hover:text-navy",
+        pop ? "save-pop" : "",
       ].join(" ")}
     >
       <svg width="18" height="18" viewBox="0 0 24 24" fill={saved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8">
@@ -98,12 +107,8 @@ export function ScholarshipCard({
   pending?: boolean;
   sharerId?: string;
 }) {
-  // Verified but not yet accepting: opens_at is still in the future. Show
-  // an honest "Opens in X days" chip and suppress the deadline chip, which
-  // would otherwise read as "you have time to apply" when you can't yet.
   const opensIn = scholarship.opens_at ? daysUntil(scholarship.opens_at) : null;
   const opensSoon = scholarship.isOpenNow === false && opensIn !== null && opensIn > 0;
-
   return (
     <div className="relative bg-white rounded-xl border border-hairline p-5 flex flex-col gap-4 sm:flex-row shadow-card focus-within:ring-2 focus-within:ring-emerald focus-within:ring-offset-2 focus-within:ring-offset-parchment">
       <Link href={`/scholarships/${scholarship.id}`} className="contents">
@@ -126,14 +131,10 @@ export function ScholarshipCard({
               <DeadlineBadge deadline={scholarship.deadline} />
             )}
             {scholarship.isOpenNow && (
-              <span className="text-xs font-medium px-2 py-1 rounded-full bg-emerald-light text-emerald">
-                Open now
-              </span>
+              <span className="text-xs font-medium px-2 py-1 rounded-full bg-emerald-light text-emerald">Open now</span>
             )}
             {scholarship.isTrending && (
-              <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-light text-amber">
-                Trending
-              </span>
+              <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-light text-amber">Trending</span>
             )}
             {scholarship.amount && <span className="text-xs font-mono text-emerald">{scholarship.amount}</span>}
             <span className="text-xs text-navy-light capitalize">
@@ -142,25 +143,16 @@ export function ScholarshipCard({
             {scholarship.discipline && <span className="text-xs text-navy-light">&middot; {scholarship.discipline}</span>}
           </div>
           {totalCount !== undefined && totalCount > 0 && (
-            <p className="text-xs text-navy-light mt-2 font-mono">
-              {metCount}/{totalCount} requirements met
-            </p>
+            <p className="text-xs text-navy-light mt-2 font-mono">{metCount}/{totalCount} requirements met</p>
           )}
           {missingLabels && missingLabels.length > 0 && (
-            <p className="text-xs text-amber mt-1.5">
-              Missing: {missingLabels.join(", ")}
-            </p>
+            <p className="text-xs text-amber mt-1.5">Missing: {missingLabels.join(", ")}</p>
           )}
         </div>
       </Link>
       <div className="absolute top-5 right-5 flex items-center gap-3.5">
         {sharerId && (
-          <ShareButton
-            variant="icon"
-            scholarshipId={scholarship.id}
-            title={scholarship.title}
-            sharerId={sharerId}
-          />
+          <ShareButton variant="icon" scholarshipId={scholarship.id} title={scholarship.title} sharerId={sharerId} />
         )}
         <SaveButton saved={saved} pending={pending} onToggle={onToggleSave} />
       </div>
