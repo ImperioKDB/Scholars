@@ -28,8 +28,8 @@
 }
 
 /* One-shot celebratory confetti burst (components/Confetti.tsx) -- not a
-   general-purpose animation utility, used on profile completion and, with
-   a tier-colored override, on achievement unlocks. */
+general-purpose animation utility, used on profile completion and, with
+a tier-matched `colors` override, for achievement unlocks. */
 @keyframes confetti-fall {
   0% {
     transform: translateY(-10px) rotate(0deg);
@@ -40,7 +40,6 @@
     opacity: 0;
   }
 }
-
 .confetti-piece {
   animation-name: confetti-fall;
   animation-timing-function: ease-in;
@@ -48,25 +47,23 @@
 }
 
 /* Physical press feedback for every button in the app. Deliberately left
-   OUTSIDE any @layer block -- unlayered CSS always wins over ALL layered
-   rules (base/components/utilities), regardless of specificity. Buttons
-   using Tailwind's `transition-colors` utility set their own
-   `transition-property` (color/background-color/border-color only), which
-   would otherwise silently strip `transform` out of the transition and
-   turn the press into an instant snap instead of a soft compression.
-   Staying unlayered guarantees this rule always wins that fight. The
-   :active state only touches transform, so it stays on the compositor --
-   no layout or paint cost. */
+OUTSIDE any @layer block -- unlayered CSS always wins over ALL layered
+rules (base/components/utilities), regardless of specificity. Buttons
+using Tailwind's `transition-colors` utility set their own
+`transition-property` (color/background-color/border-color only), which
+would otherwise silently strip `transform` out of the transition and
+turn the press into an instant snap instead of a soft compression.
+Staying unlayered guarantees this rule always wins that fight. The
+:active state only touches transform, so it stays on the compositor --
+no layout or paint cost. */
 button:not(:disabled) {
   transition-property: transform, opacity, background-color, border-color, color;
   transition-duration: 150ms;
   transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
 }
-
 button:not(:disabled):active {
   transform: scale(0.97) translateY(1px);
 }
-
 @media (prefers-reduced-motion: reduce) {
   button:not(:disabled) {
     transition-property: background-color, border-color, color;
@@ -77,9 +74,9 @@ button:not(:disabled):active {
 }
 
 /* Ade attention shake -- fires once when a genuinely new mascot prompt
-   arrives (see components/ade/AdeProvider.tsx), to pull the eye toward the
-   floating avatar instead of relying on the small red dot alone. Rotation
-   only, so it's a compositor-only transform animation -- no layout cost. */
+arrives (see components/ade/AdeProvider.tsx), to pull the eye toward the
+floating avatar instead of relying on the small red dot alone. Rotation
+only, so it's a compositor-only transform animation -- no layout cost. */
 @keyframes ade-attention-shake {
   0%, 100% { transform: rotate(0deg); }
   15% { transform: rotate(-8deg); }
@@ -88,11 +85,9 @@ button:not(:disabled):active {
   60% { transform: rotate(4deg); }
   75% { transform: rotate(-2deg); }
 }
-
 .ade-attention {
   animation: ade-attention-shake 0.6s ease-in-out 3;
 }
-
 @media (prefers-reduced-motion: reduce) {
   .ade-attention {
     animation: none;
@@ -100,31 +95,29 @@ button:not(:disabled):active {
 }
 
 /* Achievement unlock -- spring "pop" entrance for the achievement panel
-   content in AdeProvider.tsx, fired once per achievement the first time
-   the panel is opened after it's earned (see AdeProvider's
-   confettiShownRef). Overshoot easing simulates a physical snap into
-   place instead of a linear fade. transform + opacity only -- compositor
-   only, no layout cost. */
+content in AdeProvider.tsx, fired once per achievement the first time
+the panel is opened after it's earned (see AdeProvider's
+confettiShownRef). Overshoot easing simulates a physical snap into
+place instead of a linear fade. transform + opacity only -- compositor
+only, no layout cost. */
 @keyframes badge-pop-in {
   0% { transform: scale(0.4) rotate(-6deg); opacity: 0; }
   60% { transform: scale(1.08) rotate(2deg); opacity: 1; }
   100% { transform: scale(1) rotate(0deg); opacity: 1; }
 }
-
 .badge-pop-in {
   animation: badge-pop-in 480ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* Subtle looping shimmer on a freshly-unlocked achievement card (see
-   AchievementsClient.tsx's NEW_WINDOW_MS) -- a light diagonal sweep, not a
-   full pulse, so it reads as "new" without being distracting in a long
-   scroll. background-position only, no layout cost. Runs 3 times then
-   stops, so it doesn't nag indefinitely on a page someone leaves open. */
+AchievementsClient.tsx's NEW_WINDOW_MS) -- a light diagonal sweep, not a
+full pulse, so it reads as "new" without being distracting in a long
+scroll. background-position only, no layout cost. Runs 3 times then
+stops, so it doesn't nag indefinitely on a page someone leaves open. */
 @keyframes shimmer-sweep {
   0% { background-position: -150% 0; }
   100% { background-position: 250% 0; }
 }
-
 .achievement-new {
   background-image: linear-gradient(
     100deg,
@@ -137,21 +130,66 @@ button:not(:disabled):active {
 }
 
 /* Staggered card entrance for the achievements grid (AchievementsClient
-   applies animation-delay per card, capped at 10 * 40ms). transform +
-   opacity only. */
+applies animation-delay per card, capped at 10 * 40ms). transform +
+opacity only. */
 @keyframes card-in {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
-
 .animate-card-in {
   animation: card-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* MOTION/FEEDBACK (item 3): skeleton shimmer sweep. Replaces animate-pulse
+on Skeleton.tsx. background-position only (no layout cost), infinite while
+the placeholder is mounted, and fully disabled under reduced motion (the
+old pulse was not gated, an a11y gap). Base color stays navy-50 so the
+reduced-motion fallback is a plain static block. */
+@keyframes skeleton-shimmer {
+  0% { background-position: -150% 0; }
+  100% { background-position: 250% 0; }
+}
+.skeleton-shimmer {
+  background-image: linear-gradient(
+    100deg,
+    #EEF2F8 40%,
+    rgba(255, 255, 255, 0.9) 50%,
+    #EEF2F8 60%
+  );
+  background-size: 250% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+/* MOTION/FEEDBACK (item 1): one-shot save-bookmark pop. Keyframes carry the
+overshoot (scale past 1 then settle) so the easing stays the repo's house
+curve. transform only. Cleared by onAnimationEnd in SaveButton so rapid
+re-taps re-trigger it. */
+@keyframes save-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.25); }
+  70% { transform: scale(0.94); }
+  100% { transform: scale(1); }
+}
+.save-pop {
+  animation: save-pop 320ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .badge-pop-in,
   .achievement-new,
   .animate-card-in {
+    animation: none;
+  }
+  .skeleton-shimmer {
+    animation: none;
+    background-image: none;
+  }
+  .save-pop {
+    animation: none;
+  }
+  /* Safety gate: any remaining animate-pulse (e.g. third-party) also
+  stops under reduced motion. */
+  .animate-pulse {
     animation: none;
   }
 }
