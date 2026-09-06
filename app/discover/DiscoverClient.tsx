@@ -1,20 +1,7 @@
 "use client";
-
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ScholarshipCard, type CardScholarship } from "@/components/ScholarshipCard";
-
-// app/discover/DiscoverClient.tsx
-//
-// Browse/search client for /discover. Fetches from GET /api/scholarships
-// (the dumb catalog endpoint -- no eligibility scoring; that stays the
-// dashboard's job). Keyword search hits title + provider name via the
-// route's `q` param (added in batch 4); level and discipline map to the
-// route's existing filters.
-//
-// Cards render in the unscored variant (no `score` prop, so they show a
-// provider monogram instead of a MatchSeal), because a catalog listing
-// has no per-item profile evaluation behind it -- printing a number here
-// would mean fabricating one.
+import { isCurrentlyOpen } from "@/lib/discovery";
 
 const LEVEL_OPTIONS = [
   { value: "", label: "All levels" },
@@ -25,13 +12,7 @@ const LEVEL_OPTIONS = [
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 350;
 
-export function DiscoverClient({
-  userId,
-  initialSavedIds,
-}: {
-  userId: string;
-  initialSavedIds: string[];
-}) {
+export function DiscoverClient({ userId, initialSavedIds }: { userId: string; initialSavedIds: string[] }) {
   const [keyword, setKeyword] = useState("");
   const [level, setLevel] = useState("");
   const [discipline, setDiscipline] = useState("");
@@ -50,7 +31,6 @@ export function DiscoverClient({
     const requestId = ++requestIdRef.current;
     setLoading(true);
     setLoadError(null);
-
     const params = new URLSearchParams();
     if (keyword.trim()) params.set("q", keyword.trim());
     if (level) params.set("level", level);
@@ -59,10 +39,7 @@ export function DiscoverClient({
     params.set("offset", String(offset));
 
     const res = await fetch("/api/scholarships?" + params.toString());
-    // Stale-response guard: a slow earlier request must never overwrite
-    // the results of a newer one.
     if (requestId !== requestIdRef.current) return;
-
     if (!res.ok) {
       setLoadError("Couldn't load scholarships. Try again.");
       setLoading(false);
@@ -76,13 +53,19 @@ export function DiscoverClient({
     setLoading(false);
   }
 
-  // Debounce typing instead of firing a request per keystroke. Also
-  // drives the initial load on mount.
   useEffect(() => {
     const t = setTimeout(() => load(0, true), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyword, level, discipline]);
+
+  const openNowItems = useMemo(
+    () => items.filter((s) => isCurrentlyOpen(s)).map((s) => ({ ...s, isOpenNow: true })),
+    [items]
+  );
+  const comingSoonItems = useMemo(
+    () => items.filter((s) => !isCurrentlyOpen(s)).map((s) => ({ ...s, isOpenNow: false })),
+    [items]
+  );
 
   async function toggleSave(scholarshipId: string) {
     const wasSaved = savedIds.has(scholarshipId);
@@ -93,7 +76,6 @@ export function DiscoverClient({
       return next;
     });
     setPendingIds((prev) => new Set(prev).add(scholarshipId));
-
     const res = wasSaved
       ? await fetch(`/api/scholarships/save?scholarship_id=${scholarshipId}`, { method: "DELETE" })
       : await fetch("/api/scholarships/save", {
@@ -101,7 +83,6 @@ export function DiscoverClient({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ scholarship_id: scholarshipId }),
         });
-
     if (!res.ok) {
       setSavedIds((prev) => {
         const next = new Set(prev);
@@ -124,10 +105,8 @@ export function DiscoverClient({
       <div className="mb-8">
         <h1 className="font-display text-2xl font-semibold text-navy">Browse scholarships</h1>
         <p className="text-sm text-navy-light mt-1 mb-6">
-          Every verified listing on Scholars. Your personalized matches live on the dashboard; this is the
-          full catalog.
+          Every verified listing on Scholars. Your personalized matches live on the dashboard; this is the full catalog.
         </p>
-
         <div className="bg-white rounded-xl border border-hairline p-4">
           <label className="block mb-3">
             <span className="sr-only">Search by scholarship name or provider</span>
@@ -147,9 +126,7 @@ export function DiscoverClient({
               aria-label="Filter by level"
             >
               {LEVEL_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
+                <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
             <input
@@ -168,24 +145,31 @@ export function DiscoverClient({
 
       {!loading && items.length === 0 && !loadError ? (
         <div className="bg-white rounded-xl border border-hairline p-8 text-center">
-          <p className="text-sm text-navy-light">
-            No scholarships match that search. Try fewer filters or a different keyword.
-          </p>
+          <p className="text-sm text-navy-light">No scholarships match that search. Try fewer filters or a different keyword.</p>
         </div>
       ) : (
         <>
-          <div className="grid md:grid-cols-2 gap-4">
-            {items.map((s) => (
-              <ScholarshipCard
-                key={s.id}
-                scholarship={s}
-                saved={savedIds.has(s.id)}
-                pending={pendingIds.has(s.id)}
-                onToggleSave={() => toggleSave(s.id)}
-                sharerId={userId}
-              />
-            ))}
-          </div>
+          {openNowItems.length > 0 && (
+            <div className="grid md:grid-cols-2 gap-4">
+              {openNowItems.map((s) => (
+                <ScholarshipCard key={s.id} scholarship={s} saved={savedIds.has(s.id)} pending={pendingIds.has(s.id)} onToggleSave={() => toggleSave(s.id)} sharerId={userId} />
+              ))}
+            </div>
+          )}
+
+          {comingSoonItems.length > 0 && (
+            <div className="mt-10">
+              <h2 className="font-display text-lg font-semibold text-navy mb-1">Coming soon</h2>
+              <p className="text-sm text-navy-light mb-4">
+                Verified scholarships that aren&apos;t accepting applications yet. Save one to keep it on your radar.
+              </p>
+              <div className="grid md:grid-cols-2 gap-4">
+                {comingSoonItems.map((s) => (
+                  <ScholarshipCard key={s.id} scholarship={s} saved={savedIds.has(s.id)} pending={pendingIds.has(s.id)} onToggleSave={() => toggleSave(s.id)} sharerId={userId} />
+                ))}
+              </div>
+            </div>
+          )}
 
           {loading && <p className="text-sm text-navy-light mt-6">Loading&hellip;</p>}
 
@@ -202,13 +186,6 @@ export function DiscoverClient({
           )}
 
           {!loading && !hasMore && items.length > 0 && (
-            // COPY FIX (live feedback): the old end-of-list line read like
-            // a debug readout. The catalog case now states the promise the
-            // product actually keeps -- phase 3 of the daily cron emails
-            // students when a new scholarship goes live (see
-            // app/api/cron/deadline-check/route.ts, notification_type
-            // 'new_scholarship'). A filtered view isn't "all there is," so
-            // it points at the filters instead.
             <p className="text-sm text-navy-light text-center mt-8 leading-relaxed">
               {filtersActive
                 ? "That is every match for these filters. Try clearing one to see more."
