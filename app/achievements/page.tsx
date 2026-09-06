@@ -1,7 +1,7 @@
 import { getCurrentUserAndProfile } from "@/lib/supabase/currentUser";
 import { createClient } from "@/lib/supabase/server";
 import { levelForXp } from "@/lib/xp/level";
-import { AchievementsClient, type AchievementProgress } from "./AchievementsClient";
+import { AchievementsClient } from "./AchievementsClient";
 
 // app/achievements/page.tsx
 // GET /achievements
@@ -9,8 +9,7 @@ import { AchievementsClient, type AchievementProgress } from "./AchievementsClie
 // Server component: fetches achievements + unlock state, hands everything
 // to AchievementsClient for filtering/animation. Every achievement is
 // still fetched and shown -- locked ones keep their full description
-// visible, not a "???" mystery box (see AchievementsClient for the
-// reasoning this preserves from the original version of this file).
+// visible, not a "???" mystery box.
 type Achievement = {
   id: string;
   label: string;
