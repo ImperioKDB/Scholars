@@ -1,10 +1,15 @@
 // components/Skeleton.tsx
-// Base pulsing placeholder + a couple of pre-composed shapes for the card
-// grids used across Dashboard/Applications. Sized to roughly match their
-// loaded counterparts so nothing jumps around once real content arrives.
-
+// Base placeholder + a couple of pre-composed shapes for the card grids
+// used across Dashboard/Applications. Sized to roughly match their loaded
+// counterparts so nothing jumps around once real content arrives.
+//
+// MOTION/FEEDBACK (item 3): animate-pulse replaced with a shimmer sweep
+// (.skeleton-shimmer in app/globals.css), which reads more premium for
+// near-zero cost, and is gated off under prefers-reduced-motion (the old
+// animate-pulse was not, an a11y gap). A safety gate for any remaining
+// animate-pulse also lives in globals.css.
 export function Skeleton({ className = "" }: { className?: string }) {
-  return <div className={`animate-pulse rounded-md bg-navy-50 ${className}`} />;
+  return <div className={`skeleton-shimmer rounded-md bg-navy-50 ${className}`} />;
 }
 
 export function SkeletonStatTile() {
@@ -34,11 +39,7 @@ export function SkeletonCard() {
 
 // Matches the shape of components/StatusDonut.tsx: a ~96px ring on the
 // left, a short legend list (dot + label + count) on the right. Used on
-// the Applications page loading states -- previously both loading.tsx and
-// the inline loading branch showed a generic circular-avatar-plus-lines
-// skeleton (borrowed from the dashboard's profile-completion card), which
-// doesn't match what actually renders there and caused a visible shape
-// jump once the real StatusDonut mounted.
+// the Applications page loading states.
 export function SkeletonDonut() {
   return (
     <div className="flex items-center gap-6 flex-wrap">
