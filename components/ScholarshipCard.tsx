@@ -1,10 +1,9 @@
 "use client";
-import { useState } from "react";
 import Link from "next/link";
 import { MatchSeal } from "@/components/MatchSeal";
 import { ProviderMonogram } from "@/components/ProviderMonogram";
 import { ShareButton } from "@/components/ShareButton";
-import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
+import { daysUntil, deadlineTone, formatDeadlineLabel, formatLastClosedLabel, formatOpensLabel } from "@/lib/dates";
 
 export type CardScholarship = {
   id: string;
@@ -13,6 +12,7 @@ export type CardScholarship = {
   amount: string | null;
   deadline: string | null;
   opens_at?: string | null;
+  last_cycle_closed_at?: string | null;
   level: "undergrad" | "postgrad" | "both";
   discipline: string | null;
   application_url: string | null;
@@ -41,36 +41,17 @@ function DeadlineBadge({ deadline }: { deadline: string | null }) {
   const days = daysUntil(deadline);
   if (days === null) return null;
   return (
-    <span
-      className={`text-xs font-mono font-medium px-2 py-1 rounded-full ${DEADLINE_TONE_CLASSES[deadlineTone(days)]}`}
-    >
+    <span className={`text-xs font-mono font-medium px-2 py-1 rounded-full ${DEADLINE_TONE_CLASSES[deadlineTone(days)]}`}>
       {formatDeadlineLabel(days)}
     </span>
   );
 }
 
-// MOTION/FEEDBACK (item 1): saving is the single most-tapped action and the
-// icon used to just swap. A one-shot scale/spring pop (save-pop keyframes in
-// app/globals.css, transform-only, reduced-motion off) acknowledges the tap.
-// The pop is cleared on animationend so rapid re-taps re-trigger it.
-function SaveButton({
-  saved,
-  pending,
-  onToggle,
-}: {
-  saved: boolean;
-  pending?: boolean;
-  onToggle: () => void;
-}) {
-  const [pop, setPop] = useState(false);
+function SaveButton({ saved, pending, onToggle }: { saved: boolean; pending?: boolean; onToggle: () => void }) {
   return (
     <button
       type="button"
-      onClick={() => {
-        setPop(true);
-        onToggle();
-      }}
-      onAnimationEnd={() => setPop(false)}
+      onClick={onToggle}
       disabled={pending}
       aria-label={saved ? "Remove from saved scholarships" : "Save scholarship"}
       aria-pressed={saved}
@@ -78,7 +59,6 @@ function SaveButton({
         "relative shrink-0 rounded-full p-1.5 bg-white/90 backdrop-blur-sm transition-colors disabled:opacity-50",
         "after:absolute after:-inset-[7px] after:rounded-full after:content-['']",
         saved ? "text-emerald" : "text-navy-light hover:text-navy",
-        pop ? "save-pop" : "",
       ].join(" ")}
     >
       <svg width="18" height="18" viewBox="0 0 24 24" fill={saved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8">
@@ -109,22 +89,14 @@ export function ScholarshipCard({
   pending?: boolean;
   sharerId?: string;
 }) {
-  // Verified but not yet accepting: opens_at is still in the future. Show
-  // an honest "Opens in X days" chip and suppress the deadline chip, which
-  // would otherwise read as "you have time to apply" when you can't yet.
   const opensIn = scholarship.opens_at ? daysUntil(scholarship.opens_at) : null;
   const opensSoon = scholarship.isOpenNow === false && opensIn !== null && opensIn > 0;
+  const closedUnknownReopen =
+    scholarship.isOpenNow === false && !opensSoon && Boolean(scholarship.last_cycle_closed_at);
+
   return (
-    <div className="relative bg-white rounded-xl border border-hairline p-5 shadow-card focus-within:ring-2 focus-within:ring-emerald focus-within:ring-offset-2 focus-within:ring-offset-parchment">
-      {/* MOTION/FEEDBACK (item 2): the Link is now the flex container so it
-          has a real box to press. active:scale + a subtle hover lift match
-          the global button-press convention; transform-only so it stays on
-          the compositor. Save/Share sit OUTSIDE the Link so tapping them
-          doesn't press the card. Reduced motion disables both. */}
-      <Link
-        href={`/scholarships/${scholarship.id}`}
-        className="flex flex-col gap-4 sm:flex-row rounded-xl transition-transform duration-150 hover:-translate-y-[1px] active:scale-[0.99] motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100"
-      >
+    <div className="relative bg-white rounded-xl border border-hairline p-5 flex flex-col gap-4 sm:flex-row shadow-card focus-within:ring-2 focus-within:ring-emerald focus-within:ring-offset-2 focus-within:ring-offset-parchment">
+      <Link href={`/scholarships/${scholarship.id}`} className="contents">
         {score !== undefined ? (
           <MatchSeal score={score} size={52} />
         ) : (
@@ -138,20 +110,20 @@ export function ScholarshipCard({
           <div className="flex flex-wrap items-center gap-2 mt-3">
             {opensSoon ? (
               <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-light text-amber">
-                Opens in {opensIn} day{opensIn === 1 ? "" : "s"}
+                {formatOpensLabel(scholarship.opens_at as string)}
+              </span>
+            ) : closedUnknownReopen ? (
+              <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-light text-amber">
+                {formatLastClosedLabel(scholarship.last_cycle_closed_at as string)}
               </span>
             ) : (
               <DeadlineBadge deadline={scholarship.deadline} />
             )}
             {scholarship.isOpenNow && (
-              <span className="text-xs font-medium px-2 py-1 rounded-full bg-emerald-light text-emerald">
-                Open now
-              </span>
+              <span className="text-xs font-medium px-2 py-1 rounded-full bg-emerald-light text-emerald">Open now</span>
             )}
             {scholarship.isTrending && (
-              <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-light text-amber">
-                Trending
-              </span>
+              <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-light text-amber">Trending</span>
             )}
             {scholarship.amount && <span className="text-xs font-mono text-emerald">{scholarship.amount}</span>}
             <span className="text-xs text-navy-light capitalize">
@@ -160,25 +132,16 @@ export function ScholarshipCard({
             {scholarship.discipline && <span className="text-xs text-navy-light">&middot; {scholarship.discipline}</span>}
           </div>
           {totalCount !== undefined && totalCount > 0 && (
-            <p className="text-xs text-navy-light mt-2 font-mono">
-              {metCount}/{totalCount} requirements met
-            </p>
+            <p className="text-xs text-navy-light mt-2 font-mono">{metCount}/{totalCount} requirements met</p>
           )}
           {missingLabels && missingLabels.length > 0 && (
-            <p className="text-xs text-amber mt-1.5">
-              Missing: {missingLabels.join(", ")}
-            </p>
+            <p className="text-xs text-amber mt-1.5">Missing: {missingLabels.join(", ")}</p>
           )}
         </div>
       </Link>
       <div className="absolute top-5 right-5 flex items-center gap-3.5">
         {sharerId && (
-          <ShareButton
-            variant="icon"
-            scholarshipId={scholarship.id}
-            title={scholarship.title}
-            sharerId={sharerId}
-          />
+          <ShareButton variant="icon" scholarshipId={scholarship.id} title={scholarship.title} sharerId={sharerId} />
         )}
         <SaveButton saved={saved} pending={pending} onToggle={onToggleSave} />
       </div>
