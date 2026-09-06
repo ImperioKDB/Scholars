@@ -1,159 +1,33 @@
 "use client";
-
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Confetti } from "@/components/Confetti";
 
-// components/ade/AdeProvider.tsx
-//
-// Ade -- Scholars' persistent guide character (an owl; "Ade" reads as a
-// real Nigerian name prefix meaning "crown," not a generic mascot name).
-// One instance wraps the ROOT layout's children (app/layout.tsx) and
-// self-gates to the authenticated app routes via usePathname, so any page
-// can trigger a prompt via useAde(), while a single floating avatar owns
-// the UI so two prompts never stack on screen at once.
-//
-// AUDIT FIX (batch 2): this provider used to be mounted separately inside
-// each section layout (dashboard/applications/achievements/scholarships),
-// so navigating between sections remounted it and silently reset Ade's
-// dismissed prompts, seen-prompt tracking, and panel state. Mounted once
-// at the root, that state now survives route changes. It still resets on
-// a full page reload -- persisting seen ids to localStorage is the
-// follow-up if that ever becomes annoying.
-//
-// AUDIT FIX (batch 5): the panel is now a real dialog (role="dialog",
-// aria-modal) with proper keyboard behavior -- Escape closes it, Tab is
-// trapped inside while it's open, focus moves to the close button on
-// open and back to the avatar on close. Previously it was a plain <div>
-// that keyboard and screen-reader users couldn't parse or escape from.
-//
-// ALWAYS VISIBLE as a small round avatar button, bottom-right. Tapping it
-// toggles an expanded panel open/closed at any time.
-//
-// THREE PROMPT KINDS now share the same floating panel:
-//   - apply_guard / ready_to_open -- the "track before you go" flow,
-//     client-driven via confirmApply(), auto-opens the panel (see
-//     AUTO-OPEN RULES below).
-//   - checkin -- passive, from polling /api/mascot/next-prompt. Does NOT
-//     auto-open.
-//   - achievement -- also passive, same polling endpoint, same
-//     non-auto-opening treatment. Unlock moments speak in the same voice
-//     as everything else Ade already says.
-//
-// ACHIEVEMENT CELEBRATION: the first time the panel is opened while an
-// achievement prompt is showing, a tier-colored confetti burst fires and
-// the panel content gets a spring "pop" entrance (see .badge-pop-in in
-// app/globals.css). confettiShownRef dedupes by achievementId so
-// re-opening the panel later (or the same achievement resurfacing across
-// an AdeProvider remount) doesn't re-fire the burst. Deliberately NOT
-// fired ambiently while the panel is closed -- that would be an
-// interruption, which contradicts the deliberate non-auto-opening
-// treatment passive prompts already get (see AUTO-OPEN RULES below).
-//
-// ATTENTION SHAKE: when a genuinely new passive prompt (checkin OR
-// achievement) shows up, the avatar plays a brief rotation shake (see
-// .ade-attention in app/globals.css) and, where supported,
-// navigator.vibrate(). lastSeenPromptIdRef is keyed by a prefixed id
-// ("chk:<applicationId>" or "ach:<achievementId>") so the two kinds don't
-// collide in the same ref. Resets on remount -- since the root-layout
-// lift (see above) that now only happens on a full page reload, not on
-// section-to-section navigation.
-//
-// AUTO-OPEN RULES (deliberately asymmetric):
-//   - Passive prompts (checkin AND achievement) do NOT auto-open the
-//     panel -- they only light up the badge dot and the attention shake.
-//     A tap opens it.
-//   - The apply-guard prompt DOES auto-open -- it's a direct response to
-//     something the user just did, not an ambient interruption.
-//
-// TRACK-THEN-OPEN FLOW: unchanged from the original -- track first (shown
-// as a loading state in the panel), then render a fresh "Continue to
-// application" button so the real tab opens on a brand-new, fully
-// synchronous click with no popup blocker able to intervene.
-
 type CheckinReason = "clicked" | "deadline_passed";
-
-type CheckinPrompt = {
-  kind: "checkin";
-  applicationId: string;
-  scholarshipTitle: string;
-  reason: CheckinReason;
-};
-
-type AchievementPrompt = {
-  kind: "achievement";
-  achievementId: string;
-  label: string;
-  description: string;
-  xpReward: number;
-  tier: string;
-};
-
+type CheckinPrompt = { kind: "checkin"; applicationId: string; scholarshipTitle: string; reason: CheckinReason };
+type AchievementPrompt = { kind: "achievement"; achievementId: string; label: string; description: string; xpReward: number; tier: string };
 type PassivePrompt = CheckinPrompt | AchievementPrompt;
-
-type ApplyGuardPrompt = {
-  kind: "apply_guard";
-  scholarshipTitle: string;
-  applicationUrl: string;
-  onTrack: () => Promise<{ id: string } | null>;
-};
-
-type ReadyToOpenPrompt = {
-  kind: "ready_to_open";
-  scholarshipTitle: string;
-  applicationUrl: string;
-  applicationId: string;
-};
-
+type ApplyGuardPrompt = { kind: "apply_guard"; scholarshipTitle: string; applicationUrl: string; onTrack: () => Promise<{ id: string } | null> };
+type ReadyToOpenPrompt = { kind: "ready_to_open"; scholarshipTitle: string; applicationUrl: string; applicationId: string };
 type ActivePrompt = ApplyGuardPrompt | ReadyToOpenPrompt;
 type AdePromptState = ActivePrompt | PassivePrompt | null;
-
-type ConfirmApplyArgs = {
-  scholarshipTitle: string;
-  applicationUrl: string;
-  alreadyTracked: boolean;
-  applicationId?: string;
-  onTrack: () => Promise<{ id: string } | null>;
-};
-
-type AdeContextValue = {
-  confirmApply: (args: ConfirmApplyArgs) => void;
-};
+type ConfirmApplyArgs = { scholarshipTitle: string; applicationUrl: string; alreadyTracked: boolean; applicationId?: string; onTrack: () => Promise<{ id: string } | null> };
+type AdeContextValue = { confirmApply: (args: ConfirmApplyArgs) => void };
 
 const AdeContext = createContext<AdeContextValue | null>(null);
-
 export function useAde(): AdeContextValue {
   const ctx = useContext(AdeContext);
-  if (!ctx) {
-    return {
-      confirmApply: (args) => {
-        window.open(args.applicationUrl, "_blank", "noreferrer");
-      },
-    };
-  }
+  if (!ctx) return { confirmApply: (args) => { window.open(args.applicationUrl, "_blank", "noreferrer"); } };
   return ctx;
 }
 
-// Routes where Ade is visible. The provider lives in the root layout now
-// (app/layout.tsx) so its state survives navigation between these
-// sections; this list keeps it off public pages (landing, auth, /s/[id]
-// share links) and the admin shell, exactly matching where the old
-// per-section layout wrappers used to mount it.
 const ADE_ROUTES = ["/dashboard", "/applications", "/achievements", "/scholarships"];
-
 const STATUS_OPTIONS: { value: "submitted" | "in_progress" | "rejected"; label: string }[] = [
   { value: "submitted", label: "I applied" },
   { value: "in_progress", label: "Still working on it" },
   { value: "rejected", label: "Changed my mind" },
 ];
-
-// Tier -> confetti palette. Deliberately reuses the app's existing brand
-// colors (navy/emerald/amber/parchment) rather than inventing literal
-// bronze/silver/gold hex values -- gold leans on emerald, the color this
-// app already treats as its top tier elsewhere (MatchSeal, achievement
-// chips). Falls back to Confetti's own default palette for an unknown
-// tier string.
 const TIER_CONFETTI_COLORS: Record<string, string[]> = {
   bronze: ["#C98A2E", "#0B1E3D", "#F7F5EF"],
   silver: ["#8B93A3", "#0B1E3D", "#F7F5EF"],
@@ -187,23 +61,14 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
   const lastSeenPromptIdRef = useRef<string | null>(null);
   const [attention, setAttention] = useState(false);
   const attentionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Achievement-unlock celebration state -- see the ACHIEVEMENT
-  // CELEBRATION note above the type definitions for why this fires on
-  // open() rather than the moment the poll first sees the prompt.
   const confettiShownRef = useRef<Set<string>>(new Set());
   const [confettiColors, setConfettiColors] = useState<string[] | undefined>(undefined);
   const confettiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // AUDIT FIX (batch 5): dialog focus management refs.
   const panelRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const avatarRef = useRef<HTMLButtonElement | null>(null);
 
-  // Where Ade is actually active. The provider mounts on every page
-  // (root layout), but renders and polls only on the authenticated app
-  // sections.
-  const isActive = Boolean(pathname) && ADE_ROUTES.some(
-    (route) => pathname === route || pathname.startsWith(route + "/")
-  );
+  const isActive = Boolean(pathname) && ADE_ROUTES.some((r) => pathname === r || pathname.startsWith(r + "/"));
 
   const pollNextPrompt = useCallback(async () => {
     if (pollingRef.current) return;
@@ -215,29 +80,14 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
         if (prompt) {
           const key = prompt.type === "achievement" ? `ach:${prompt.achievementId}` : `chk:${prompt.applicationId}`;
           if (!dismissedRef.current.has(key)) {
-            const next: PassivePrompt =
-              prompt.type === "achievement"
-                ? {
-                    kind: "achievement",
-                    achievementId: prompt.achievementId,
-                    label: prompt.label,
-                    description: prompt.description,
-                    xpReward: prompt.xpReward,
-                    tier: prompt.tier,
-                  }
-                : {
-                    kind: "checkin",
-                    applicationId: prompt.applicationId,
-                    scholarshipTitle: prompt.scholarshipTitle,
-                    reason: prompt.reason,
-                  };
+            const next: PassivePrompt = prompt.type === "achievement"
+              ? { kind: "achievement", achievementId: prompt.achievementId, label: prompt.label, description: prompt.description, xpReward: prompt.xpReward, tier: prompt.tier }
+              : { kind: "checkin", applicationId: prompt.applicationId, scholarshipTitle: prompt.scholarshipTitle, reason: prompt.reason };
             setPassivePrompt(next);
             if (lastSeenPromptIdRef.current !== key) {
               lastSeenPromptIdRef.current = key;
               setAttention(true);
-              if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-                navigator.vibrate([120, 60, 120]);
-              }
+              if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate([120, 60, 120]);
               if (attentionTimeoutRef.current) clearTimeout(attentionTimeoutRef.current);
               attentionTimeoutRef.current = setTimeout(() => setAttention(false), 2000);
             }
@@ -245,81 +95,51 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
         }
       }
     } catch {
-      // Silent -- Ade is a nice-to-have, never worth surfacing a network error for.
+      // Silent -- Ade is a nice-to-have.
     } finally {
       pollingRef.current = false;
     }
   }, []);
 
   useEffect(() => {
-    // No session (and no visible Ade) outside the app sections, so don't
-    // poll there either.
     if (!isActive) return;
     pollNextPrompt();
-    function onFocus() {
-      pollNextPrompt();
-    }
+    function onFocus() { pollNextPrompt(); }
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [pollNextPrompt, isActive]);
 
-  useEffect(() => {
-    return () => {
-      if (attentionTimeoutRef.current) clearTimeout(attentionTimeoutRef.current);
-      if (confettiTimeoutRef.current) clearTimeout(confettiTimeoutRef.current);
-    };
+  useEffect(() => () => {
+    if (attentionTimeoutRef.current) clearTimeout(attentionTimeoutRef.current);
+    if (confettiTimeoutRef.current) clearTimeout(confettiTimeoutRef.current);
   }, []);
 
-  // AUDIT FIX (batch 5): move focus into the panel when it opens so
-  // keyboard users land inside the dialog instead of staying stranded on
-  // the page behind it.
-  useEffect(() => {
-    if (open) closeButtonRef.current?.focus();
-  }, [open]);
+  useEffect(() => { if (open) closeButtonRef.current?.focus(); }, [open]);
 
   async function answerCheckin(applicationId: string, status: "submitted" | "in_progress" | "rejected") {
     setSubmitting(true);
-    await fetch(`/api/applications/${applicationId}/checkin`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "answer", status }),
-    }).catch(() => {});
+    await fetch(`/api/applications/${applicationId}/checkin`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "answer", status }) }).catch(() => {});
     setSubmitting(false);
     dismissedRef.current.add(`chk:${applicationId}`);
     setPassivePrompt(null);
   }
-
   async function snoozeCheckin(applicationId: string) {
     setSubmitting(true);
-    await fetch(`/api/applications/${applicationId}/checkin`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "snooze" }),
-    }).catch(() => {});
+    await fetch(`/api/applications/${applicationId}/checkin`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "snooze" }) }).catch(() => {});
     setSubmitting(false);
     dismissedRef.current.add(`chk:${applicationId}`);
     setPassivePrompt(null);
   }
-
   async function markNotOpenYet(applicationId: string) {
     setSubmitting(true);
-    await fetch(`/api/applications/${applicationId}/checkin`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "not_open_yet" }),
-    }).catch(() => {});
+    await fetch(`/api/applications/${applicationId}/checkin`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "not_open_yet" }) }).catch(() => {});
     setSubmitting(false);
     dismissedRef.current.add(`chk:${applicationId}`);
     setPassivePrompt(null);
   }
-
   async function acknowledgeAchievement(achievementId: string) {
     setSubmitting(true);
-    await fetch("/api/achievements/announce", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ achievement_id: achievementId }),
-    }).catch(() => {});
+    await fetch("/api/achievements/announce", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ achievement_id: achievementId }) }).catch(() => {});
     setSubmitting(false);
     dismissedRef.current.add(`ach:${achievementId}`);
     setPassivePrompt(null);
@@ -327,89 +147,49 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
 
   const confirmApply = useCallback((args: ConfirmApplyArgs) => {
     if (args.alreadyTracked) {
-      if (args.applicationId) {
-        fetch(`/api/applications/${args.applicationId}/click`, { method: "POST" }).catch(() => {});
-      }
+      if (args.applicationId) fetch(`/api/applications/${args.applicationId}/click`, { method: "POST" }).catch(() => {});
       window.open(args.applicationUrl, "_blank", "noreferrer");
       return;
     }
     setTrackError(null);
-    setActivePrompt({
-      kind: "apply_guard",
-      scholarshipTitle: args.scholarshipTitle,
-      applicationUrl: args.applicationUrl,
-      onTrack: args.onTrack,
-    });
+    setActivePrompt({ kind: "apply_guard", scholarshipTitle: args.scholarshipTitle, applicationUrl: args.applicationUrl, onTrack: args.onTrack });
     setOpen(true);
   }, []);
 
   async function handleTrackFirst() {
     if (!activePrompt || activePrompt.kind !== "apply_guard") return;
-    setTrackError(null);
-    setTrackingInFlight(true);
+    setTrackError(null); setTrackingInFlight(true);
     const result = await activePrompt.onTrack();
     setTrackingInFlight(false);
     if (result?.id) {
-      setActivePrompt({
-        kind: "ready_to_open",
-        scholarshipTitle: activePrompt.scholarshipTitle,
-        applicationUrl: activePrompt.applicationUrl,
-        applicationId: result.id,
-      });
+      setActivePrompt({ kind: "ready_to_open", scholarshipTitle: activePrompt.scholarshipTitle, applicationUrl: activePrompt.applicationUrl, applicationId: result.id });
     } else {
       setTrackError("Couldn't track it just now -- you can still continue without tracking.");
     }
   }
-
   function handleJustGo() {
     if (!activePrompt || activePrompt.kind !== "apply_guard") return;
     window.open(activePrompt.applicationUrl, "_blank", "noreferrer");
     setActivePrompt(null);
   }
-
   function handleContinueToApplication() {
     if (!activePrompt || activePrompt.kind !== "ready_to_open") return;
     fetch(`/api/applications/${activePrompt.applicationId}/click`, { method: "POST" }).catch(() => {});
     window.open(activePrompt.applicationUrl, "_blank", "noreferrer");
-    setActivePrompt(null);
-    setOpen(false);
+    setActivePrompt(null); setOpen(false);
   }
 
-  // AUDIT FIX (batch 5): closing via the X and closing via Escape share
-  // one path, and both return focus to the avatar so keyboard users
-  // aren't dropped into the void where the dialog used to be.
-  function closePanel() {
-    setOpen(false);
-    avatarRef.current?.focus();
-  }
+  function closePanel() { setOpen(false); avatarRef.current?.focus(); }
 
-  // AUDIT FIX (batch 5): real dialog keyboard behavior -- Escape closes,
-  // Tab cycles within the panel instead of escaping to the page behind
-  // it. The panel holds focus while open (see the open-effect above), so
-  // keydown reliably fires here.
   function handlePanelKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Escape") {
-      e.stopPropagation();
-      closePanel();
-      return;
-    }
+    if (e.key === "Escape") { e.stopPropagation(); closePanel(); return; }
     if (e.key !== "Tab" || !panelRef.current) return;
-    const focusables = Array.from(
-      panelRef.current.querySelectorAll<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      )
-    ).filter((el) => !el.hasAttribute("disabled"));
+    const focusables = Array.from(panelRef.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')).filter((el) => !el.hasAttribute("disabled"));
     if (focusables.length === 0) return;
-    const first = focusables[0];
-    const last = focusables[focusables.length - 1];
+    const first = focusables[0]; const last = focusables[focusables.length - 1];
     const active = document.activeElement;
-    if (e.shiftKey && (active === first || active === panelRef.current)) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && active === last) {
-      e.preventDefault();
-      first.focus();
-    }
+    if (e.shiftKey && (active === first || active === panelRef.current)) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
   }
 
   const prompt: AdePromptState = activePrompt ?? passivePrompt;
@@ -418,11 +198,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
   function handleAvatarClick() {
     setOpen((wasOpen) => {
       const nextOpen = !wasOpen;
-      if (
-        nextOpen &&
-        passivePrompt?.kind === "achievement" &&
-        !confettiShownRef.current.has(passivePrompt.achievementId)
-      ) {
+      if (nextOpen && passivePrompt?.kind === "achievement" && !confettiShownRef.current.has(passivePrompt.achievementId)) {
         confettiShownRef.current.add(passivePrompt.achievementId);
         setConfettiColors(TIER_CONFETTI_COLORS[passivePrompt.tier]);
         if (confettiTimeoutRef.current) clearTimeout(confettiTimeoutRef.current);
@@ -433,199 +209,78 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
     setAttention(false);
   }
 
-  // Public pages (landing, auth, /s/[id] share links, admin) mount this
-  // provider too since it lives in the root layout now -- render nothing
-  // there. Placed below every hook call so hook order stays stable no
-  // matter which route is rendering.
-  if (!isActive) {
-    return <>{children}</>;
-  }
+  if (!isActive) return <>{children}</>;
 
   return (
     <AdeContext.Provider value={{ confirmApply }}>
       {children}
       {confettiColors && <Confetti colors={confettiColors} pieceCount={70} durationMs={2600} />}
-      {/* AUDIT FIX (batch 4): bottom-20 on mobile lifts the avatar clear
-          of the new bottom tab bar (see components/Sidebar.tsx);
-          md:bottom-4 restores the original position where there is no
-          tab bar. */}
       <div className="fixed bottom-20 md:bottom-4 right-4 z-[90] flex flex-col items-end gap-2">
         {open && (
-          <div
-            ref={panelRef}
-            // AUDIT FIX (batch 5): this used to be an unlabelled <div> --
-            // screen readers couldn't tell a dialog had appeared and
-            // keyboard focus could wander off behind it.
-            role="dialog"
-            aria-modal="true"
-            aria-label="Ade, your application guide"
-            onKeyDown={handlePanelKeyDown}
-            // aria-live="polite" so screen readers announce prompt text
-            // that appears or changes while the panel is open (product
-            // audit: prompts previously appeared with no announcement).
-            aria-live="polite"
-            className="w-[calc(100vw-2rem)] max-w-80 bg-white rounded-2xl border border-hairline shadow-card p-4"
-          >
+          <div ref={panelRef} role="dialog" aria-modal="true" aria-label="Ade, your application guide" onKeyDown={handlePanelKeyDown} aria-live="polite"
+            // AUDIT item 5: spring entrance on open (panel mounts when open
+            // flips, so the existing badge-pop-in keyframe plays once).
+            className="badge-pop-in w-[calc(100vw-2rem)] max-w-80 bg-white rounded-2xl border border-hairline shadow-card p-4">
             <div className="flex items-start gap-3">
               <AdeAvatar />
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium text-emerald mb-0.5">Ade</p>
                 {!prompt && (
-                  <p className="text-sm text-ink leading-snug">
-                    Hi, I&apos;m Ade! I&apos;ll remind you to track a scholarship before you head to a
-                    provider&apos;s site, check in with you after deadlines pass, and let you know when
-                    you&apos;ve earned something. Nothing to tell you about right now -- you&apos;re all
-                    caught up.
-                  </p>
+                  <p className="text-sm text-ink leading-snug">Hi, I&apos;m Ade! I&apos;ll remind you to track a scholarship before you head to a provider&apos;s site, check in with you after deadlines pass, and let you know when you&apos;ve earned something. Nothing to tell you about right now -- you&apos;re all caught up.</p>
                 )}
                 {prompt?.kind === "apply_guard" && (
                   <>
-                    <p className="text-sm text-ink leading-snug">
-                      Want me to track <span className="font-medium">{prompt.scholarshipTitle}</span> before you
-                      head over? I&apos;ll follow up so it doesn&apos;t fall through the cracks.
-                    </p>
+                    <p className="text-sm text-ink leading-snug">Want me to track <span className="font-medium">{prompt.scholarshipTitle}</span> before you head over? I&apos;ll follow up so it doesn&apos;t fall through the cracks.</p>
                     <div className="flex flex-wrap gap-2 mt-3">
-                      <button
-                        type="button"
-                        onClick={handleTrackFirst}
-                        disabled={trackingInFlight}
-                        className="text-xs font-medium text-white bg-emerald rounded-full px-3 py-1.5 hover:opacity-90 transition-opacity disabled:opacity-50"
-                      >
-                        {trackingInFlight ? "Tracking\u2026" : "Track it first"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleJustGo}
-                        disabled={trackingInFlight}
-                        className="text-xs font-medium text-navy-light hover:text-navy disabled:opacity-50"
-                      >
-                        Just take me there
-                      </button>
+                      <button type="button" onClick={handleTrackFirst} disabled={trackingInFlight} className="text-xs font-medium text-white bg-emerald rounded-full px-3 py-1.5 hover:opacity-90 transition-opacity disabled:opacity-50">{trackingInFlight ? "Tracking\u2026" : "Track it first"}</button>
+                      <button type="button" onClick={handleJustGo} disabled={trackingInFlight} className="text-xs font-medium text-navy-light hover:text-navy disabled:opacity-50">Just take me there</button>
                     </div>
                     {trackError && <p className="text-xs text-rose mt-2">{trackError}</p>}
                   </>
                 )}
                 {prompt?.kind === "ready_to_open" && (
                   <>
-                    <p className="text-sm text-ink leading-snug">
-                      You&apos;re tracking <span className="font-medium">{prompt.scholarshipTitle}</span> now{" "}
-                      {"\u2713"}. Tap below when you&apos;re ready to head to the application.
-                    </p>
+                    <p className="text-sm text-ink leading-snug">You&apos;re tracking <span className="font-medium">{prompt.scholarshipTitle}</span> now {"\u2713"}. Tap below when you&apos;re ready to head to the application.</p>
                     <div className="flex flex-wrap gap-2 mt-3">
-                      <button
-                        type="button"
-                        onClick={handleContinueToApplication}
-                        className="text-xs font-medium text-white bg-navy rounded-full px-3 py-1.5 hover:bg-navy-light transition-colors"
-                      >
-                        Continue to application &rarr;
-                      </button>
+                      <button type="button" onClick={handleContinueToApplication} className="text-xs font-medium text-white bg-navy rounded-full px-3 py-1.5 hover:bg-navy-light transition-colors">Continue to application &rarr;</button>
                     </div>
                   </>
                 )}
                 {prompt?.kind === "checkin" && (
                   <>
                     <p className="text-sm text-ink leading-snug">
-                      {prompt.reason === "clicked" ? (
-                        <>
-                          How did it go with <span className="font-medium">{prompt.scholarshipTitle}</span>?
-                          Answering helps me match you better next time.
-                        </>
-                      ) : (
-                        <>
-                          <span className="font-medium">{prompt.scholarshipTitle}</span>&apos;s deadline has
-                          passed -- did you hear back?
-                        </>
-                      )}
+                      {prompt.reason === "clicked" ? (<>How did it go with <span className="font-medium">{prompt.scholarshipTitle}</span>? Answering helps me match you better next time.</>) : (<><span className="font-medium">{prompt.scholarshipTitle}</span>&apos;s deadline has passed -- did you hear back?</>)}
                     </p>
                     <div className="flex flex-wrap gap-2 mt-3">
                       {STATUS_OPTIONS.map((opt) => (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          disabled={submitting}
-                          onClick={() => answerCheckin(prompt.applicationId, opt.value)}
-                          className="text-xs font-medium text-white bg-navy rounded-full px-3 py-1.5 hover:bg-navy-light transition-colors disabled:opacity-50"
-                        >
-                          {opt.label}
-                        </button>
+                        <button key={opt.value} type="button" disabled={submitting} onClick={() => answerCheckin(prompt.applicationId, opt.value)} className="text-xs font-medium text-white bg-navy rounded-full px-3 py-1.5 hover:bg-navy-light transition-colors disabled:opacity-50">{opt.label}</button>
                       ))}
-                      <button
-                        type="button"
-                        disabled={submitting}
-                        onClick={() => markNotOpenYet(prompt.applicationId)}
-                        className="text-xs font-medium text-navy-light border border-hairline rounded-full px-3 py-1.5 hover:border-navy/40 hover:text-navy transition-colors disabled:opacity-50"
-                      >
-                        Portal not open yet
-                      </button>
+                      <button type="button" disabled={submitting} onClick={() => markNotOpenYet(prompt.applicationId)} className="text-xs font-medium text-navy-light border border-hairline rounded-full px-3 py-1.5 hover:border-navy/40 hover:text-navy transition-colors disabled:opacity-50">Portal not open yet</button>
                     </div>
-                    <button
-                      type="button"
-                      disabled={submitting}
-                      onClick={() => snoozeCheckin(prompt.applicationId)}
-                      className="text-xs text-navy-light hover:text-navy mt-2 disabled:opacity-50"
-                    >
-                      Ask me later
-                    </button>
+                    <button type="button" disabled={submitting} onClick={() => snoozeCheckin(prompt.applicationId)} className="text-xs text-navy-light hover:text-navy mt-2 disabled:opacity-50">Ask me later</button>
                   </>
                 )}
                 {prompt?.kind === "achievement" && (
                   <div className="badge-pop-in">
-                    <p className="text-sm text-ink leading-snug">
-                      You unlocked <span className="font-medium">{prompt.label}</span> -- {prompt.description}
-                    </p>
+                    <p className="text-sm text-ink leading-snug">You unlocked <span className="font-medium">{prompt.label}</span> -- {prompt.description}</p>
                     <p className="text-xs font-mono text-emerald mt-1">+{prompt.xpReward} XP</p>
                     <div className="flex flex-wrap gap-2 mt-3">
-                      <button
-                        type="button"
-                        disabled={submitting}
-                        onClick={() => acknowledgeAchievement(prompt.achievementId)}
-                        className="text-xs font-medium text-white bg-emerald rounded-full px-3 py-1.5 hover:opacity-90 transition-opacity disabled:opacity-50"
-                      >
-                        Nice!
-                      </button>
-                      <Link
-                        href="/achievements"
-                        onClick={() => acknowledgeAchievement(prompt.achievementId)}
-                        className="text-xs font-medium text-navy-light hover:text-navy"
-                      >
-                        View achievements &rarr;
-                      </Link>
+                      <button type="button" disabled={submitting} onClick={() => acknowledgeAchievement(prompt.achievementId)} className="text-xs font-medium text-white bg-emerald rounded-full px-3 py-1.5 hover:opacity-90 transition-opacity disabled:opacity-50">Nice!</button>
+                      <Link href="/achievements" onClick={() => acknowledgeAchievement(prompt.achievementId)} className="text-xs font-medium text-navy-light hover:text-navy">View achievements &rarr;</Link>
                     </div>
                   </div>
                 )}
               </div>
-              <button
-                ref={closeButtonRef}
-                type="button"
-                onClick={closePanel}
-                aria-label="Close"
-                // 44x44 tap target (product audit / WCAG 2.5.5): was p-1
-                // (~24px). The visible icon stays 16px; the ::after
-                // pseudo extends the clickable area to 44px.
-                className="relative shrink-0 text-navy-light hover:text-navy -mt-1 -mr-1 p-1 after:absolute after:-inset-[10px] after:rounded-full after:content-['']"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
-                </svg>
+              <button ref={closeButtonRef} type="button" onClick={closePanel} aria-label="Close" className="relative shrink-0 text-navy-light hover:text-navy -mt-1 -mr-1 p-1 after:absolute after:-inset-[10px] after:rounded-full after:content-['']">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" /></svg>
               </button>
             </div>
           </div>
         )}
-        <button
-          ref={avatarRef}
-          type="button"
-          onClick={handleAvatarClick}
-          aria-label={open ? "Close Ade" : "Open Ade"}
-          aria-expanded={open}
-          className={[
-            "relative w-14 h-14 rounded-full shadow-card border border-hairline bg-white flex items-center justify-center hover:scale-105 active:scale-95 transition-transform",
-            attention ? "ade-attention" : "",
-          ].join(" ")}
-        >
+        <button ref={avatarRef} type="button" onClick={handleAvatarClick} aria-label={open ? "Close Ade" : "Open Ade"} aria-expanded={open}
+          className={["relative w-14 h-14 rounded-full shadow-card border border-hairline bg-white flex items-center justify-center hover:scale-105 active:scale-95 transition-transform", attention ? "ade-attention" : ""].join(" ")}>
           <AdeAvatar size={40} />
-          {hasPending && !open && (
-            <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-rose border-2 border-white" />
-          )}
+          {hasPending && !open && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-rose border-2 border-white" />}
         </button>
       </div>
     </AdeContext.Provider>
