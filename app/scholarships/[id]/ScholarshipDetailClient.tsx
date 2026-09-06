@@ -1,6 +1,5 @@
 "use client";
-
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
 import { MatchSeal } from "@/components/MatchSeal";
@@ -20,9 +19,6 @@ type ScholarshipDetail = {
   level: "undergrad" | "postgrad" | "both";
   discipline: string | null;
   score: number;
-  // Pure eligibility score before the competitiveness discount below is
-  // applied -- see lib/matching/engine.ts. Used to explain a gap between
-  // "you meet every requirement" and "but this award is competitive."
   eligibilityScore: number;
   competitivenessFactor: number;
   awards_available: number | null;
@@ -56,15 +52,6 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
   rejected: "Rejected",
 };
 
-// Receives everything it needs from the server component
-// (app/scholarships/[id]/page.tsx) -- no fetch-on-mount waterfall. Save
-// and track-application actions hit the existing /api/scholarships/save
-// and /api/applications routes, same ones the dashboard already uses.
-//
-// sharerId: the current user's profile id, threaded down from the
-// Server Component so the ShareButton below can build a referral link
-// (?ref=<sharerId>) via app/s/[id]/page.tsx + middleware.ts's cookie
-// capture -- see components/ShareButton.tsx for the full mechanism.
 export function ScholarshipDetailClient({
   scholarship,
   initialSaved,
@@ -82,8 +69,13 @@ export function ScholarshipDetailClient({
   const [savePending, setSavePending] = useState(false);
   const [trackPending, setTrackPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-
   const days = daysUntil(scholarship.deadline);
+
+  // SCROLL FIX: always land at the top of the page when arriving from a
+  // card click, regardless of where the previous page was scrolled.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   async function toggleSave() {
     setActionError(null);
@@ -125,7 +117,6 @@ export function ScholarshipDetailClient({
   return (
     <div>
       <BackLink href="/dashboard" label="Back to matches" />
-
       <div className="bg-white rounded-2xl border border-hairline shadow-card p-6 md:p-8">
         <div className="flex items-start gap-4 mb-6">
           <MatchSeal score={scholarship.score} size={64} />
@@ -137,7 +128,6 @@ export function ScholarshipDetailClient({
             <p className="text-sm text-navy-light mt-1">{scholarship.provider_name}</p>
           </div>
         </div>
-
         <div className="flex flex-wrap items-center gap-2 mb-4">
           {days !== null && (
             <span className={"text-xs font-mono font-medium px-2 py-1 rounded-full " + DEADLINE_TONE_CLASSES[deadlineTone(days)]}>
@@ -156,13 +146,6 @@ export function ScholarshipDetailClient({
             <span className="text-xs text-navy-light px-2 py-1">&middot; {scholarship.discipline}</span>
           )}
         </div>
-
-        {/* Competitiveness transparency block -- separate from the
-            eligibility requirements list below. Explains why `score` (the
-            number on the seal above) can sit lower than pure eligibility
-            would suggest. Renders nothing if no competitiveness data has
-            been researched for this scholarship yet -- see
-            components/CompetitivenessBadge.tsx. */}
         <CompetitivenessBadge
           awardsAvailable={scholarship.awards_available}
           estimatedApplicantPool={scholarship.estimated_applicant_pool}
@@ -176,13 +159,10 @@ export function ScholarshipDetailClient({
             than average.
           </p>
         )}
-
         {scholarship.description && (
           <p className="text-sm text-ink leading-relaxed mb-6 mt-4">{scholarship.description}</p>
         )}
-
         {actionError && <p className="text-sm text-rose mb-4">{actionError}</p>}
-
         <div className="flex flex-wrap items-center gap-3 mb-8 pb-8 border-b border-hairline">
           {scholarship.application_url && (
             <a
@@ -219,21 +199,10 @@ export function ScholarshipDetailClient({
               {trackPending ? "Adding\u2026" : "+ Track application"}
             </button>
           )}
-          <ShareButton
-            variant="full"
-            scholarshipId={scholarship.id}
-            title={scholarship.title}
-            sharerId={sharerId}
-          />
+          <ShareButton variant="full" scholarshipId={scholarship.id} title={scholarship.title} sharerId={sharerId} />
         </div>
-
         <div>
           <h2 className="font-display text-lg font-semibold text-navy mb-4">Eligibility requirements</h2>
-          {/* Grouped, color-coded requirements (product audit, Section 12:
-              the old flat <ul> gave met / not-met / missing rows identical
-              visual weight). RequirementsList orders the actionable
-              "missing from your profile" group first, gives it one shared
-              CTA, and truncates long multi-value requirement strings. */}
           <RequirementsList requirements={scholarship.requirements} />
         </div>
       </div>
