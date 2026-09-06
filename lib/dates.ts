@@ -5,13 +5,10 @@
 
 export function daysUntil(deadline: string | null | undefined): number | null {
   if (!deadline) return null;
-
   const target = new Date(`${deadline}T00:00:00Z`).getTime();
   if (Number.isNaN(target)) return null;
-
   const now = new Date();
   const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-
   return Math.ceil((target - todayUtc) / (1000 * 60 * 60 * 24));
 }
 
@@ -27,4 +24,28 @@ export function deadlineTone(days: number): "closed" | "urgent" | "soon" | "late
   if (days <= 7) return "urgent";
   if (days <= 30) return "soon";
   return "later";
+}
+
+export function formatOpensLabel(opensAt: string): string {
+  const date = new Date(`${opensAt}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return `Opens ${opensAt}`;
+  const formatted = date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  return `Opens ${formatted}`;
+}
+
+export function formatLastClosedLabel(closedAt: string): string {
+  const date = new Date(`${closedAt}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return `Last cycle closed ${closedAt}`;
+  const formatted = date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  return `Last cycle closed ${formatted}`;
 }
