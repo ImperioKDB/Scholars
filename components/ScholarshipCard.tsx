@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { MatchSeal } from "@/components/MatchSeal";
 import { ProviderMonogram } from "@/components/ProviderMonogram";
@@ -47,28 +47,11 @@ function DeadlineBadge({ deadline }: { deadline: string | null }) {
   );
 }
 
-// AUDIT item 1: one-shot scale "pop" on save/unsave so the highest-frequency
-// action gets physical acknowledgment. The class is applied for a single
-// animation run and cleared on animationend; reduced-motion disables it in
-// motion.css.
-function SaveButton({
-  saved,
-  pending,
-  onToggle,
-}: {
-  saved: boolean;
-  pending?: boolean;
-  onToggle: () => void;
-}) {
-  const [pop, setPop] = useState(false);
+function SaveButton({ saved, pending, onToggle }: { saved: boolean; pending?: boolean; onToggle: () => void }) {
   return (
     <button
       type="button"
-      onClick={() => {
-        setPop(true);
-        onToggle();
-      }}
-      onAnimationEnd={() => setPop(false)}
+      onClick={onToggle}
       disabled={pending}
       aria-label={saved ? "Remove from saved scholarships" : "Save scholarship"}
       aria-pressed={saved}
@@ -76,7 +59,6 @@ function SaveButton({
         "relative shrink-0 rounded-full p-1.5 bg-white/90 backdrop-blur-sm transition-colors disabled:opacity-50",
         "after:absolute after:-inset-[7px] after:rounded-full after:content-['']",
         saved ? "text-emerald" : "text-navy-light hover:text-navy",
-        pop ? "save-pop" : "",
       ].join(" ")}
     >
       <svg width="18" height="18" viewBox="0 0 24 24" fill={saved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8">
@@ -85,6 +67,13 @@ function SaveButton({
     </button>
   );
 }
+
+// CLICK FEEL (live feedback): the Link was display:contents, which has no
+// box, so :active could never animate it and a slow server read as "nothing
+// happened." The Link is now a real flex box that presses (active:scale)
+// and, if navigation takes >150ms, shows a dim + spinner overlay so the
+// wait always reads as "loading," never as "dead."
+const SPINNER_DELAY_MS = 150;
 
 export function ScholarshipCard({
   scholarship,
@@ -107,11 +96,36 @@ export function ScholarshipCard({
   pending?: boolean;
   sharerId?: string;
 }) {
+  const [navigating, setNavigating] = useState(false);
+  const [showSpinner, setShowSpinner] = useState(false);
+  const spinnerTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (spinnerTimeout.current) clearTimeout(spinnerTimeout.current);
+    };
+  }, []);
+
+  function handleNavigate() {
+    setNavigating(true);
+    spinnerTimeout.current = setTimeout(() => setShowSpinner(true), SPINNER_DELAY_MS);
+  }
+
   const opensIn = scholarship.opens_at ? daysUntil(scholarship.opens_at) : null;
   const opensSoon = scholarship.isOpenNow === false && opensIn !== null && opensIn > 0;
+
   return (
-    <div className="relative bg-white rounded-xl border border-hairline p-5 flex flex-col gap-4 sm:flex-row shadow-card focus-within:ring-2 focus-within:ring-emerald focus-within:ring-offset-2 focus-within:ring-offset-parchment">
-      <Link href={`/scholarships/${scholarship.id}`} className="contents">
+    <div className="relative bg-white rounded-xl border border-hairline p-5 shadow-card focus-within:ring-2 focus-within:ring-emerald focus-within:ring-offset-2 focus-within:ring-offset-parchment">
+      <Link
+        href={`/scholarships/${scholarship.id}`}
+        onClick={handleNavigate}
+        className={[
+          "flex flex-col gap-4 sm:flex-row rounded-xl",
+          "transition-transform duration-150 motion-reduce:transition-none",
+          "active:scale-[0.98] motion-reduce:active:scale-100",
+          navigating ? "scale-[0.98] opacity-80" : "",
+        ].join(" ")}
+      >
         {score !== undefined ? (
           <MatchSeal score={score} size={52} />
         ) : (
@@ -156,6 +170,11 @@ export function ScholarshipCard({
         )}
         <SaveButton saved={saved} pending={pending} onToggle={onToggleSave} />
       </div>
+      {showSpinner && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/70 backdrop-blur-[1px] pointer-events-none">
+          <Spinner className="h-4 w-4 text-navy" />
+        </div>
+      )}
     </div>
   );
 }
