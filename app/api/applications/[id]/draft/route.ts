@@ -25,7 +25,6 @@
 // !inner, the unjoinable row makes the whole select return zero rows,
 // .single() fails with PGRST116, and that already maps to the existing
 // { error: 'not_found' } -> 404 branch below. No new branch needed.
-
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -101,11 +100,11 @@ async function loadContext(
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
+
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
@@ -151,17 +150,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       application_url: null,
       // Not loaded/needed for draft generation -- this route only uses
       // the evaluation's requirement labels, never renders an apply
-      // action. Added to satisfy ScholarshipRow's opens_at and
-      // how_to_apply fields (see migrations: add_opens_at_and_trending_fn,
-      // add_how_to_apply_fallback).
+      // action. Added to satisfy ScholarshipRow's shape.
       opens_at: null,
       how_to_apply: null,
+      last_cycle_closed_at: null,
       level: 'undergrad',
       discipline: scholarship.discipline,
       verified: true,
       // Not loaded/needed either -- this route never surfaces a score or
-      // competitiveness info, only requirement labels. Added to satisfy
-      // ScholarshipRow's shape (see migration: add_competitiveness_fields).
+      // competitiveness info, only requirement labels.
       awards_available: null,
       estimated_applicant_pool: null,
       competitiveness_tier: null,
@@ -171,7 +168,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   )
 
   const metLabels = evaluated.requirements.filter((r) => r.status === 'met').map((r) => r.requirement)
-
   const summary = buildDraftSummary(p as never, waecResults)
   const prompt = buildStatementPrompt(p as never, scholarship, metLabels)
 
@@ -213,11 +209,11 @@ const patchSchema = z
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
+
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
