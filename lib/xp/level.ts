@@ -7,7 +7,6 @@
 // costs progressively more: early levels come fast, matching how quickly
 // a new student can complete onboarding; later ones need sustained real
 // usage or successful referrals.
-
 const LEVEL_THRESHOLDS = [0, 20, 50, 100, 175, 275, 400, 550, 725, 925, 1150];
 
 export function levelForXp(xp: number): { level: number; currentFloor: number; nextCeiling: number | null } {
@@ -19,4 +18,27 @@ export function levelForXp(xp: number): { level: number; currentFloor: number; n
   const currentFloor = LEVEL_THRESHOLDS[level - 1];
   const nextCeiling = level < LEVEL_THRESHOLDS.length ? LEVEL_THRESHOLDS[level] : null;
   return { level, currentFloor, nextCeiling };
+}
+
+// ACHIEVEMENTS UPGRADE (#3): level titles. Deliberately distinct from the
+// referral achievement names (Scout/Connector/Mentor) so a level title
+// never reads as an achievement the student hasn't earned. Pure function,
+// client-safe, single source so the sidebar and achievements page agree.
+export const LEVEL_TITLES = [
+  "Prospect",
+  "Scholar",
+  "Contender",
+  "Achiever",
+  "Pathfinder",
+  "Trailblazer",
+  "Front-runner",
+  "Standard-bearer",
+  "Champion",
+  "Legend",
+  "Icon",
+];
+
+export function titleForLevel(level: number): string {
+  const idx = Math.min(Math.max(level, 1), LEVEL_TITLES.length) - 1;
+  return LEVEL_TITLES[idx];
 }
