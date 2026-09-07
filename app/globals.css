@@ -10,12 +10,15 @@
     color: #10151F;
     font-feature-settings: "ss01" on;
   }
+  /* COLOR CONSISTENCY: selection + focus ring use the darkened emerald
+     token (#15705A), matching tailwind.config.ts, instead of the old
+     pre-audit #1B8A6B that hardcoded hexes elsewhere still carried. */
   ::selection {
-    background-color: #1B8A6B;
+    background-color: #15705A;
     color: white;
   }
   :focus-visible {
-    outline: 2px solid #1B8A6B;
+    outline: 2px solid #15705A;
     outline-offset: 2px;
   }
 }
@@ -122,7 +125,7 @@ stops, so it doesn't nag indefinitely on a page someone leaves open. */
   background-image: linear-gradient(
     100deg,
     transparent 40%,
-    rgba(27, 138, 107, 0.12) 50%,
+    rgba(21, 112, 90, 0.12) 50%,
     transparent 60%
   );
   background-size: 250% 100%;
@@ -160,19 +163,9 @@ reduced-motion fallback is a plain static block. */
   animation: skeleton-shimmer 1.6s ease-in-out infinite;
 }
 
-/* MOTION/FEEDBACK (item 1): one-shot save-bookmark pop. Keyframes carry the
-overshoot (scale past 1 then settle) so the easing stays the repo's house
-curve. transform only. Cleared by onAnimationEnd in SaveButton so rapid
-re-taps re-trigger it. */
-@keyframes save-pop {
-  0% { transform: scale(1); }
-  40% { transform: scale(1.25); }
-  70% { transform: scale(0.94); }
-  100% { transform: scale(1); }
-}
-.save-pop {
-  animation: save-pop 320ms cubic-bezier(0.16, 1, 0.3, 1);
-}
+/* NOTE: the save-pop keyframes live in app/motion.css (single source).
+They were previously duplicated here; the duplicate was removed so the
+animation has exactly one definition. */
 
 @media (prefers-reduced-motion: reduce) {
   .badge-pop-in,
@@ -183,9 +176,6 @@ re-taps re-trigger it. */
   .skeleton-shimmer {
     animation: none;
     background-image: none;
-  }
-  .save-pop {
-    animation: none;
   }
   /* Safety gate: any remaining animate-pulse (e.g. third-party) also
   stops under reduced motion. */
