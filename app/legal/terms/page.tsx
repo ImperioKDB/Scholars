@@ -6,10 +6,9 @@ export const metadata: Metadata = {
 };
 
 // Keep in sync with app/legal/privacy/page.tsx.
-// Live support inbox on the production domain (scholars.com.ng). The old
-// placeholder pointed at scholars.ng, a domain this project does not own.
-const CONTACT_EMAIL = "support@scholars.com.ng";
-const LAST_UPDATED = "2025";
+// TODO before launch: replace with the real support inbox.
+const CONTACT_EMAIL = "support@scholars.ng";
+const LAST_UPDATED = "2026";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
