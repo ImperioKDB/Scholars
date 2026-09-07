@@ -11,8 +11,8 @@ import { Logo } from "@/components/Logo";
 //   doesn't actually do anything is worse than not having one.
 // - No "Collections"/social column -- those don't map to any real page or
 //   account we have today. Only links to routes that actually exist
-//   (Home, the how-it-works anchor, Log in, and the two /legal pages)
-//   so nothing here is a dead link.
+//   (Home, About, the how-it-works anchor, Log in, and the two /legal
+//   pages) so nothing here is a dead link.
 export function Footer() {
   return (
     <footer className="border-t border-hairline bg-white overflow-hidden">
@@ -32,6 +32,11 @@ export function Footer() {
             <li>
               <Link href="/" className="text-navy-light hover:text-navy">
                 Home
+              </Link>
+            </li>
+            <li>
+              <Link href="/about" className="text-navy-light hover:text-navy">
+                About
               </Link>
             </li>
             <li>
