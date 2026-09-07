@@ -2,18 +2,14 @@
 // POST /api/admin/scholarships/[id]/rules — add a single eligibility rule
 // to an existing scholarship, admin only.
 //
-// For bulk rule replacement, it's simpler to DELETE each old rule via
-// /api/admin/scholarships/[id]/rules/[ruleId] and POST new ones, rather
-// than a "replace all" endpoint — keeps each operation small and auditable
-// rather than one call silently wiping and rebuilding a rule set.
-//
-// ruleSchema.field widened to match ADMIN_RULE_FIELDS in
-// lib/admin/scholarship.ts -- see app/api/admin/scholarships/route.ts for
-// the full note on why this was stale.
+// The rules API only exposes add-one / delete-one, deliberately, to keep
+// each write small and auditable rather than one call silently wiping and
+// rebuilding a rule set.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
+import { assertAdmin } from '@/lib/admin/guard'
 
 const ruleSchema = z.object({
   field: z.enum([
@@ -37,34 +33,13 @@ const ruleSchema = z.object({
   value: z.unknown(),
 })
 
-async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-  if (authError || !user) {
-    return { error: NextResponse.json({ error: 'Not authenticated' }, { status: 401 }) }
-  }
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('id', user.id)
-    .single()
-  if (profileError || !profile?.is_admin) {
-    return { error: NextResponse.json({ error: 'Admin access required' }, { status: 403 }) }
-  }
-  return { user }
-}
-
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: scholarshipId } = await params
-  // SECURITY HARDENING (phase 1): see the 60/min note on the list route.
   const limited = await checkRateLimit(request, { route: 'admin-rules', limit: 60 })
   if (limited) return limited
-
   const supabase = await createClient()
-  const check = await requireAdmin(supabase)
-  if (check.error) return check.error
+  const guard = await assertAdmin(supabase)
+  if (!guard.ok) return guard.response
   const raw = await request.json().catch(() => null)
   const parsed = ruleSchema.safeParse(raw)
   if (!parsed.success) {
@@ -79,7 +54,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .select('*')
     .single()
   if (error) {
-    // 23503 = foreign_key_violation — scholarship_id doesn't exist
     if (error.code === '23503') {
       return NextResponse.json({ error: 'Scholarship not found' }, { status: 404 })
     }
