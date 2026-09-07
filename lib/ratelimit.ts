@@ -48,7 +48,7 @@ function getLimiter(route: string, limit: number, client: Redis): Ratelimit {
       analytics: false,
       prefix: `scholars:rl:${route}`,
     })
-    limiters.set(key)
+    limiters.set(key, limiter)
   }
   return limiter
 }
