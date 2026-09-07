@@ -1,12 +1,11 @@
 "use client";
-
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AuthShell } from "@/components/AuthShell";
 import { FormField, inputClass } from "@/components/FormField";
-
+import { normalizeEmail } from "@/lib/auth/email";
 // AUTH SECURITY AUDIT (brute-force brake, client side): progressive
 // lockout stored in localStorage. This is UX-level only -- a determined
 // attacker bypasses it trivially -- the real brakes are Supabase's own
@@ -14,7 +13,6 @@ import { FormField, inputClass } from "@/components/FormField";
 // slowdown for casual credential-stuffing against a real device.
 const LOCK_KEY = "scholars_login_lockout";
 type LockState = { count: number; until: number };
-
 function readLock(): LockState {
   try {
     const raw = localStorage.getItem(LOCK_KEY);
@@ -25,7 +23,6 @@ function readLock(): LockState {
     return { count: 0, until: 0 };
   }
 }
-
 function writeLock(lock: LockState) {
   try {
     localStorage.setItem(LOCK_KEY, JSON.stringify(lock));
@@ -33,7 +30,6 @@ function writeLock(lock: LockState) {
     // storage blocked -- lockout degrades to per-page state, fine
   }
 }
-
 function clearLock() {
   try {
     localStorage.removeItem(LOCK_KEY);
@@ -41,7 +37,6 @@ function clearLock() {
     // ignore
   }
 }
-
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -51,21 +46,19 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(searchParams.get("error"));
-
+  const cleanEmail = normalizeEmail(email);
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-
     const lock = readLock();
     if (lock.until > Date.now()) {
       const secs = Math.ceil((lock.until - Date.now()) / 1000);
       setError(`Too many failed attempts. Try again in ${secs} second${secs === 1 ? "" : "s"}.`);
       return;
     }
-
     setLoading(true);
     const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
+      email: cleanEmail,
       password,
     });
     setLoading(false);
@@ -82,7 +75,6 @@ function LoginForm() {
     router.push("/dashboard");
     router.refresh();
   }
-
   async function handleGoogle() {
     setError(null);
     setGoogleLoading(true);
@@ -95,7 +87,6 @@ function LoginForm() {
       options: { redirectTo: `${window.location.origin}/auth/callback?next=/dashboard` },
     });
   }
-
   return (
     <AuthShell heading="Welcome back" sub="Log in to see your latest matches.">
       {error && (
@@ -170,7 +161,6 @@ function LoginForm() {
     </AuthShell>
   );
 }
-
 // useSearchParams() requires a Suspense boundary in the App Router --
 // wrapping here (rather than inside AuthShell) keeps AuthShell reusable
 // for pages that don't need query params.
