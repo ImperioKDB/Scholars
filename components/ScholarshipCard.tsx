@@ -93,53 +93,64 @@ export function ScholarshipCard({
   const opensSoon = scholarship.isOpenNow === false && opensIn !== null && opensIn > 0;
   const closedUnknownReopen =
     scholarship.isOpenNow === false && !opensSoon && Boolean(scholarship.last_cycle_closed_at);
-
   return (
-    <div className="relative bg-white rounded-xl border border-hairline p-5 flex flex-col gap-4 sm:flex-row shadow-card focus-within:ring-2 focus-within:ring-emerald focus-within:ring-offset-2 focus-within:ring-offset-parchment">
-      <Link href={`/scholarships/${scholarship.id}`} className="contents">
-        {score !== undefined ? (
-          <MatchSeal score={score} size={52} />
-        ) : (
-          <ProviderMonogram name={scholarship.provider_name} size={52} />
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="sm:pr-24">
-            <p className="font-medium text-ink leading-snug hover:text-navy transition-colors">{scholarship.title}</p>
-            <p className="text-xs text-navy-light mt-0.5">{scholarship.provider_name}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 mt-3">
-            {opensSoon ? (
-              <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-light text-amber">
-                {formatOpensLabel(scholarship.opens_at as string)}
-              </span>
-            ) : closedUnknownReopen ? (
-              <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-light text-amber">
-                {formatLastClosedLabel(scholarship.last_cycle_closed_at as string)}
-              </span>
-            ) : (
-              <DeadlineBadge deadline={scholarship.deadline} />
-            )}
-            {scholarship.isOpenNow && (
-              <span className="text-xs font-medium px-2 py-1 rounded-full bg-emerald-light text-emerald">Open now</span>
-            )}
-            {scholarship.isTrending && (
-              <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-light text-amber">Trending</span>
-            )}
-            {scholarship.amount && <span className="text-xs font-mono text-emerald">{scholarship.amount}</span>}
-            <span className="text-xs text-navy-light capitalize">
-              {scholarship.level === "both" ? "Undergrad & postgrad" : scholarship.level}
-            </span>
-            {scholarship.discipline && <span className="text-xs text-navy-light">&middot; {scholarship.discipline}</span>}
-          </div>
-          {totalCount !== undefined && totalCount > 0 && (
-            <p className="text-xs text-navy-light mt-2 font-mono">{metCount}/{totalCount} requirements met</p>
-          )}
-          {missingLabels && missingLabels.length > 0 && (
-            <p className="text-xs text-amber mt-1.5">Missing: {missingLabels.join(", ")}</p>
-          )}
+    <div className="group relative bg-white rounded-xl border border-hairline p-5 flex flex-col gap-4 sm:flex-row shadow-card focus-within:ring-2 focus-within:ring-emerald focus-within:ring-offset-2 focus-within:ring-offset-parchment transition-transform duration-150 motion-reduce:transition-none has-[a:active]:scale-[0.99] motion-reduce:has-[a:active]:scale-100">
+      {/* STRETCHED LINK: an invisible anchor covering the entire card so
+          every part of it (seal, badges, amount, requirements line,
+          padding, gaps) navigates to the detail page. The old
+          display:contents wrapper had no box of its own, so tap
+          activation only worked on some inner content and the rest of
+          the card surface was dead space. Sits above the in-flow
+          content but BELOW the action buttons (z-10), so share and
+          save stay independently clickable. Same pattern the dashboard's
+          DeadlineCard already uses. */}
+      <Link
+        href={`/scholarships/${scholarship.id}`}
+        className="absolute inset-0 z-0 rounded-xl"
+        aria-label={`View details for ${scholarship.title}`}
+      />
+      {score !== undefined ? (
+        <MatchSeal score={score} size={52} />
+      ) : (
+        <ProviderMonogram name={scholarship.provider_name} size={52} />
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="sm:pr-24">
+          <p className="font-medium text-ink leading-snug group-hover:text-navy transition-colors">{scholarship.title}</p>
+          <p className="text-xs text-navy-light mt-0.5">{scholarship.provider_name}</p>
         </div>
-      </Link>
-      <div className="absolute top-5 right-5 flex items-center gap-3.5">
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          {opensSoon ? (
+            <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-light text-amber">
+              {formatOpensLabel(scholarship.opens_at as string)}
+            </span>
+          ) : closedUnknownReopen ? (
+            <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-light text-amber">
+              {formatLastClosedLabel(scholarship.last_cycle_closed_at as string)}
+            </span>
+          ) : (
+            <DeadlineBadge deadline={scholarship.deadline} />
+          )}
+          {scholarship.isOpenNow && (
+            <span className="text-xs font-medium px-2 py-1 rounded-full bg-emerald-light text-emerald">Open now</span>
+          )}
+          {scholarship.isTrending && (
+            <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-light text-amber">Trending</span>
+          )}
+          {scholarship.amount && <span className="text-xs font-mono text-emerald">{scholarship.amount}</span>}
+          <span className="text-xs text-navy-light capitalize">
+            {scholarship.level === "both" ? "Undergrad & postgrad" : scholarship.level}
+          </span>
+          {scholarship.discipline && <span className="text-xs text-navy-light">&middot; {scholarship.discipline}</span>}
+        </div>
+        {totalCount !== undefined && totalCount > 0 && (
+          <p className="text-xs text-navy-light mt-2 font-mono">{metCount}/{totalCount} requirements met</p>
+        )}
+        {missingLabels && missingLabels.length > 0 && (
+          <p className="text-xs text-amber mt-1.5">Missing: {missingLabels.join(", ")}</p>
+        )}
+      </div>
+      <div className="absolute top-5 right-5 z-10 flex items-center gap-3.5">
         {sharerId && (
           <ShareButton variant="icon" scholarshipId={scholarship.id} title={scholarship.title} sharerId={sharerId} />
         )}
