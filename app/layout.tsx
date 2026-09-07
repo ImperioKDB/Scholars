@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Manrope } from "next/font/google";
 import { AdeProvider } from "@/components/ade/AdeProvider";
+import { AuthRescue } from "@/components/AuthRescue";
 import "./globals.css";
 import "./motion.css";
 
@@ -31,6 +32,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${fraunces.variable} ${manrope.variable}`}>
       <body className="font-sans bg-parchment text-ink antialiased">
+        {/* Rescues auth codes/tokens that Supabase strands on the root
+            when a redirectTo is rejected (see components/AuthRescue.tsx).
+            No-op everywhere else. */}
+        <AuthRescue />
         <AdeProvider>{children}</AdeProvider>
       </body>
     </html>
