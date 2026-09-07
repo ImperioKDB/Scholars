@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ScholarshipCard, Spinner, type CardScholarship } from "@/components/ScholarshipCard";
+import { consumeReturnScroll, saveReturnScroll } from "@/lib/scrollRestore";
 import { daysUntil, formatDeadlineLabel } from "@/lib/dates";
 import type { GapNudge } from "@/lib/matching/gaps";
 
@@ -21,6 +22,7 @@ const TABS: { value: "all" | MatchTier; label: string }[] = [
   { value: "good", label: "Worth a look" },
   { value: "possible", label: "Possible" },
 ];
+
 const SPINNER_DELAY_MS = 150;
 
 function timeGreeting() {
@@ -82,7 +84,12 @@ function DeadlineCard({ scholarship, days }: { scholarship: CardScholarship; day
       "active:scale-[0.97]",
       navigating ? "scale-[0.97] opacity-80" : "scale-100 opacity-100",
     ].join(" ")}>
-      <Link href={`/scholarships/${scholarship.id}`} aria-label={scholarship.title} className="absolute inset-0 z-0 rounded-xl" onClick={handleNavigate}>
+      <Link
+        href={`/scholarships/${scholarship.id}`}
+        aria-label={scholarship.title}
+        className="absolute inset-0 z-0 rounded-xl"
+        onClick={() => { saveReturnScroll(); handleNavigate(); }}
+      >
         <span className="sr-only">{scholarship.title}</span>
       </Link>
       <div className="pointer-events-none">
@@ -119,6 +126,16 @@ export function DashboardClient({
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<"all" | MatchTier>("all");
 
+  // RETURN-SCROLL: replay the offset saved when a scholarship card was
+  // tapped, once the real content (not the skeleton) is mounted. Consumed
+  // once, so sidebar navigation still lands at the top.
+  useEffect(() => {
+    const y = consumeReturnScroll("/dashboard");
+    if (y === null) return;
+    const raf = requestAnimationFrame(() => window.scrollTo(0, y));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
   async function refreshSaved() {
     const res = await fetch("/api/scholarships/save");
     if (!res.ok) return;
@@ -134,7 +151,6 @@ export function DashboardClient({
     () => (tab === "all" ? openMatches : openMatches.filter((m) => m.tier === tab)),
     [openMatches, tab]
   );
-
   const upcomingDeadlines = useMemo(() => {
     const map = new Map<string, CardScholarship>();
     for (const m of matches) map.set(m.id, m);
@@ -144,7 +160,6 @@ export function DashboardClient({
       .sort((a, b) => new Date(a.deadline as string).getTime() - new Date(b.deadline as string).getTime())
       .slice(0, 5);
   }, [matches, saved]);
-
   const closingSoonCount = useMemo(() => {
     const ids = new Set<string>();
     for (const m of matches) { const d = daysUntil(m.deadline); if (d !== null && d >= 0 && d <= 30) ids.add(m.id); }
@@ -168,13 +183,11 @@ export function DashboardClient({
   }
 
   const firstName = fullName?.trim().split(/\s+/)[0];
-
   return (
     <div>
       <div className="mb-8">
         <h1 className="font-display text-2xl font-semibold text-navy">{timeGreeting()}{firstName ? `, ${firstName}` : ""}</h1>
         <p className="text-sm text-navy-light mt-1 mb-6">{openMatches.length} open scholarship{openMatches.length === 1 ? "" : "s"} you can apply to now.</p>
-
         {profileCompleteness < 100 && (
           <div className="bg-white rounded-xl border border-hairline p-5 mb-6">
             <div className="flex items-center justify-between mb-2 gap-3">
@@ -187,9 +200,7 @@ export function DashboardClient({
             <p className="text-xs text-navy-light mt-2">A fuller profile means more accurate match scores -- you can browse now and finish it anytime.</p>
           </div>
         )}
-
         <GapNudgeBanner gaps={gaps} />
-
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatTile value={openMatches.length} label="Open now" />
           <StatTile value={comingSoon.length} label="Coming soon" tone={comingSoon.length > 0 ? "amber" : "navy"} />
@@ -197,14 +208,12 @@ export function DashboardClient({
           <StatTile value={saved.length} label="Saved" />
         </div>
       </div>
-
       {loadError && (
         <p className="text-sm text-rose mb-6">
           {loadError}{" "}
           <button type="button" onClick={() => { setLoadError(null); router.refresh(); }} className="font-medium underline">Try again</button>
         </p>
       )}
-
       {upcomingDeadlines.length > 0 && (
         <div className="mb-10">
           <h2 className="font-display text-lg font-semibold text-navy mb-3">Upcoming deadlines</h2>
@@ -215,7 +224,6 @@ export function DashboardClient({
           </div>
         </div>
       )}
-
       <div className="flex items-center gap-2 mb-5 flex-wrap">
         {TABS.map((t) => (
           <button key={t.value} type="button" onClick={() => setTab(t.value)}
@@ -224,7 +232,6 @@ export function DashboardClient({
           </button>
         ))}
       </div>
-
       {filteredMatches.length === 0 ? (
         <div className="bg-white rounded-xl border border-hairline p-8 text-center mb-12">
           <p className="text-sm text-navy-light">
@@ -236,10 +243,6 @@ export function DashboardClient({
           </p>
         </div>
       ) : (
-        // AUDIT item 3: keying the grid by tab remounts the cards on tab
-        // change so the existing card-in stagger replays, giving clear
-        // feedback that the list changed. Capped delay keeps long lists
-        // from feeling slow.
         <div key={tab} className="grid md:grid-cols-2 gap-4 mb-12">
           {filteredMatches.map((m, i) => {
             const met = m.requirements.filter((r) => r.status === "met").length;
@@ -254,7 +257,6 @@ export function DashboardClient({
           })}
         </div>
       )}
-
       {comingSoon.length > 0 && (
         <div className="mb-12">
           <h2 className="font-display text-lg font-semibold text-navy mb-1">Coming soon</h2>
@@ -272,7 +274,6 @@ export function DashboardClient({
           </div>
         </div>
       )}
-
       <h2 id="saved" className="font-display text-lg font-semibold text-navy mb-5 scroll-mt-20">Saved ({saved.length})</h2>
       {saved.length === 0 ? (
         <div className="bg-white rounded-xl border border-hairline p-8 text-center">
