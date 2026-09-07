@@ -58,13 +58,8 @@ export function createClient() {
   );
 }
 
-// Admin client using the service role key. NEVER import this from client components.
-// Only use inside app/api/** route handlers.
-export function createAdminClient() {
-  const { createClient: createSupabaseClient } = require("@supabase/supabase-js");
-  return createSupabaseClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
-  );
-}
+// NOTE: a createAdminClient() service-role export used to live here. It was
+// dead code (no importer) and used require() inside an ES module, so it was
+// removed. The only legitimate service-role client is
+// lib/supabase/service.ts createServiceClient(), used by the cron route and
+// /api/xp/share under their own auth checks.
