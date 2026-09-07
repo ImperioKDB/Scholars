@@ -27,6 +27,7 @@
 import { NextResponse } from 'next/server'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
+import { logWarn } from '@/lib/logging'
 
 let redis: Redis | null = null
 const limiters = new Map<string, Ratelimit>()
@@ -47,7 +48,7 @@ function getLimiter(route: string, limit: number, client: Redis): Ratelimit {
       analytics: false,
       prefix: `scholars:rl:${route}`,
     })
-    limiters.set(key, limiter)
+    limiters.set(key)
   }
   return limiter
 }
@@ -73,14 +74,9 @@ export async function checkRateLimit(
     }
     return null
   } catch {
-    console.warn(
-      JSON.stringify({
-        level: 'warn',
-        event: 'ratelimit_fail_open',
-        route: opts.route,
-        timestamp: new Date().toISOString(),
-      })
-    )
+    // LOGGING CONSISTENCY: route through the shared structured logger so
+    // fail-open events are searchable in Vercel Logs like everything else.
+    logWarn('ratelimit', 'fail_open', { route: opts.route })
     return null
   }
 }
