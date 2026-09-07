@@ -5,25 +5,12 @@
 //
 // PATCH rather than PUT: PUT implies replacing the whole resource, but
 // admin edits here are typically "toggle verified" or "fix a deadline" —
-// partial updates are the actual usage pattern, so PATCH semantics fit
-// better even though 05_CODING_WORKFLOW.md says "PUT". Flagging the
-// deviation — swap the export name back to PUT if you'd rather match the
-// doc literally; the handler logic doesn't change either way.
-//
-// how_to_apply added: fallback guidance shown to students when
-// application_url is blank -- see migration: add_how_to_apply_fallback.
-//
-// opens_at added: date applications open, optional/nullable -- see
-// migration: add_opens_at_and_trending_fn.
-//
-// awards_available / estimated_applicant_pool / competitiveness_tier /
-// historical_acceptance_rate / competitiveness_notes added: competitiveness
-// inputs consumed by lib/matching/engine.ts's computeCompetitivenessFactor
-// -- see migration: add_competitiveness_fields.
+// partial updates are the actual usage pattern.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
+import { assertAdmin } from '@/lib/admin/guard'
 
 const updateSchema = z
   .object({
@@ -50,34 +37,13 @@ const updateSchema = z
   .partial()
   .refine((obj) => Object.keys(obj).length > 0, 'No fields to update')
 
-async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-  if (authError || !user) {
-    return { error: NextResponse.json({ error: 'Not authenticated' }, { status: 401 }) }
-  }
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('id', user.id)
-    .single()
-  if (profileError || !profile?.is_admin) {
-    return { error: NextResponse.json({ error: 'Admin access required' }, { status: 403 }) }
-  }
-  return { user }
-}
-
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  // SECURITY HARDENING (phase 1): see the 60/min note on the list route.
   const limited = await checkRateLimit(request, { route: 'admin-scholarships-id', limit: 60 })
   if (limited) return limited
-
   const { id } = await params
   const supabase = await createClient()
-  const check = await requireAdmin(supabase)
-  if (check.error) return check.error
+  const guard = await assertAdmin(supabase)
+  if (!guard.ok) return guard.response
   const raw = await request.json().catch(() => null)
   const parsed = updateSchema.safeParse(raw)
   if (!parsed.success) {
@@ -104,11 +70,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const limited = await checkRateLimit(request, { route: 'admin-scholarships-id', limit: 60 })
   if (limited) return limited
-
   const { id } = await params
   const supabase = await createClient()
-  const check = await requireAdmin(supabase)
-  if (check.error) return check.error
+  const guard = await assertAdmin(supabase)
+  if (!guard.ok) return guard.response
   const { error } = await supabase.from('scholarships').delete().eq('id', id)
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
