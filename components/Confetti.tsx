@@ -1,8 +1,10 @@
 "use client";
-
 import { useEffect, useState } from "react";
 
-const DEFAULT_COLORS = ["#0B1E3D", "#1B8A6B", "#C98A2E", "#B4433E", "#14315C"];
+// COLOR CONSISTENCY: default burst colors use the darkened WCAG tokens
+// (emerald #15705A, amber #966216, rose #A63A35) plus the navy family, so
+// celebrations match the app palette instead of the old pre-audit hexes.
+const DEFAULT_COLORS = ["#0B1E3D", "#15705A", "#966216", "#A63A35", "#14315C"];
 
 type Piece = {
   id: number;
@@ -40,14 +42,11 @@ export function Confetti({
       rounded: Math.random() > 0.5,
     }))
   );
-
   useEffect(() => {
     const t = setTimeout(() => setVisible(false), durationMs);
     return () => clearTimeout(t);
   }, [durationMs]);
-
   if (!visible) return null;
-
   return (
     <div className="fixed inset-0 pointer-events-none overflow-hidden z-[100]" aria-hidden="true">
       {pieces.map((p) => (
