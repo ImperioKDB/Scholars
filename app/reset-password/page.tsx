@@ -1,11 +1,10 @@
 "use client";
-
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { AuthShell } from "@/components/AuthShell";
 import { FormField, inputClass } from "@/components/FormField";
-
+import { normalizeEmail } from "@/lib/auth/email";
 // app/reset-password/page.tsx
 // GET /reset-password
 //
@@ -25,7 +24,6 @@ import { FormField, inputClass } from "@/components/FormField";
 const THROTTLE_KEY = "scholars_reset_throttle";
 const THROTTLE_WINDOW_MS = 10 * 60_000;
 const THROTTLE_MAX = 3;
-
 function throttleError(): string | null {
   try {
     const now = Date.now();
@@ -42,14 +40,13 @@ function throttleError(): string | null {
   }
   return null;
 }
-
 export default function ResetPasswordPage() {
   const supabase = createClient();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
-
+  const cleanEmail = normalizeEmail(email);
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -59,7 +56,7 @@ export default function ResetPasswordPage() {
       return;
     }
     setLoading(true);
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
       redirectTo: `${window.location.origin}/reset-password/update`,
     });
     setLoading(false);
@@ -69,13 +66,12 @@ export default function ResetPasswordPage() {
     }
     setSent(true);
   }
-
   if (sent) {
     return (
       <AuthShell heading="Check your email" sub="One more step before you're back in.">
         <div className="rounded-xl border border-hairline bg-navy-50 p-5 mb-6">
           <p className="text-sm text-ink">
-            If an account exists for <span className="font-medium">{email}</span>, we&apos;ve sent a link to
+            If an account exists for <span className="font-medium">{cleanEmail}</span>, we&apos;ve sent a link to
             reset your password. It expires after a while, so use it soon.
           </p>
         </div>
@@ -87,7 +83,6 @@ export default function ResetPasswordPage() {
       </AuthShell>
     );
   }
-
   return (
     <AuthShell heading="Reset your password" sub="We'll email you a link to set a new one.">
       <form onSubmit={handleSubmit} noValidate>
