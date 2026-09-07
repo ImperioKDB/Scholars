@@ -7,7 +7,9 @@ import { createPublicClient } from "@/lib/supabase/public";
 // actually renders inline inside a WhatsApp/iMessage/Slack link preview,
 // which is the entire point of the share feature: the card has to be
 // recognizable as Scholars, and legible, before anyone taps it.
-
+//
+// COLOR CONSISTENCY: the accent uses the darkened emerald token (#15705A)
+// instead of the old pre-audit #1B8A6B, matching the rest of the app.
 export const runtime = "edge";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -23,7 +25,6 @@ export default async function Image({ params }: { params: Promise<{ id: string }
     .eq("id", id)
     .eq("verified", true)
     .maybeSingle();
-
   return new ImageResponse(
     (
       <div
@@ -39,10 +40,9 @@ export default async function Image({ params }: { params: Promise<{ id: string }
           fontFamily: "sans-serif",
         }}
       >
-        <div style={{ display: "flex", fontSize: 30, color: "#1B8A6B", fontWeight: 700 }}>
+        <div style={{ display: "flex", fontSize: 30, color: "#15705A", fontWeight: 700 }}>
           Scholars
         </div>
-
         <div style={{ display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", fontSize: 24, color: "#8B93A3", marginBottom: 14 }}>
             {scholarship?.provider_name ?? "Scholarship opportunity"}
@@ -59,13 +59,12 @@ export default async function Image({ params }: { params: Promise<{ id: string }
             {scholarship?.title ?? "Find scholarships you're eligible for"}
           </div>
         </div>
-
         <div style={{ display: "flex", gap: 18, fontSize: 26 }}>
           {scholarship?.amount && (
             <div
               style={{
                 display: "flex",
-                background: "#1B8A6B",
+                background: "#15705A",
                 color: "#0B1E3D",
                 padding: "10px 24px",
                 borderRadius: 999,
