@@ -34,7 +34,7 @@ export default async function AboutPage() {
   const { data: objs } = await supabase.storage.from("site").list("", { limit: 50 });
   const portrait = (objs ?? []).find((o) => o.name === PORTRAIT_NAME);
   const portraitUrl = portrait
-    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/site/${PORTRAIT_NAME}?v=${encodeURIComponent(portrait.updated_at)}`
+    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/site/${PORTRAIT_NAME}?v=${encodeURIComponent(portrait.updated_at ?? Date.now().toString())}`
     : null;
   return (
     <article>
