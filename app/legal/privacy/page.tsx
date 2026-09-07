@@ -6,8 +6,9 @@ export const metadata: Metadata = {
 };
 
 // Keep in sync with app/legal/terms/page.tsx.
-// TODO before launch: replace with the real support inbox.
-const CONTACT_EMAIL = "support@scholars.ng";
+// Live support inbox on the production domain (scholars.com.ng). The old
+// placeholder pointed at scholars.ng, a domain this project does not own.
+const CONTACT_EMAIL = "support@scholars.com.ng";
 const LAST_UPDATED = "2025";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -24,7 +25,6 @@ export default function PrivacyPolicyPage() {
     <article>
       <h1 className="font-display text-3xl font-semibold text-navy mb-2">Privacy Policy</h1>
       <p className="text-sm text-navy-light mb-8">Last updated: {LAST_UPDATED}</p>
-
       <Section title="1. The short version">
         <p>
           Scholars matches you with scholarships you can realistically win. To do that well, we ask for
@@ -34,7 +34,6 @@ export default function PrivacyPolicyPage() {
           section 4: share links and referrals.
         </p>
       </Section>
-
       <Section title="2. What we collect">
         <ul className="list-disc pl-5 space-y-2">
           <li>
@@ -53,7 +52,6 @@ export default function PrivacyPolicyPage() {
           </li>
         </ul>
       </Section>
-
       <Section title="3. How we use it">
         <ul className="list-disc pl-5 space-y-2">
           <li>To compute eligibility matches and explain, requirement by requirement, why a score is what it is.</li>
@@ -68,7 +66,6 @@ export default function PrivacyPolicyPage() {
           other students, and they are used only to surface scholarships that are relevant to you.
         </p>
       </Section>
-
       <Section title="4. Share links and referrals (read this one)">
         <p>
           When you share a scholarship, we create a public page (under /s/) that anyone with the link
@@ -79,7 +76,6 @@ export default function PrivacyPolicyPage() {
           there.
         </p>
       </Section>
-
       <Section title="5. Third-party services">
         <p>
           We process data with a small set of infrastructure providers: Supabase for authentication and
@@ -88,7 +84,6 @@ export default function PrivacyPolicyPage() {
           and we do not use advertising networks.
         </p>
       </Section>
-
       <Section title="6. Cookies and local storage">
         <ul className="list-disc pl-5 space-y-2">
           <li>Authentication cookies keep you signed in (handled by Supabase).</li>
@@ -102,7 +97,6 @@ export default function PrivacyPolicyPage() {
           </li>
         </ul>
       </Section>
-
       <Section title="7. Retention and deletion">
         <p>
           We keep your data while your account is active. To delete your account and the profile,
@@ -114,7 +108,6 @@ export default function PrivacyPolicyPage() {
           being overwritten.
         </p>
       </Section>
-
       <Section title="8. Security">
         <p>
           Data is encrypted in transit, database access keys are restricted to our server code, and admin
@@ -122,21 +115,18 @@ export default function PrivacyPolicyPage() {
           find a vulnerability, please report it to us at {CONTACT_EMAIL}.
         </p>
       </Section>
-
       <Section title="9. Who this service is for">
         <p>
           Scholars is built for university-level students and is not directed at children under 16. We do
           not knowingly collect data from anyone under 16.
         </p>
       </Section>
-
       <Section title="10. Changes">
         <p>
           When this policy changes, we update this page and, for significant changes, post a notice
           inside the app.
         </p>
       </Section>
-
       <Section title="11. Contact">
         <p>
           Questions about your data:{" "}
