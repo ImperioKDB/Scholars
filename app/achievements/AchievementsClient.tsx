@@ -149,7 +149,6 @@ export function AchievementsClient({
     : 100;
   const unlockedList = achievements.filter((a) => unlockedMap.has(a.id));
   const lockedList = achievements.filter((a) => !unlockedMap.has(a.id));
-
   const showUnlocked = filter !== "locked";
   const showLocked = filter !== "unlocked";
 
@@ -177,10 +176,13 @@ export function AchievementsClient({
               <XpCounter value={xpTotal} /> XP
             </p>
           </div>
+          {/* MOTION/PERF: animate transform scaleX (compositor-only) instead
+              of width (layout thrash every frame). origin-left so the fill
+              grows from the start edge exactly like the width version did. */}
           <div className="h-2 rounded-full bg-hairline overflow-hidden">
             <div
-              className="h-full rounded-full bg-emerald transition-[width] duration-700 ease-out motion-reduce:transition-none"
-              style={{ width: `${progressPct}%` }}
+              className="h-full rounded-full bg-emerald origin-left transition-transform duration-700 ease-out motion-reduce:transition-none"
+              style={{ transform: `scaleX(${progressPct / 100})` }}
             />
           </div>
           <p className="text-xs text-navy-light mt-2">
