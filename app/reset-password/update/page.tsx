@@ -1,45 +1,63 @@
 "use client";
-
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AuthShell } from "@/components/AuthShell";
 import { FormField, inputClass } from "@/components/FormField";
 import { validatePasswordStrength } from "@/lib/auth/password";
+import { RECOVERY_REDIRECT_FLAG } from "@/components/AuthRescue";
 
 // app/reset-password/update/page.tsx
-// GET /reset-password/update
+// Step 2 of the password reset flow: set the new password.
 //
-// Step 2 of the password reset flow. The recovery link's access token
-// lives in the URL hash fragment -- the Supabase JS client parses it
-// automatically on load and fires a PASSWORD_RECOVERY auth event once a
-// session is established from it. That event (not the URL shape itself) is
-// the reliable signal that this form should unlock, since a stale or
-// already-used link won't produce a session at all.
-//
-// AUTH SECURITY AUDIT: new passwords here go through the same shared
-// strength policy as signup (lib/auth/password.ts), not just a length
-// check.
-export default function ResetPasswordUpdatePage() {
+// Accepts the recovery session from ANY of three arrival paths, so the
+// flow cannot strand a student again:
+//   1. Direct: the email link's redirectTo was honored and the PKCE code
+//      is in THIS page's URL -- creating the client auto-exchanges it and
+//      fires PASSWORD_RECOVERY here.
+//   2. Rescued: AuthRescue caught the tokens on the root (Supabase fell
+//      back to the Site URL), exchanged them there, and handed the
+//      recovery over via sessionStorage (RECOVERY_REDIRECT_FLAG).
+//   3. Event: PASSWORD_RECOVERY fires on this client for any other reason.
+// If none of these happens within a few seconds, we show an explicit
+// "link could not be verified" state with a path to request a new one,
+// instead of an infinite spinner.
+type Stage = "verifying" | "form" | "invalid" | "done";
+
+export default function UpdatePasswordPage() {
   const router = useRouter();
   const supabase = createClient();
-  const [ready, setReady] = useState(false);
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [stage, setStage] = useState<Stage>("verifying");
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  const [password, setPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  const validRef = useRef(false);
 
   useEffect(() => {
-    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") setReady(true);
+    function accept() {
+      if (validRef.current) return;
+      validRef.current = true;
+      setStage("form");
+    }
+    try {
+      if (sessionStorage.getItem(RECOVERY_REDIRECT_FLAG)) {
+        sessionStorage.removeItem(RECOVERY_REDIRECT_FLAG);
+        accept();
+      }
+    } catch {
+      // storage blocked -- the event path below still covers us
+    }
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") accept();
     });
-    // Covers the case where the PASSWORD_RECOVERY event already fired
-    // before this listener attached (e.g. fast redirect).
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) setReady(true);
-    });
-    return () => listener.subscription.unsubscribe();
+    const t = setTimeout(() => {
+      if (!validRef.current) setStage("invalid");
+    }, 5000);
+    return () => {
+      sub.subscription.unsubscribe();
+      clearTimeout(t);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -51,48 +69,71 @@ export default function ResetPasswordUpdatePage() {
       setError("Password needs " + issues.join(", ") + ".");
       return;
     }
-    if (password !== confirm) {
-      setError("Passwords don't match.");
-      return;
-    }
-    setLoading(true);
+    setSaving(true);
     const { error: updateError } = await supabase.auth.updateUser({ password });
-    setLoading(false);
+    setSaving(false);
     if (updateError) {
-      setError("Couldn't update your password. The link may have expired -- request a new one.");
+      setError(updateError.message);
       return;
     }
-    setDone(true);
-    setTimeout(() => router.push("/login"), 2000);
+    try {
+      sessionStorage.removeItem(RECOVERY_REDIRECT_FLAG);
+    } catch {
+      // ignore
+    }
+    setStage("done");
   }
 
-  if (done) {
+  if (stage === "verifying") {
     return (
-      <AuthShell heading="Password updated" sub="Taking you to log in.">
-        <p className="text-sm text-ink">You&apos;re all set.</p>
+      <AuthShell heading="Verifying your link" sub="One moment while we check your reset link.">
+        <p className="text-sm text-navy-light text-center">If this takes more than a few seconds, the link may have expired.</p>
       </AuthShell>
     );
   }
 
-  if (!ready) {
+  if (stage === "invalid") {
     return (
-      <AuthShell heading="Verifying your link" sub="This only takes a second.">
-        <p className="text-sm text-navy-light">
-          If nothing happens, the link may have expired -- request a new one from the{" "}
-          <a href="/reset-password" className="text-navy font-medium hover:underline">
-            reset password page
-          </a>
-          .
-        </p>
+      <AuthShell heading="Link not valid" sub="That reset link could not be verified.">
+        <div className="rounded-xl border border-hairline bg-navy-50 p-5 mb-6">
+          <p className="text-sm text-ink">
+            Reset links expire and can only be used once. Request a fresh one and try again from the
+            new email.
+          </p>
+        </div>
+        <Link
+          href="/reset-password"
+          className="block w-full rounded-lg bg-navy text-white font-medium py-3 text-center hover:bg-navy-light transition-colors"
+        >
+          Request a new link
+        </Link>
+      </AuthShell>
+    );
+  }
+
+  if (stage === "done") {
+    return (
+      <AuthShell heading="Password updated" sub="You're all set.">
+        <div className="rounded-xl border border-hairline bg-emerald-light p-5 mb-6">
+          <p className="text-sm text-ink">Your password has been changed. You can log in with it now.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => router.push("/dashboard")}
+          className="w-full rounded-lg bg-navy text-white font-medium py-3 hover:bg-navy-light transition-colors"
+        >
+          Go to my dashboard
+        </button>
       </AuthShell>
     );
   }
 
   return (
-    <AuthShell heading="Set a new password" sub="Choose something you haven't used here before.">
+    <AuthShell heading="Set a new password" sub="Choose something you haven't used before.">
       <form onSubmit={handleSubmit} noValidate>
         <FormField
           label="New password"
+          error={error ?? undefined}
           hint="At least 8 characters, with an uppercase letter, a lowercase letter, and a number."
         >
           <input
@@ -102,28 +143,16 @@ export default function ResetPasswordUpdatePage() {
             minLength={8}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="At least 8 characters"
-            autoComplete="new-password"
-          />
-        </FormField>
-        <FormField label="Confirm password" error={error ?? undefined}>
-          <input
-            className={inputClass}
-            type="password"
-            required
-            minLength={8}
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            placeholder="Type it again"
+            placeholder="New password"
             autoComplete="new-password"
           />
         </FormField>
         <button
           type="submit"
-          disabled={loading}
+          disabled={saving}
           className="w-full rounded-lg bg-navy text-white font-medium py-3 mt-2 hover:bg-navy-light transition-colors disabled:opacity-60"
         >
-          {loading ? "Updating\u2026" : "Update password"}
+          {saving ? "Updating\u2026" : "Update password"}
         </button>
       </form>
     </AuthShell>
