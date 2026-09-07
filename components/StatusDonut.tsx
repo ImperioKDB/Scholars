@@ -2,6 +2,11 @@
 // Reuses the same stroke-dasharray ring technique as MatchSeal, extended
 // to multiple colored segments -- no charting library needed for a single
 // 4-category donut.
+//
+// COLOR CONSISTENCY: segment colors use the darkened WCAG tokens from
+// tailwind.config.ts (emerald #15705A, amber #966216, rose #A63A35) instead
+// of the old pre-audit hexes, so the donut matches every other status color
+// in the app.
 type StatusCounts = {
   in_progress: number;
   submitted: number;
@@ -10,17 +15,16 @@ type StatusCounts = {
 };
 
 const SEGMENTS: { key: keyof StatusCounts; color: string; label: string }[] = [
-  { key: "in_progress", color: "#C98A2E", label: "In progress" },
+  { key: "in_progress", color: "#966216", label: "In progress" },
   { key: "submitted", color: "#0B1E3D", label: "Submitted" },
-  { key: "accepted", color: "#1B8A6B", label: "Accepted" },
-  { key: "rejected", color: "#B4433E", label: "Rejected" },
+  { key: "accepted", color: "#15705A", label: "Accepted" },
+  { key: "rejected", color: "#A63A35", label: "Rejected" },
 ];
 
 export function StatusDonut({ counts }: { counts: StatusCounts }) {
   const total = counts.in_progress + counts.submitted + counts.accepted + counts.rejected;
   const r = 15.5;
   const c = 2 * Math.PI * r;
-
   let cumulative = 0;
   const arcs =
     total === 0
@@ -37,7 +41,6 @@ export function StatusDonut({ counts }: { counts: StatusCounts }) {
   // no meaning. role="img" + a spoken summary replaces that; the visible
   // legend still renders for sighted users.
   const ariaSummary = `Application status: ${counts.in_progress} in progress, ${counts.submitted} submitted, ${counts.accepted} accepted, ${counts.rejected} rejected, ${total} total`;
-
   return (
     <div className="flex items-center gap-6 flex-wrap" role="img" aria-label={ariaSummary}>
       <div className="relative shrink-0" style={{ width: 96, height: 96 }}>
@@ -62,7 +65,6 @@ export function StatusDonut({ counts }: { counts: StatusCounts }) {
           <span className="text-[10px] text-navy-light">total</span>
         </div>
       </div>
-
       <ul className="space-y-1.5 text-sm min-w-[160px]">
         {SEGMENTS.map((s) => (
           <li key={s.key} className="flex items-center gap-2">
