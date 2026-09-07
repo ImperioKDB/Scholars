@@ -1,36 +1,18 @@
 // app/api/admin/scholarships/route.ts
 // GET  /api/admin/scholarships — list ALL scholarships (verified + unverified), admin only.
-//      SCOPE NOTE: not in 05_CODING_WORKFLOW.md's route list, but the admin
-//      panel (01_PRD.md #8) needs to see drafts/unverified entries to
-//      review and verify them, and there's no other route that returns
-//      unverified rows (GET /api/scholarships is verified-only by RLS).
-//      Flagging as a deliberate addition.
 // POST /api/admin/scholarships — create a scholarship, optionally with
 //      inline eligibility rules, admin only.
 //
 // Defense in depth: RLS already restricts writes to is_admin(auth.uid()),
-// but we also check profile.is_admin server-side before attempting the
-// mutation, so a non-admin gets a clear 403 instead of a confusing RLS
-// failure buried in a Postgres error.
-//
-// how_to_apply added to the insert payload: fallback guidance shown to
-// students when application_url is blank -- see migration:
-// add_how_to_apply_fallback.
-//
-// opens_at added: date applications open, optional/nullable -- see
-// migration: add_opens_at_and_trending_fn. Feeds the "Open now" badge
-// (lib/discovery.ts), never the matching engine.
-//
-// awards_available / estimated_applicant_pool / competitiveness_tier /
-// historical_acceptance_rate / competitiveness_notes added: competitiveness
-// inputs consumed by lib/matching/engine.ts's computeCompetitivenessFactor
-// -- see migration: add_competitiveness_fields. All optional/nullable; the
-// client (app/admin/scholarships/new/page.tsx) sends already-converted
-// numbers or null, not raw form strings.
+// but we also check profile.is_admin server-side (via lib/admin/guard.ts)
+// before attempting the mutation, so a non-admin gets a clear 403 instead
+// of a confusing RLS failure buried in a Postgres error. The middleware
+// /api/admin gate is a third, independent enforcement point.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
+import { assertAdmin } from '@/lib/admin/guard'
 
 const ruleSchema = z.object({
   field: z.enum(['gpa', 'nationality', 'gender', 'financial_need', 'academic_level', 'discipline', 'career_goals']),
@@ -62,35 +44,12 @@ const scholarshipSchema = z.object({
   rules: z.array(ruleSchema).optional().default([]),
 })
 
-async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-  if (authError || !user) {
-    return { error: NextResponse.json({ error: 'Not authenticated' }, { status: 401 }) }
-  }
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('id', user.id)
-    .single()
-  if (profileError || !profile?.is_admin) {
-    return { error: NextResponse.json({ error: 'Admin access required' }, { status: 403 }) }
-  }
-  return { user }
-}
-
 export async function GET(request: Request) {
-  // SECURITY HARDENING (phase 1): admin surface gets a higher ceiling
-  // (60/min) because is_admin + middleware already gate it; the limiter
-  // is a brute-force brake, not the primary control.
   const limited = await checkRateLimit(request, { route: 'admin-scholarships', limit: 60 })
   if (limited) return limited
-
   const supabase = await createClient()
-  const check = await requireAdmin(supabase)
-  if (check.error) return check.error
+  const guard = await assertAdmin(supabase)
+  if (!guard.ok) return guard.response
   const { data: scholarships, error } = await supabase
     .from('scholarships')
     .select('*, scholarship_rules ( id, field, operator, value )')
@@ -104,10 +63,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const limited = await checkRateLimit(request, { route: 'admin-scholarships', limit: 60 })
   if (limited) return limited
-
   const supabase = await createClient()
-  const check = await requireAdmin(supabase)
-  if (check.error) return check.error
+  const guard = await assertAdmin(supabase)
+  if (!guard.ok) return guard.response
   const raw = await request.json().catch(() => null)
   const parsed = scholarshipSchema.safeParse(raw)
   if (!parsed.success) {
@@ -119,7 +77,7 @@ export async function POST(request: Request) {
   const { rules, ...scholarshipFields } = parsed.data
   const { data: scholarship, error: insertError } = await supabase
     .from('scholarships')
-    .insert({ ...scholarshipFields, created_by: check.user!.id })
+    .insert({ ...scholarshipFields, created_by: guard.userId })
     .select('*')
     .single()
   if (insertError) {
@@ -130,8 +88,6 @@ export async function POST(request: Request) {
       rules.map((r) => ({ ...r, scholarship_id: scholarship.id }))
     )
     if (rulesError) {
-      // Scholarship was created but rules failed — surface this clearly
-      // rather than silently leaving a scholarship with no rules.
       return NextResponse.json(
         {
           error: 'Scholarship created but rules failed to save',
