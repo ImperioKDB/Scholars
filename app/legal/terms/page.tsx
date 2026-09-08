@@ -5,10 +5,8 @@ export const metadata: Metadata = {
   description: "The rules of using Scholars, in plain language.",
 };
 
-// Keep in sync with app/legal/privacy/page.tsx.
-// FINAL CLEANUP: placeholder replaced with the live-domain support inbox.
-// Make sure this mailbox (or a forwarder for it) exists before launch.
-const CONTACT_EMAIL = "support@scholars.com.ng";
+// Keep in sync with app/legal/privacy/page.tsx. Live support inbox.
+const CONTACT_EMAIL = "support.scholarsteam@gmail.com";
 const LAST_UPDATED = "2026";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
