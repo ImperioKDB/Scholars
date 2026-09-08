@@ -1,10 +1,10 @@
 // app/api/scholarships/route.ts
 // GET /api/scholarships -- dumb browse/search catalog for /discover.
 //
-// SECURITY HARDENING (batch 2): keyword search hits PostgREST ilike on
-// every keystroke (debounced client-side), so a script could use this as
-// a free fuzzy-search oracle. 60/min per IP is far above real student
-// usage and below abuse.
+// REFACTOR BATCH 1: rate-limit parity with the other student-facing reads
+// (60/min per IP). Browse is the most hammerable public-ish endpoint in
+// the student surface (keyword search fires on every debounced keystroke),
+// so it gets the same Upstash sliding window everything else uses.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
