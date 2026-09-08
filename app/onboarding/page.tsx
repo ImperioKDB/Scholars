@@ -38,6 +38,10 @@ type OnboardingDraft = {
   // refresh mid-way through the "my school isn't listed" path restores
   // the manual fields instead of dropping back to the curated search.
   manualInstitution: boolean;
+  // NEW (user feedback batch): parallel escape hatch for discipline,
+  // since new courses appear every session and no curated list stays
+  // current. Restored the same way manualInstitution is.
+  manualDiscipline: boolean;
 };
 
 function readDraft(): OnboardingDraft | null {
@@ -54,6 +58,7 @@ function readDraft(): OnboardingDraft | null {
       waecRows: Array.isArray(parsed.waecRows) ? parsed.waecRows : [],
       step: typeof parsed.step === "number" ? parsed.step : 0,
       manualInstitution: Boolean(parsed.manualInstitution),
+      manualDiscipline: Boolean(parsed.manualDiscipline),
     };
   } catch {
     return null;
@@ -87,6 +92,11 @@ function OnboardingForm() {
   // false = curated Combobox search (default), true = free-text "my
   // school isn't listed" mode. See toggleManualInstitution below.
   const [manualInstitution, setManualInstitution] = useState(false);
+  // NEW: parallel escape hatch for discipline. Same UX pattern as the
+  // institution escape hatch -- swap modes clears the field on purpose
+  // so a half-typed value from one mode can't silently save under the
+  // other. See toggleManualDiscipline below.
+  const [manualDiscipline, setManualDiscipline] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -177,6 +187,7 @@ function OnboardingForm() {
           setStep(Math.min(Math.max(draft.step, 0), STEPS.length - 1));
         }
         setManualInstitution(draft.manualInstitution);
+        setManualDiscipline(draft.manualDiscipline);
       } else {
         setForm(serverForm);
         setWaecRows(serverWaecRows);
@@ -185,6 +196,15 @@ function OnboardingForm() {
         // restore that mode so the name stays visible and editable.
         if (serverForm.institution_name && !institutionTypeFor(serverForm.institution_name)) {
           setManualInstitution(true);
+        }
+        // NEW: same restore logic for discipline. A saved course name
+        // that isn't in DISCIPLINE_OPTIONS came through the manual path,
+        // so restore that mode so it stays visible and editable.
+        if (
+          serverForm.discipline &&
+          !DISCIPLINE_OPTIONS.includes(serverForm.discipline)
+        ) {
+          setManualDiscipline(true);
         }
       }
       setLoading(false);
@@ -199,8 +219,8 @@ function OnboardingForm() {
   // draft.
   useEffect(() => {
     if (loading) return;
-    writeDraft({ form, waecRows, step, manualInstitution });
-  }, [form, waecRows, step, manualInstitution, loading]);
+    writeDraft({ form, waecRows, step, manualInstitution, manualDiscipline });
+  }, [form, waecRows, step, manualInstitution, manualDiscipline, loading]);
 
   // AUDIT FIX (batch 2): warn on tab close / refresh / external navigation
   // while there are unsaved edits. Client-side navigation (Skip, Finish,
@@ -249,6 +269,18 @@ function OnboardingForm() {
     setDirty(true);
   }
 
+  // NEW (user feedback batch): escape hatch for courses missing from the
+  // curated list (lib/data/courses.ts). Same swap-clears-field pattern
+  // as toggleManualInstitution -- a half-typed Combobox filter that never
+  // committed must not carry over into the free-text input, and vice
+  // versa. The discipline column is already free text, so a manual entry
+  // saves straight to the DB with no conversion step.
+  function toggleManualDiscipline() {
+    setManualDiscipline((m) => !m);
+    setForm((f) => ({ ...f, discipline: "" }));
+    setDirty(true);
+  }
+
   function validateStep(): string | null {
     if (step === 0 && !form.full_name.trim()) return "We need your name to personalize matches.";
     if (step === 1 && manualInstitution && form.institution_name.trim() && !form.institution_type) {
@@ -287,7 +319,7 @@ function OnboardingForm() {
         full_name: form.full_name.trim(),
         nationality: form.nationality.trim() || null,
         gender: form.gender || null,
-        discipline: form.discipline || null,
+        discipline: form.discipline.trim() || null,
         gpa: form.gpa ? Number(form.gpa) : null,
         financial_need: form.financial_need,
         career_goals: form.career_goals.trim() || null,
@@ -438,6 +470,22 @@ function OnboardingForm() {
                   onChange={(e) => update("date_of_birth", e.target.value)}
                 />
               </FormField>
+              {/* PRIVACY TRANSPARENCY (user feedback batch): a student
+                  asked "will the developer see my personal details". The
+                  honest answer is yes -- admins can read profile rows via
+                  the Supabase dashboard. Rather than hide that fact, we
+                  state it plainly here alongside the real privacy
+                  promises: never sold, never shared with providers without
+                  explicit consent, deletable at any time from Settings. */}
+              <div className="rounded-lg bg-navy-50 border border-hairline px-3.5 py-2.5 -mt-2 mb-4">
+                <p className="text-xs text-navy-light leading-relaxed">
+                  <strong className="text-navy">Who can see this?</strong> Only the small Scholars
+                  team, to run your matches and respond to support requests. Scholarship providers
+                  never see your profile -- they only see the applications you choose to send them.
+                  We don&apos;t sell or share your data, and you can delete your account and everything
+                  in it from Settings at any time.
+                </p>
+              </div>
               <FormField label="Nationality">
                 <input
                   className={inputClass}
@@ -493,14 +541,47 @@ function OnboardingForm() {
           )}
           {step === 1 && (
             <>
-              <FormField label="Field of study / discipline" hint="Search and select -- typing the exact course name works too.">
-                <Combobox
-                  options={DISCIPLINE_COMBO_OPTIONS}
-                  value={form.discipline}
-                  onChange={(value) => update("discipline", value)}
-                  placeholder="Search a course, e.g. Computer Science"
-                />
+              <FormField
+                label="Field of study / discipline"
+                hint={
+                  manualDiscipline
+                    ? "Type your course's official name exactly as it appears on your admission letter -- we use this for matching."
+                    : "Search and select -- typing the exact course name works too."
+                }
+              >
+                {manualDiscipline ? (
+                  <input
+                    className={inputClass}
+                    type="text"
+                    value={form.discipline}
+                    onChange={(e) => update("discipline", e.target.value)}
+                    placeholder="e.g. Mechatronics Engineering"
+                  />
+                ) : (
+                  <Combobox
+                    options={DISCIPLINE_COMBO_OPTIONS}
+                    value={form.discipline}
+                    onChange={(value) => update("discipline", value)}
+                    placeholder="Search a course, e.g. Computer Science"
+                  />
+                )}
               </FormField>
+              {/* DISCIPLINE ESCAPE HATCH (user feedback batch): a FUTA
+                  student reported his new course isn't in the list. The
+                  curated list in lib/data/courses.ts will never stay
+                  current -- new courses appear every academic session.
+                  Mirrors the existing institution escape hatch pattern
+                  exactly, so the UX is already familiar. Swapping modes
+                  clears the field on purpose (see toggleManualDiscipline). */}
+              <button
+                type="button"
+                onClick={toggleManualDiscipline}
+                className="-mt-2 mb-4 text-xs font-medium text-navy hover:underline"
+              >
+                {manualDiscipline
+                  ? "Search the list instead"
+                  : "Can't find your course? Enter it manually"}
+              </button>
               <FormField
                 label="Institution"
                 hint={
