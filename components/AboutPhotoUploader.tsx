@@ -2,6 +2,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { StatusMessage } from "@/components/StatusMessage";
 
 // components/AboutPhotoUploader.tsx
 //
@@ -110,6 +111,15 @@ export function AboutPhotoUploader({ currentUrl }: { currentUrl: string | null }
 
   return (
     <div className="flex flex-col gap-2">
+      {currentUrl && (
+        // AUDIT FIX (P10): loading="lazy" on non-hero images
+        <img
+          src={currentUrl}
+          alt="Founder portrait"
+          loading="lazy"
+          className="w-full aspect-square object-cover rounded-xl border border-hairline mb-2"
+        />
+      )}
       <div className="flex items-center gap-3 flex-wrap">
         <button
           type="button"
@@ -130,8 +140,8 @@ export function AboutPhotoUploader({ currentUrl }: { currentUrl: string | null }
           </button>
         )}
       </div>
-      {notice && <p className="text-xs text-emerald">{notice}</p>}
-      {error && <p className="text-xs text-rose">{error}</p>}
+      <StatusMessage tone="success">{notice}</StatusMessage>
+      <StatusMessage tone="error">{error}</StatusMessage>
       <input
         ref={inputRef}
         type="file"
