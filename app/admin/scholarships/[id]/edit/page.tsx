@@ -1,9 +1,9 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ScholarshipFields } from "@/components/admin/ScholarshipFields";
 import { RuleBuilder } from "@/components/admin/RuleBuilder";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
   EMPTY_SCHOLARSHIP,
   diffRules,
@@ -43,7 +43,6 @@ type AdminScholarship = Omit<
 export default function EditScholarshipPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-
   const [values, setValues] = useState<ScholarshipFormValues>(EMPTY_SCHOLARSHIP);
   const [rules, setRules] = useState<RuleFormRow[]>([]);
   const [originalRules, setOriginalRules] = useState<RuleFormRow[]>([]);
@@ -52,6 +51,10 @@ export default function EditScholarshipPage() {
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+  // AUDIT FIX (batch 3): deletion is irreversible and cascades to rules,
+  // saves, and applications. Replaced window.confirm() with the styled,
+  // focus-trapped ConfirmDialog (Esc cancels, Cancel is the default focus).
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -67,13 +70,11 @@ export default function EditScholarshipPage() {
       }
       const { scholarships } = await res.json();
       const scholarship = (scholarships as AdminScholarship[]).find((s) => s.id === params.id);
-
       if (!scholarship) {
         setNotFound(true);
         setLoading(false);
         return;
       }
-
       setValues({
         title: scholarship.title,
         provider_name: scholarship.provider_name,
@@ -96,7 +97,6 @@ export default function EditScholarshipPage() {
           scholarship.historical_acceptance_rate != null ? String(scholarship.historical_acceptance_rate) : "",
         competitiveness_notes: scholarship.competitiveness_notes ?? "",
       });
-
       const loadedRules: RuleFormRow[] = (scholarship.scholarship_rules ?? []).map((r) => ({
         key: crypto.randomUUID(),
         id: r.id,
@@ -119,7 +119,6 @@ export default function EditScholarshipPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitError(null);
-
     const parsed = scholarshipSchema.safeParse(values);
     if (!parsed.success) {
       const fieldErrors: typeof errors = {};
@@ -130,9 +129,7 @@ export default function EditScholarshipPage() {
       return;
     }
     setErrors({});
-
     setSaving(true);
-
     const updateRes = await fetch(`/api/admin/scholarships/${params.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -159,20 +156,17 @@ export default function EditScholarshipPage() {
         competitiveness_notes: parsed.data.competitiveness_notes || null,
       }),
     });
-
     if (!updateRes.ok) {
       setSaving(false);
       const body = await updateRes.json().catch(() => ({}));
       setSubmitError(body.error ?? "Couldn't save changes.");
       return;
     }
-
     // The rules API only exposes add-one / delete-one, not bulk replace —
     // diff against what was originally loaded and reconcile with the
     // minimum number of calls, rather than wiping and rebuilding.
     const validRules = rules.filter((r) => r.field && (r.operator === "exists" || r.value !== ""));
     const { toDelete, toAdd } = diffRules(originalRules, validRules);
-
     const deleteResults = await Promise.all(
       toDelete.map((ruleId) =>
         fetch(`/api/admin/scholarships/${params.id}/rules/${ruleId}`, { method: "DELETE" })
@@ -191,21 +185,17 @@ export default function EditScholarshipPage() {
         })
       )
     );
-
     setSaving(false);
-
     const ruleFailure = [...deleteResults, ...addResults].some((r) => !r.ok);
     if (ruleFailure) {
       setSubmitError("Scholarship saved, but one or more rule changes failed. Reload and check the rules below.");
       return;
     }
-
     router.push("/admin/scholarships");
     router.refresh();
   }
 
-  async function handleDelete() {
-    if (!confirm(`Delete "${values.title}"? This can't be undone.`)) return;
+  async function doDelete() {
     const res = await fetch(`/api/admin/scholarships/${params.id}`, { method: "DELETE" });
     if (res.ok) {
       router.push("/admin/scholarships");
@@ -219,34 +209,40 @@ export default function EditScholarshipPage() {
   if (loading) {
     return <p className="text-sm text-navy-light">Loading…</p>;
   }
-
   if (notFound) {
     return <p className="text-sm text-rose">Scholarship not found, or admin access is required.</p>;
   }
-
   return (
     <div>
+      {confirmDeleteOpen && (
+        <ConfirmDialog
+          message={`Delete "${values.title}"? This can't be undone.`}
+          onConfirm={doDelete}
+          onClose={() => setConfirmDeleteOpen(false)}
+          confirmLabel="Delete scholarship"
+          tone="rose"
+        />
+      )}
       <div className="flex items-center justify-between mb-1">
         <h1 className="font-display text-2xl font-semibold text-navy">Edit scholarship</h1>
-        <button onClick={handleDelete} className="text-sm font-medium text-rose hover:underline">
+        <button
+          onClick={() => setConfirmDeleteOpen(true)}
+          className="text-sm font-medium text-rose hover:underline"
+        >
           Delete scholarship
         </button>
       </div>
       <p className="text-sm text-navy-light mb-8">{values.title}</p>
-
       <form onSubmit={handleSubmit}>
         <div className="bg-white rounded-xl border border-hairline p-6 mb-6">
           <ScholarshipFields values={values} errors={errors} onChange={update} />
         </div>
-
         <div className="bg-white rounded-xl border border-hairline p-6 mb-6">
           <h2 className="font-display text-lg font-semibold text-navy mb-1">Eligibility rules</h2>
           <p className="text-sm text-navy-light mb-4">These drive the match score students see.</p>
           <RuleBuilder rules={rules} onChange={setRules} />
         </div>
-
         {submitError && <p className="text-sm text-rose mb-4">{submitError}</p>}
-
         <div className="flex items-center gap-3">
           <button
             type="submit"
