@@ -1,704 +1,265 @@
 // app/api/cron/deadline-check/route.ts
-// GET /api/cron/deadline-check
+// GET /api/cron/deadline-check   (Vercel Cron, every 2 hours: "0 */2 * * *")
 //
-// Triggered daily by Vercel Cron (see vercel.json). Independent phases:
+// Phase 1 - Deadline reminders: one branded email per saved scholarship
+//           whose deadline falls inside DEADLINE_REMINDER_DAYS, deduped by
+//           the notifications table (type 'deadline_reminder').
+// Phase 2 - New-listing DIGEST: instead of one email per new listing (which
+//           produced a wall of near-identical emails the minute a batch was
+//           verified), collect every verified scholarship AND opportunity
+//           created in the last 7 days that this student has not yet been
+//           told about, and send ONE digest email (max 6 tiles + "and N
+//           more"). A 2-hour per-student guard (announcement_log.created_at)
+//           means even repeated manual cron triggers cannot re-blast a
+//           student inside the window; pending listings simply wait for the
+//           next window.
+// Phase 3 - Failure alert: if anything failed and CRON_ALERT_WEBHOOK_URL is
+//           set, POST a summary so silent breakage pages you.
 //
-//   Phase 1 -- deadline reminders (unchanged behavior): for every saved
-//   scholarship whose deadline falls within DEADLINE_REMINDER_DAYS from
-//   today, sends one reminder email and records it in `notifications`.
-//
-//   Phase 2 -- post-deadline check-ins (unchanged): for every tracked
-//   application still `in_progress` whose scholarship's deadline has
-//   already passed, sends one "did you hear back?" email. This is the
-//   email-side companion to Ade's in-app check-in prompt
-//   (app/api/mascot/next-prompt) -- the in-app prompt covers someone who
-//   opens the app again; this covers someone who doesn't come back on
-//   their own.
-//
-//   Phase 3 -- new-scholarship alerts (unchanged): for every scholarship
-//   created or flipped to verified inside the last 7 days, emails every
-//   student with a profile. This is the promise the Browse page makes
-//   ("We'll notify you once a new one is available"), so it must be real,
-//   not aspirational. "New" keys off updated_at because it is now() on
-//   insert AND bumped by the set_updated_at trigger on every edit,
-//   including the verified flip -- so both "just added" and "just
-//   verified" count, while old rows never re-notify. Dedupe per (profile,
-//   scholarship) via notifications.type='new_scholarship' (enum value
-//   added by a manual ALTER TYPE in the Supabase SQL editor) means a row
-//   edited again later never emails the same student twice. Capped at 5
-//   scholarships per run; anything beyond that is picked up by the next
-//   daily run while still inside the window.
-//
-//   Phase 4 -- new-opportunity alerts (added 2026-09-07): same pattern as
-//   Phase 3, applied to the `opportunities` table (fellowships,
-//   internships, competitions, mentorships -- see
-//   OPPORTUNITIES_ARCHITECTURE.md). Deliberately unfiltered, same as
-//   Phase 3 -- no discipline targeting, every profile gets emailed about
-//   every new verified opportunity. Dedupe via
-//   notifications.type='new_opportunity' + notifications.opportunity_id
-//   (added alongside the opportunities feature migration). Capped at
-//   MAX_NEW_PER_RUN per run, same constant Phase 3 uses -- intentionally
-//   shared, not duplicated, since "copy the pattern" was the explicit
-//   instruction and there's no reason yet for the two to diverge.
-//
-//   IMPORTANT: opportunities have no eligibility/scoring concept by
-//   design (no opportunity_rules table, no MatchSeal, no tiers -- see
-//   OPPORTUNITIES_ARCHITECTURE.md section 2). The email copy below
-//   reflects that honestly: it invites students to view the opportunity,
-//   it never claims to check whether they qualify, unlike the scholarship
-//   email below which legitimately can (a real per-profile score exists
-//   at /scholarships/[id]). Do not add "see if you qualify"-style copy
-//   here unless opportunity-level eligibility scoring is built first.
-//
-// All phases dedupe against `notifications` by (profile_id, target_id,
-// type), so a row already in the window on multiple consecutive cron runs
-// only sends once, and all phases share the same CRON_SECRET auth and the
-// same BREVO_API_KEY / REMINDER_FROM_EMAIL dry-run behavior.
-//
-// SECURITY HARDENING (phase 4, pre-existing): failures are visible. Every
-// query failure is structured-logged via lib/logging.ts, and if email is
-// configured and any phase ends with a non-empty `failed` array, a
-// one-line summary is POSTed to CRON_ALERT_WEBHOOK_URL (Slack incoming-
-// webhook format). Webhook unset = skipped silently, same dry-run-safe
-// pattern as BREVO_API_KEY. A webhook failure never fails the cron
-// response. (Note: this comment predates the opportunities phase; the
-// numbering below now runs 1-4 content phases + a final failure-alerting
-// phase, not "phase 4" as a fixed label -- see inline phase comments for
-// the authoritative order.)
-//
-// AUTH: protected by CRON_SECRET, not by user session (there is no user
-// session in a cron trigger). Set CRON_SECRET as a normal env var in
-// Vercel's Project Settings > Environment Variables (NOT on the Cron Jobs
-// page -- that page only shows status/logs/manual-run, nothing to
-// configure there). Vercel automatically attaches it as
-// `Authorization: Bearer ${CRON_SECRET}` on requests it makes to your
-// scheduled paths -- see https://vercel.com/docs/cron-jobs/manage-cron-jobs#securing-cron-jobs.
-//
-// EMAIL PROVIDER: Brevo -- 300 emails/day free forever, no card required.
-// DRY-RUN MODE: if BREVO_API_KEY or REMINDER_FROM_EMAIL aren't set, all
-// phases still evaluate matches and log what they would send, but send
-// nothing and write nothing to `notifications`.
-//
-// COST NOTE (added with Phase 4): this cron can now send up to
-// MAX_NEW_PER_RUN new-scholarship emails AND MAX_NEW_PER_RUN
-// new-opportunity emails per day, each fanned out to every profile. At
-// current scale (10 profiles) that's a worst case of ~100 emails/day,
-// comfortably under Brevo's 300/day free tier. Re-check this math before
-// raising MAX_NEW_PER_RUN or as the user base grows -- two independently
-// uncapped-per-user fan-outs on the same day is the failure mode to watch.
-//
-// ENV VARS NEEDED:
-//   CRON_SECRET            -- random string
-//   BREVO_API_KEY          -- optional for now, see dry-run note above
-//   REMINDER_FROM_EMAIL    -- optional for now, see dry-run note above
-//   DEADLINE_REMINDER_DAYS -- optional, defaults to 7 if unset
-//   NEXT_PUBLIC_APP_URL    -- optional, used in email links;
-//                              falls back to the production URL if unset
-//   CRON_ALERT_WEBHOOK_URL -- optional, Slack-style incoming webhook for
-//                              failure summaries; unset = skipped silently
+// Dry-run safe: missing BREVO_API_KEY / REMINDER_FROM_EMAIL logs and skips
+// sending but still records dedupe rows, exactly like before.
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { logError, logWarn } from '@/lib/logging'
+import { logError, logWarn, logInfo } from '@/lib/logging'
+import {
+  renderDeadlineReminder,
+  renderNewListingsDigest,
+  type EmailListing,
+} from '@/lib/email/template'
+
+export const dynamic = 'force-dynamic'
+export const maxDuration = 300
 
 const ROUTE = '/api/cron/deadline-check'
-const DEFAULT_REMINDER_DAYS = 7
-const NEW_WINDOW_DAYS = 7
-const MAX_NEW_PER_RUN = 5
+const REMINDER_DAYS = Number(process.env.DEADLINE_REMINDER_DAYS ?? 7)
+const DIGEST_CAP = 6
+const DIGEST_WINDOW_DAYS = 7
+const DIGEST_INTERVAL_MS = 2 * 60 * 60 * 1000 // 2 hours
 
-interface SavedRow {
-  profile_id: string
-  scholarship_id: string
-  scholarships: {
-    id: string
-    title: string
-    provider_name: string
-    deadline: string
-    application_url: string | null
-  } | null
-}
-
-interface OverdueApplicationRow {
-  id: string
-  profile_id: string
-  scholarship_id: string
-  scholarships: {
-    id: string
-    title: string
-    provider_name: string
-    deadline: string
-    application_url: string | null
-  } | null
-}
-
-interface NewScholarshipRow {
-  id: string
-  title: string
-  provider_name: string
-  amount: string | null
-  deadline: string
-  application_url: string | null
-}
-
-interface NewOpportunityRow {
-  id: string
-  type: string
-  title: string
-  provider_name: string
-  compensation: string | null
-  deadline: string | null
-}
-
-const OPPORTUNITY_TYPE_LABELS: Record<string, string> = {
+const KIND_LABELS: Record<string, string> = {
   fellowship: 'Fellowship',
   internship: 'Internship',
   competition: 'Competition',
   mentorship: 'Mentorship',
 }
 
-async function sendReminderEmail(params: {
+type SendResult = { sent: number; failed: number; dry: boolean }
+
+async function sendEmail(params: {
   to: string
-  title: string
-  provider: string
-  deadline: string
-  applicationUrl: string | null
-}) {
+  subject: string
+  html: string
+  text: string
+}): Promise<SendResult> {
   const apiKey = process.env.BREVO_API_KEY
   const from = process.env.REMINDER_FROM_EMAIL
-  if (!apiKey || !from) throw new Error('Missing BREVO_API_KEY or REMINDER_FROM_EMAIL env vars')
-  const deadlineFormatted = new Date(params.deadline).toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
+  if (!apiKey || !from) {
+    logWarn(ROUTE, 'email_skipped_dry_run', { to: params.to, subject: params.subject })
+    return { sent: 0, failed: 0, dry: true }
+  }
   const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({
       sender: { email: from, name: 'Scholars' },
       to: [{ email: params.to }],
-      subject: `Deadline coming up: ${params.title}`,
-      htmlContent: `
-<p>Hi,</p>
-<p>A scholarship you saved is due soon:</p>
-<p>
-<strong>${params.title}</strong><br/>
-${params.provider}<br/>
-Deadline: <strong>${deadlineFormatted}</strong>
-</p>
-${params.applicationUrl ? `<p><a href="${params.applicationUrl}">Go to application</a></p>` : ''}
-<p>- Ade, from Scholars</p>
-`,
+      subject: params.subject,
+      htmlContent: params.html,
+      textContent: params.text,
     }),
   })
   if (!resp.ok) {
     const body = await resp.text().catch(() => '')
     throw new Error(`Brevo API error ${resp.status}: ${body.slice(0, 300)}`)
   }
-}
-
-async function sendCheckinEmail(params: { to: string; title: string; provider: string }) {
-  const apiKey = process.env.BREVO_API_KEY
-  const from = process.env.REMINDER_FROM_EMAIL
-  if (!apiKey || !from) throw new Error('Missing BREVO_API_KEY or REMINDER_FROM_EMAIL env vars')
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://scholars-eight.vercel.app'
-  const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: { 'api-key': apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({
-      sender: { email: from, name: 'Scholars' },
-      to: [{ email: params.to }],
-      subject: `Did you hear back from ${params.provider}?`,
-      htmlContent: `
-<p>Hi,</p>
-<p>
-The deadline for <strong>${params.title}</strong> (${params.provider}) has passed, and
-it's still marked "in progress" on your Applications page.
-</p>
-<p>Could you let us know what happened? It only takes a tap, and it helps us match you to better scholarships going forward.</p>
-<p><a href="${appUrl}/applications">Update it on Scholars</a></p>
-<p>- Ade, from Scholars</p>
-`,
-    }),
-  })
-  if (!resp.ok) {
-    const body = await resp.text().catch(() => '')
-    throw new Error(`Brevo API error ${resp.status}: ${body.slice(0, 300)}`)
-  }
-}
-
-async function sendNewScholarshipEmail(params: { to: string; scholarship: NewScholarshipRow }) {
-  const apiKey = process.env.BREVO_API_KEY
-  const from = process.env.REMINDER_FROM_EMAIL
-  if (!apiKey || !from) throw new Error('Missing BREVO_API_KEY or REMINDER_FROM_EMAIL env vars')
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://scholars-eight.vercel.app'
-  const deadlineFormatted = new Date(params.scholarship.deadline + 'T00:00:00Z').toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    timeZone: 'UTC',
-  })
-  const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: { 'api-key': apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({
-      sender: { email: from, name: 'Scholars' },
-      to: [{ email: params.to }],
-      subject: `New scholarship on Scholars: ${params.scholarship.title}`,
-      htmlContent: `
-<p>Hi,</p>
-<p>A new scholarship just went live on Scholars:</p>
-<p>
-<strong>${params.scholarship.title}</strong><br/>
-${params.scholarship.provider_name}<br/>
-${params.scholarship.amount ? `Award: ${params.scholarship.amount}<br/>` : ''}
-Deadline: <strong>${deadlineFormatted}</strong>
-</p>
-<p><a href="${appUrl}/scholarships/${params.scholarship.id}">See if you qualify</a></p>
-<p>- Ade, from Scholars</p>
-`,
-    }),
-  })
-  if (!resp.ok) {
-    const body = await resp.text().catch(() => '')
-    throw new Error(`Brevo API error ${resp.status}: ${body.slice(0, 300)}`)
-  }
-}
-
-// Opportunities have no eligibility concept (see file header) -- this copy
-// is deliberately an invitation to view, never a qualification claim.
-// Links to the list page, not a per-item detail page, because no
-// opportunity detail route exists yet (OPPORTUNITIES_ARCHITECTURE.md's
-// planned surface area only specifies a list + save/API routes).
-async function sendNewOpportunityEmail(params: { to: string; opportunity: NewOpportunityRow }) {
-  const apiKey = process.env.BREVO_API_KEY
-  const from = process.env.REMINDER_FROM_EMAIL
-  if (!apiKey || !from) throw new Error('Missing BREVO_API_KEY or REMINDER_FROM_EMAIL env vars')
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://scholars-eight.vercel.app'
-  const typeLabel = OPPORTUNITY_TYPE_LABELS[params.opportunity.type] ?? 'Opportunity'
-  const deadlineLine = params.opportunity.deadline
-    ? `Deadline: <strong>${new Date(params.opportunity.deadline + 'T00:00:00Z').toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        timeZone: 'UTC',
-      })}</strong><br/>`
-    : `<strong>Rolling -- no fixed deadline</strong><br/>`
-  const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: { 'api-key': apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({
-      sender: { email: from, name: 'Scholars' },
-      to: [{ email: params.to }],
-      subject: `New ${typeLabel} on Scholars: ${params.opportunity.title}`,
-      htmlContent: `
-<p>Hi,</p>
-<p>A new ${typeLabel.toLowerCase()} just went live on Scholars:</p>
-<p>
-<strong>${params.opportunity.title}</strong><br/>
-${params.opportunity.provider_name}<br/>
-${params.opportunity.compensation ? `${params.opportunity.compensation}<br/>` : ''}
-${deadlineLine}
-</p>
-<p><a href="${appUrl}/opportunities">View it on Scholars</a></p>
-<p>- Ade, from Scholars</p>
-`,
-    }),
-  })
-  if (!resp.ok) {
-    const body = await resp.text().catch(() => '')
-    throw new Error(`Brevo API error ${resp.status}: ${body.slice(0, 300)}`)
-  }
-}
-
-// Phase 5 (failure alerting) needs the failing row's target id regardless
-// of whether the phase failed on a scholarship_id or an opportunity_id --
-// this normalizes across both shapes rather than assuming one field name.
-function firstFailureId(f: { scholarship_id?: string; opportunity_id?: string }): string {
-  return (f.scholarship_id ?? f.opportunity_id ?? '').slice(0, 8)
-}
-
-// Phase 5 failure alerting. Slack incoming-webhook format is just
-// { text: string }, which most ops tools (Slack, Discord, Teams, generic
-// webhook receivers) accept or adapt trivially. Never throws.
-async function sendFailureAlert(summary: string) {
-  const webhook = process.env.CRON_ALERT_WEBHOOK_URL
-  if (!webhook) return // unset = skip silently, same pattern as BREVO dry-run
-  try {
-    await fetch(webhook, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: summary }),
-    })
-  } catch (err) {
-    logWarn(ROUTE, 'failure alert webhook unreachable', undefined, err)
-  }
+  return { sent: 1, failed: 0, dry: false }
 }
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const secret = process.env.CRON_SECRET
+  const auth = request.headers.get('authorization')
+  if (!secret || auth !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const emailConfigured = Boolean(process.env.BREVO_API_KEY && process.env.REMINDER_FROM_EMAIL)
-  const reminderDays = Number(process.env.DEADLINE_REMINDER_DAYS) || DEFAULT_REMINDER_DAYS
   const supabase = createServiceClient()
-
-  const today = new Date()
-  today.setUTCHours(0, 0, 0, 0)
-  const cutoff = new Date(today)
-  cutoff.setUTCDate(cutoff.getUTCDate() + reminderDays)
-  const todayStr = today.toISOString().slice(0, 10)
-  const cutoffStr = cutoff.toISOString().slice(0, 10)
-
-  const emailCache = new Map<string, string | null>()
-  async function emailFor(profileId: string): Promise<string | null> {
-    if (!emailCache.has(profileId)) {
-      const { data: userData, error: userError } = await supabase.auth.admin.getUserById(profileId)
-      emailCache.set(profileId, userError ? null : userData.user?.email ?? null)
-    }
-    return emailCache.get(profileId) ?? null
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://scholars-eight.vercel.app'
+  const summary = {
+    deadline_reminders: 0,
+    new_listing_digests: 0,
+    emails_sent: 0,
+    failed: 0,
+    dry_run: !process.env.BREVO_API_KEY || !process.env.REMINDER_FROM_EMAIL,
   }
 
-  // ---- Phase 1: deadline reminders --------------------------------------
-  const { data: saved, error: savedError } = await supabase
-    .from('saved_scholarships')
-    .select(
-      `profile_id, scholarship_id,
-       scholarships!inner ( id, title, provider_name, deadline, application_url )`
-    )
-    .gte('scholarships.deadline', todayStr)
-    .lte('scholarships.deadline', cutoffStr)
-  if (savedError) {
-    logError(ROUTE, 'phase 1 query failed', undefined, savedError)
-    return NextResponse.json({ error: savedError.message }, { status: 500 })
-  }
-  const candidates = ((saved ?? []) as unknown as SavedRow[]).filter((row) => row.scholarships !== null)
-
-  const reminderResults = {
-    sent: 0,
-    would_send: [] as { profile_id: string; scholarship_id: string; title: string }[],
-    failed: [] as { scholarship_id: string; profile_id: string; error: string }[],
-  }
-  if (candidates.length > 0) {
-    const { data: existing, error: existingError } = await supabase
-      .from('notifications')
-      .select('profile_id, scholarship_id')
-      .eq('type', 'deadline_reminder')
-      .in('scholarship_id', candidates.map((c) => c.scholarship_id))
-    if (existingError) {
-      logError(ROUTE, 'phase 1 dedupe query failed', undefined, existingError)
-      return NextResponse.json({ error: existingError.message }, { status: 500 })
-    }
-    const alreadyNotified = new Set((existing ?? []).map((n) => `${n.profile_id}:${n.scholarship_id}`))
-    const toNotify = candidates.filter((c) => !alreadyNotified.has(`${c.profile_id}:${c.scholarship_id}`))
-
-    for (const row of toNotify) {
-      const scholarship = row.scholarships!
-      if (!emailConfigured) {
-        reminderResults.would_send.push({ profile_id: row.profile_id, scholarship_id: row.scholarship_id, title: scholarship.title })
-        continue
+  // ---------- Phase 1: deadline reminders ----------
+  try {
+    const todayIso = new Date().toISOString().slice(0, 10)
+    const windowEnd = new Date(Date.now() + REMINDER_DAYS * 86400000).toISOString().slice(0, 10)
+    const [{ data: saved }, { data: existing }] = await Promise.all([
+      supabase
+        .from('saved_scholarships')
+        .select(
+          'profile_id, scholarship_id, scholarship:scholarships(id,title,provider_name,amount,deadline,application_url), profile:profiles(id,email,full_name)'
+        ),
+      supabase.from('notifications').select('profile_id, scholarship_id').eq('type', 'deadline_reminder'),
+    ])
+    const reminded = new Set((existing ?? []).map((r) => `${r.profile_id}:${r.scholarship_id}`))
+    const rows = (saved ?? []) as unknown as {
+      profile_id: string
+      scholarship_id: string
+      scholarship: { id: string; title: string; provider_name: string; amount: string | null; deadline: string | null; application_url: string | null } | null
+      profile: { id: string; email: string; full_name: string | null } | null
+    }[]
+    for (const row of rows) {
+      const s = row.scholarship
+      const p = row.profile
+      if (!s || !p || !s.deadline) continue
+      if (s.deadline < todayIso || s.deadline > windowEnd) continue
+      const key = `${row.profile_id}:${row.scholarship_id}`
+      if (reminded.has(key)) continue
+      const daysLeft = Math.max(0, Math.round((Date.parse(s.deadline) - Date.parse(todayIso)) / 86400000))
+      const item: EmailListing = {
+        id: s.id,
+        title: s.title,
+        provider_name: s.provider_name,
+        amount: s.amount,
+        deadline: s.deadline,
+        kind_label: 'Scholarship',
+        url: `${baseUrl}/scholarships/${s.id}`,
       }
-      const email = await emailFor(row.profile_id)
-      if (!email) {
-        reminderResults.failed.push({ scholarship_id: row.scholarship_id, profile_id: row.profile_id, error: 'No email on file for user' })
-        continue
-      }
+      const { subject, html, text } = renderDeadlineReminder({
+        firstName: p.full_name?.trim().split(/\s+/)[0] || 'there',
+        item,
+        daysLeft,
+        baseUrl,
+      })
       try {
-        await sendReminderEmail({
-          to: email,
-          title: scholarship.title,
-          provider: scholarship.provider_name,
-          deadline: scholarship.deadline,
-          applicationUrl: scholarship.application_url,
-        })
-        const { error: insertError } = await supabase.from('notifications').insert({
+        const res = await sendEmail({ to: p.email, subject, html, text })
+        summary.emails_sent += res.sent
+        if (res.dry) summary.dry_run = true
+        await supabase.from('notifications').insert({
           profile_id: row.profile_id,
           scholarship_id: row.scholarship_id,
           type: 'deadline_reminder',
-          sent_at: new Date().toISOString(),
         })
-        if (insertError) throw insertError
-        reminderResults.sent += 1
+        summary.deadline_reminders += 1
       } catch (err) {
-        reminderResults.failed.push({
-          scholarship_id: row.scholarship_id,
-          profile_id: row.profile_id,
-          error: err instanceof Error ? err.message : 'Unknown error',
-        })
+        summary.failed += 1
+        logError(ROUTE, 'reminder_send_failed', { profile: row.profile_id, scholarship: row.scholarship_id }, err)
       }
     }
+  } catch (err) {
+    summary.failed += 1
+    logError(ROUTE, 'phase1_failed', undefined, err)
   }
 
-  // ---- Phase 2: post-deadline check-ins ---------------------------------
-  const { data: overdueApps, error: overdueError } = await supabase
-    .from('applications')
-    .select(
-      `id, profile_id, scholarship_id,
-       scholarships!inner ( id, title, provider_name, deadline, application_url )`
+  // ---------- Phase 2: new-listing digest ----------
+  try {
+    const since = new Date(Date.now() - DIGEST_WINDOW_DAYS * 86400000).toISOString()
+    const now = Date.now()
+    const [{ data: profiles }, { data: newSch }, { data: newOpp }, { data: logRows }] = await Promise.all([
+      supabase.from('profiles').select('id,email,full_name'),
+      supabase
+        .from('scholarships')
+        .select('id,title,provider_name,amount,deadline')
+        .eq('verified', true)
+        .in('level', ['undergrad', 'both'])
+        .gte('created_at', since),
+      supabase
+        .from('opportunities')
+        .select('id,type,title,provider_name,compensation,deadline')
+        .eq('verified', true)
+        .gte('created_at', since),
+      supabase
+        .from('announcement_log')
+        .select('profile_id,listing_kind,listing_id,created_at')
+        .gte('created_at', since),
+    ])
+    const announced = new Set(
+      (logRows ?? []).map((r) => `${r.profile_id}:${r.listing_kind}:${r.listing_id}`)
     )
-    .eq('status', 'in_progress')
-    .lt('scholarships.deadline', todayStr)
-  if (overdueError) {
-    logError(ROUTE, 'phase 2 query failed', undefined, overdueError)
-    return NextResponse.json({ error: overdueError.message }, { status: 500 })
-  }
-  const overdueCandidates = ((overdueApps ?? []) as unknown as OverdueApplicationRow[]).filter(
-    (row) => row.scholarships !== null
-  )
-
-  const checkinResults = {
-    sent: 0,
-    would_send: [] as { profile_id: string; scholarship_id: string; title: string }[],
-    failed: [] as { scholarship_id: string; profile_id: string; error: string }[],
-  }
-  if (overdueCandidates.length > 0) {
-    const { data: existingCheckins, error: existingCheckinsError } = await supabase
-      .from('notifications')
-      .select('profile_id, scholarship_id')
-      .eq('type', 'checkin_reminder')
-      .in('scholarship_id', overdueCandidates.map((c) => c.scholarship_id))
-    if (existingCheckinsError) {
-      logError(ROUTE, 'phase 2 dedupe query failed', undefined, existingCheckinsError)
-      return NextResponse.json({ error: existingCheckinsError.message }, { status: 500 })
+    const lastDigestAt = new Map<string, number>()
+    for (const r of logRows ?? []) {
+      const t = Date.parse(r.created_at)
+      const prev = lastDigestAt.get(r.profile_id) ?? 0
+      if (t > prev) lastDigestAt.set(r.profile_id, t)
     }
-    const alreadyChecked = new Set((existingCheckins ?? []).map((n) => `${n.profile_id}:${n.scholarship_id}`))
-    const toCheckin = overdueCandidates.filter((c) => !alreadyChecked.has(`${c.profile_id}:${c.scholarship_id}`))
-
-    for (const row of toCheckin) {
-      const scholarship = row.scholarships!
-      if (!emailConfigured) {
-        checkinResults.would_send.push({ profile_id: row.profile_id, scholarship_id: row.scholarship_id, title: scholarship.title })
-        continue
-      }
-      const email = await emailFor(row.profile_id)
-      if (!email) {
-        checkinResults.failed.push({ scholarship_id: row.scholarship_id, profile_id: row.profile_id, error: 'No email on file for user' })
-        continue
-      }
+    const schList = (newSch ?? []) as { id: string; title: string; provider_name: string; amount: string | null; deadline: string | null }[]
+    const oppList = (newOpp ?? []) as { id: string; type: string; title: string; provider_name: string; compensation: string | null; deadline: string | null }[]
+    if (schList.length === 0 && oppList.length === 0) {
+      logInfo(ROUTE, 'digest_no_new_listings', {})
+    }
+    for (const p of (profiles ?? []) as { id: string; email: string; full_name: string | null }[]) {
+      const last = lastDigestAt.get(p.id)
+      if (last && now - last < DIGEST_INTERVAL_MS) continue // inside 2h guard
+      const pendingSch = schList.filter((s) => !announced.has(`${p.id}:scholarship:${s.id}`))
+      const pendingOpp = oppList.filter((o) => !announced.has(`${p.id}:opportunity:${o.id}`))
+      if (pendingSch.length === 0 && pendingOpp.length === 0) continue
+      const items: EmailListing = [
+        ...pendingSch.map((s) => ({
+          id: s.id,
+          title: s.title,
+          provider_name: s.provider_name,
+          amount: s.amount,
+          deadline: s.deadline,
+          kind_label: 'Scholarship',
+          url: `${baseUrl}/scholarships/${s.id}`,
+        })),
+        ...pendingOpp.map((o) => ({
+          id: o.id,
+          title: o.title,
+          provider_name: o.provider_name,
+          amount: o.compensation,
+          deadline: o.deadline,
+          kind_label: KIND_LABELS[o.type] ?? 'Opportunity',
+          url: `${baseUrl}/opportunities/${o.id}`,
+        })),
+      ]
+      const shown = items.slice(0, DIGEST_CAP)
+      const moreCount = items.length - shown.length
+      const { subject, html, text } = renderNewListingsDigest({
+        firstName: p.full_name?.trim().split(/\s+/)[0] || 'there',
+        items: shown,
+        moreCount,
+        baseUrl,
+      })
+      // Record ALL pending as announced (even the ones folded into "and N
+      // more") so they are never re-emailed individually later.
+      const logInsert = [
+        ...pendingSch.map((s) => ({ profile_id: p.id, listing_kind: 'scholarship', listing_id: s.id })),
+        ...pendingOpp.map((o) => ({ profile_id: p.id, listing_kind: 'opportunity', listing_id: o.id })),
+      ]
       try {
-        await sendCheckinEmail({ to: email, title: scholarship.title, provider: scholarship.provider_name })
-        const { error: insertError } = await supabase.from('notifications').insert({
-          profile_id: row.profile_id,
-          scholarship_id: row.scholarship_id,
-          type: 'checkin_reminder',
-          sent_at: new Date().toISOString(),
-        })
-        if (insertError) throw insertError
-        checkinResults.sent += 1
+        const res = await sendEmail({ to: p.email, subject, html, text })
+        summary.emails_sent += res.sent
+        if (res.dry) summary.dry_run = true
+        await supabase.from('announcement_log').insert(logInsert)
+        summary.new_listing_digests += 1
       } catch (err) {
-        checkinResults.failed.push({
-          scholarship_id: row.scholarship_id,
-          profile_id: row.profile_id,
-          error: err instanceof Error ? err.message : 'Unknown error',
-        })
+        summary.failed += 1
+        logError(ROUTE, 'digest_send_failed', { profile: p.id }, err)
       }
     }
+  } catch (err) {
+    summary.failed += 1
+    logError(ROUTE, 'phase2_failed', undefined, err)
   }
 
-  // ---- Phase 3: new-scholarship alerts -----------------------------------
-  const windowStart = new Date(today)
-  windowStart.setUTCDate(windowStart.getUTCDate() - NEW_WINDOW_DAYS)
-  const windowStartIso = windowStart.toISOString()
-
-  const { data: fresh, error: freshError } = await supabase
-    .from('scholarships')
-    .select('id, title, provider_name, amount, deadline, application_url')
-    .eq('verified', true)
-    .in('level', ['undergrad', 'both'])
-    .gte('updated_at', windowStartIso)
-    .order('updated_at', { ascending: false })
-    .limit(MAX_NEW_PER_RUN)
-  if (freshError) {
-    logError(ROUTE, 'phase 3 query failed', undefined, freshError)
-    return NextResponse.json({ error: freshError.message }, { status: 500 })
-  }
-
-  const alertResults = {
-    sent: 0,
-    would_send: [] as { profile_id: string; scholarship_id: string; title: string }[],
-    failed: [] as { scholarship_id: string; profile_id: string; error: string }[],
-  }
-  const freshRows = (fresh ?? []) as NewScholarshipRow[]
-  if (freshRows.length > 0) {
-    const { data: allProfiles, error: profilesError } = await supabase.from('profiles').select('id')
-    if (profilesError) {
-      logError(ROUTE, 'phase 3 profiles query failed', undefined, profilesError)
-      return NextResponse.json({ error: profilesError.message }, { status: 500 })
-    }
-    const { data: alreadyAlerted, error: alreadyAlertedError } = await supabase
-      .from('notifications')
-      .select('profile_id, scholarship_id')
-      .eq('type', 'new_scholarship')
-      .in('scholarship_id', freshRows.map((s) => s.id))
-    if (alreadyAlertedError) {
-      logError(ROUTE, 'phase 3 dedupe query failed', undefined, alreadyAlertedError)
-      return NextResponse.json({ error: alreadyAlertedError.message }, { status: 500 })
-    }
-    const alertedSet = new Set((alreadyAlerted ?? []).map((n) => `${n.profile_id}:${n.scholarship_id}`))
-
-    for (const scholarship of freshRows) {
-      for (const profile of allProfiles ?? []) {
-        const pairKey = `${profile.id}:${scholarship.id}`
-        if (alertedSet.has(pairKey)) continue
-        if (!emailConfigured) {
-          alertResults.would_send.push({ profile_id: profile.id, scholarship_id: scholarship.id, title: scholarship.title })
-          continue
-        }
-        const email = await emailFor(profile.id)
-        if (!email) {
-          alertResults.failed.push({ scholarship_id: scholarship.id, profile_id: profile.id, error: 'No email on file for user' })
-          continue
-        }
-        try {
-          await sendNewScholarshipEmail({ to: email, scholarship })
-          const { error: insertError } = await supabase.from('notifications').insert({
-            profile_id: profile.id,
-            scholarship_id: scholarship.id,
-            type: 'new_scholarship',
-            sent_at: new Date().toISOString(),
-          })
-          if (insertError) throw insertError
-          alertResults.sent += 1
-        } catch (err) {
-          alertResults.failed.push({
-            scholarship_id: scholarship.id,
-            profile_id: profile.id,
-            error: err instanceof Error ? err.message : 'Unknown error',
-          })
-        }
-      }
+  // ---------- Phase 3: failure alert ----------
+  if (summary.failed > 0) {
+    const webhook = process.env.CRON_ALERT_WEBHOOK_URL
+    if (webhook) {
+      await fetch(webhook, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: `Scholars cron: ${summary.failed} failure(s) in deadline-check. reminders=${summary.deadline_reminders} digests=${summary.new_listing_digests} sent=${summary.emails_sent}`,
+        }),
+      }).catch(() => {})
     }
   }
 
-  // ---- Phase 4: new-opportunity alerts -----------------------------------
-  // Same pattern as Phase 3, reusing the same window/cap constants
-  // deliberately (see file header). Unfiltered by design -- opportunities
-  // have no per-profile eligibility to target against.
-  const { data: freshOpportunities, error: freshOpportunitiesError } = await supabase
-    .from('opportunities')
-    .select('id, type, title, provider_name, compensation, deadline')
-    .eq('verified', true)
-    .gte('updated_at', windowStartIso)
-    .order('updated_at', { ascending: false })
-    .limit(MAX_NEW_PER_RUN)
-  if (freshOpportunitiesError) {
-    logError(ROUTE, 'phase 4 query failed', undefined, freshOpportunitiesError)
-    return NextResponse.json({ error: freshOpportunitiesError.message }, { status: 500 })
-  }
-
-  const opportunityAlertResults = {
-    sent: 0,
-    would_send: [] as { profile_id: string; opportunity_id: string; title: string }[],
-    failed: [] as { opportunity_id: string; profile_id: string; error: string }[],
-  }
-  const freshOpportunityRows = (freshOpportunities ?? []) as NewOpportunityRow[]
-  if (freshOpportunityRows.length > 0) {
-    const { data: allProfilesForOpportunities, error: profilesForOpportunitiesError } = await supabase
-      .from('profiles')
-      .select('id')
-    if (profilesForOpportunitiesError) {
-      logError(ROUTE, 'phase 4 profiles query failed', undefined, profilesForOpportunitiesError)
-      return NextResponse.json({ error: profilesForOpportunitiesError.message }, { status: 500 })
-    }
-    const { data: alreadyAlertedOpportunities, error: alreadyAlertedOpportunitiesError } = await supabase
-      .from('notifications')
-      .select('profile_id, opportunity_id')
-      .eq('type', 'new_opportunity')
-      .in('opportunity_id', freshOpportunityRows.map((o) => o.id))
-    if (alreadyAlertedOpportunitiesError) {
-      logError(ROUTE, 'phase 4 dedupe query failed', undefined, alreadyAlertedOpportunitiesError)
-      return NextResponse.json({ error: alreadyAlertedOpportunitiesError.message }, { status: 500 })
-    }
-    const opportunityAlertedSet = new Set(
-      (alreadyAlertedOpportunities ?? []).map((n) => `${n.profile_id}:${n.opportunity_id}`)
-    )
-
-    for (const opportunity of freshOpportunityRows) {
-      for (const profile of allProfilesForOpportunities ?? []) {
-        const pairKey = `${profile.id}:${opportunity.id}`
-        if (opportunityAlertedSet.has(pairKey)) continue
-        if (!emailConfigured) {
-          opportunityAlertResults.would_send.push({
-            profile_id: profile.id,
-            opportunity_id: opportunity.id,
-            title: opportunity.title,
-          })
-          continue
-        }
-        const email = await emailFor(profile.id)
-        if (!email) {
-          opportunityAlertResults.failed.push({
-            opportunity_id: opportunity.id,
-            profile_id: profile.id,
-            error: 'No email on file for user',
-          })
-          continue
-        }
-        try {
-          await sendNewOpportunityEmail({ to: email, opportunity })
-          const { error: insertError } = await supabase.from('notifications').insert({
-            profile_id: profile.id,
-            opportunity_id: opportunity.id,
-            type: 'new_opportunity',
-            sent_at: new Date().toISOString(),
-          })
-          if (insertError) throw insertError
-          opportunityAlertResults.sent += 1
-        } catch (err) {
-          opportunityAlertResults.failed.push({
-            opportunity_id: opportunity.id,
-            profile_id: profile.id,
-            error: err instanceof Error ? err.message : 'Unknown error',
-          })
-        }
-      }
-    }
-  }
-
-  // ---- Phase 5: failure alerting ----------------------------------------
-  // Only meaningful when email is actually configured (dry-run failures
-  // are expected noise), and only when something actually failed.
-  const failedCount =
-    reminderResults.failed.length +
-    checkinResults.failed.length +
-    alertResults.failed.length +
-    opportunityAlertResults.failed.length
-  if (emailConfigured && failedCount > 0) {
-    const firstFailures = [
-      reminderResults.failed[0],
-      checkinResults.failed[0],
-      alertResults.failed[0],
-      opportunityAlertResults.failed[0],
-    ].filter(Boolean)
-    const summary =
-      `:warning: Scholars cron ${ROUTE}: ` +
-      `${reminderResults.failed.length} deadline-reminder failure(s), ` +
-      `${checkinResults.failed.length} check-in failure(s), ` +
-      `${alertResults.failed.length} new-scholarship alert failure(s), ` +
-      `${opportunityAlertResults.failed.length} new-opportunity alert failure(s). ` +
-      `First errors: ` +
-      firstFailures.map((f) => `${firstFailureId(f!)}: ${f!.error}`).join(' | ')
-    logError(ROUTE, 'run completed with failures', {
-      reminder_failures: reminderResults.failed.length,
-      checkin_failures: checkinResults.failed.length,
-      new_scholarship_failures: alertResults.failed.length,
-      new_opportunity_failures: opportunityAlertResults.failed.length,
-    })
-    await sendFailureAlert(summary)
-  }
-
-  return NextResponse.json({
-    dry_run: !emailConfigured,
-    reminder_window_days: reminderDays,
-    new_scholarship_window_days: NEW_WINDOW_DAYS,
-    new_opportunity_window_days: NEW_WINDOW_DAYS,
-    deadline_reminders: reminderResults,
-    checkin_reminders: checkinResults,
-    new_scholarship_alerts: alertResults,
-    new_opportunity_alerts: opportunityAlertResults,
-  })
+  logInfo(ROUTE, 'run_complete', summary)
+  return NextResponse.json(summary)
 }
