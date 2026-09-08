@@ -5,7 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AuthShell } from "@/components/AuthShell";
 import { FormField, inputClass } from "@/components/FormField";
+import { PasswordField } from "@/components/PasswordField";
 import { normalizeEmail } from "@/lib/auth/email";
+
 // AUTH SECURITY AUDIT (brute-force brake, client side): progressive
 // lockout stored in localStorage. This is UX-level only -- a determined
 // attacker bypasses it trivially -- the real brakes are Supabase's own
@@ -13,6 +15,7 @@ import { normalizeEmail } from "@/lib/auth/email";
 // slowdown for casual credential-stuffing against a real device.
 const LOCK_KEY = "scholars_login_lockout";
 type LockState = { count: number; until: number };
+
 function readLock(): LockState {
   try {
     const raw = localStorage.getItem(LOCK_KEY);
@@ -23,6 +26,7 @@ function readLock(): LockState {
     return { count: 0, until: 0 };
   }
 }
+
 function writeLock(lock: LockState) {
   try {
     localStorage.setItem(LOCK_KEY, JSON.stringify(lock));
@@ -30,6 +34,7 @@ function writeLock(lock: LockState) {
     // storage blocked -- lockout degrades to per-page state, fine
   }
 }
+
 function clearLock() {
   try {
     localStorage.removeItem(LOCK_KEY);
@@ -37,6 +42,7 @@ function clearLock() {
     // ignore
   }
 }
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -46,22 +52,27 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(searchParams.get("error"));
+
   const cleanEmail = normalizeEmail(email);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
     const lock = readLock();
     if (lock.until > Date.now()) {
       const secs = Math.ceil((lock.until - Date.now()) / 1000);
       setError(`Too many failed attempts. Try again in ${secs} second${secs === 1 ? "" : "s"}.`);
       return;
     }
+
     setLoading(true);
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email: cleanEmail,
       password,
     });
     setLoading(false);
+
     if (signInError) {
       const count = lock.count + 1;
       // 5th consecutive failure starts a 30s backoff, doubling each time,
@@ -71,10 +82,12 @@ function LoginForm() {
       setError("That email and password don't match an account.");
       return;
     }
+
     clearLock();
     router.push("/dashboard");
     router.refresh();
   }
+
   async function handleGoogle() {
     setError(null);
     setGoogleLoading(true);
@@ -87,10 +100,13 @@ function LoginForm() {
       options: { redirectTo: `${window.location.origin}/auth/callback?next=/dashboard` },
     });
   }
+
   return (
     <AuthShell heading="Welcome back" sub="Log in to see your latest matches.">
       {error && (
-        <p className="text-sm text-rose bg-rose-light rounded-lg px-3.5 py-2.5 mb-5">{error}</p>
+        <p className="text-sm text-rose bg-rose-light rounded-lg px-3.5 py-2.5 mb-5" role="alert">
+          {error}
+        </p>
       )}
       <form onSubmit={handleSubmit} noValidate>
         <FormField label="Email">
@@ -105,12 +121,9 @@ function LoginForm() {
           />
         </FormField>
         <FormField label="Password">
-          <input
-            className={inputClass}
-            type="password"
-            required
+          <PasswordField
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={setPassword}
             placeholder="Your password"
             autoComplete="current-password"
           />
@@ -161,6 +174,7 @@ function LoginForm() {
     </AuthShell>
   );
 }
+
 // useSearchParams() requires a Suspense boundary in the App Router --
 // wrapping here (rather than inside AuthShell) keeps AuthShell reusable
 // for pages that don't need query params.
