@@ -3,16 +3,15 @@ import { Logo } from "@/components/Logo";
 import { ProviderMonogram } from "@/components/ProviderMonogram";
 import { HowItWorksRotator } from "@/components/HowItWorksRotator";
 import { Footer } from "@/components/Footer";
+import { DeadlineBadge } from "@/components/DeadlineBadge";
 import { createPublicClient } from "@/lib/supabase/public";
-import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
 
 // AUDIT FIX (batch 5): the hero card used to show three hardcoded sample
 // matches, complete with invented match scores. A visitor has no profile
-// yet, so any score on this page would be fabricated -- exactly the kind
-// of made-up number the audit flagged as a trust liability. The card now
-// shows up to three REAL verified scholarships straight from the database
-// (same public-client pattern as app/s/[id]/page.tsx -- anon RLS already
-// exposes verified rows), and says so honestly if nothing is live yet.
+// yet, so any score on this page would be fabricated. The card now shows
+// up to three REAL verified scholarships straight from the database (same
+// public-client pattern as app/s/[id]/page.tsx), and says so honestly if
+// nothing is live yet.
 type LiveScholarship = {
   title: string;
   provider_name: string;
@@ -34,13 +33,6 @@ async function loadLiveScholarships(): Promise<LiveScholarship[]> {
   return (data ?? []) as LiveScholarship[];
 }
 
-const DEADLINE_TONE_CLASSES: Record<ReturnType<typeof deadlineTone>, string> = {
-  closed: "bg-hairline text-navy-light",
-  urgent: "bg-rose-light text-rose",
-  soon: "bg-amber-light text-amber",
-  later: "bg-navy-50 text-navy-light",
-};
-
 function levelLabel(level: LiveScholarship["level"]): string {
   if (level === "both") return "Undergrad & postgrad";
   if (level === "undergrad") return "Undergraduate";
@@ -49,7 +41,6 @@ function levelLabel(level: LiveScholarship["level"]): string {
 
 export default async function LandingPage() {
   const live = await loadLiveScholarships();
-
   return (
     <div className="min-h-screen">
       <header className="border-b border-hairline">
@@ -67,7 +58,6 @@ export default async function LandingPage() {
           </Link>
         </div>
       </header>
-
       <main>
         {/* Hero */}
         <section className="mx-auto max-w-6xl px-6 pt-16 pb-20 grid md:grid-cols-[1.1fr_0.9fr] gap-14 items-center">
@@ -102,7 +92,6 @@ export default async function LandingPage() {
               </p>
             </div>
           </div>
-
           <div className="bg-white rounded-2xl shadow-card border border-hairline p-6">
             <p className="font-mono text-xs uppercase tracking-widest text-navy-light mb-4">
               Live on Scholars right now
@@ -114,7 +103,6 @@ export default async function LandingPage() {
             ) : (
               <ul className="space-y-4">
                 {live.map((s) => {
-                  const days = daysUntil(s.deadline);
                   return (
                     <li key={s.title} className="flex items-center gap-4 pb-4 border-b border-hairline last:border-0 last:pb-0">
                       <ProviderMonogram name={s.provider_name} size={48} />
@@ -126,11 +114,7 @@ export default async function LandingPage() {
                         </p>
                         <div className="flex flex-wrap items-center gap-2 mt-1.5">
                           {s.amount && <span className="text-xs font-mono text-emerald">{s.amount}</span>}
-                          {days !== null && (
-                            <span className={`text-xs font-mono font-medium px-2 py-0.5 rounded-full ${DEADLINE_TONE_CLASSES[deadlineTone(days)]}`}>
-                              {formatDeadlineLabel(days)}
-                            </span>
-                          )}
+                          <DeadlineBadge deadline={s.deadline} />
                         </div>
                       </div>
                     </li>
@@ -140,7 +124,6 @@ export default async function LandingPage() {
             )}
           </div>
         </section>
-
         {/* How it works */}
         <section id="how-it-works" className="border-t border-hairline bg-white">
           <div className="mx-auto max-w-6xl px-6 py-16">
@@ -151,7 +134,6 @@ export default async function LandingPage() {
           </div>
         </section>
       </main>
-
       <Footer />
     </div>
   );
