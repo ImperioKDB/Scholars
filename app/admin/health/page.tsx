@@ -6,7 +6,7 @@ import { daysUntil } from "@/lib/dates";
 // app/admin/health/page.tsx
 // GET /admin/health
 //
-// Weekly maintenance triage in one server-rendered page. Pulls the whole
+// Weekly maintenance triage in one server-rendered page. Pulls the
 // scholarships table once (small by design) and partitions it into the
 // three buckets maintenance actually acts on:
 //
@@ -24,6 +24,13 @@ import { daysUntil } from "@/lib/dates";
 // Read-only by design: every row links straight to the edit page, so the
 // fix happens where the tooling already exists. One query, one render,
 // no client JS, no new API route, no migration.
+//
+// AUDIT FIX (batch 3): RELIABILITY CAP. The original query had no limit,
+// so a 10,000-row catalog would serialize every row into one serverless
+// response and risk blowing the function's memory/time budget. Health
+// triage only ever acts on the soonest deadlines, so we cap at ROW_CAP
+// ordered by deadline and say so loudly when the cap bites.
+const ROW_CAP = 2000;
 
 type Row = {
   id: string;
@@ -130,13 +137,13 @@ export default async function AdminHealthPage() {
   const { data, error } = await supabase
     .from("scholarships")
     .select("id, title, provider_name, deadline, verified, application_url, how_to_apply, updated_at")
-    .order("deadline", { ascending: true });
-
+    .order("deadline", { ascending: true })
+    .limit(ROW_CAP);
   if (error) {
     return <p className="text-sm text-rose">Couldn&apos;t load health data: {error.message}</p>;
   }
-
   const rows = (data ?? []) as Row[];
+  const capped = rows.length >= ROW_CAP;
   const unverified = rows.filter((r) => !r.verified);
   const unverifiedPast = unverified.filter((r) => isPast(r.deadline));
   const missingPath = rows.filter(
@@ -145,7 +152,6 @@ export default async function AdminHealthPage() {
   const stale = rows.filter((r) => isPast(r.deadline));
   const staleLive = stale.filter((r) => r.verified);
   const attention = unverified.length + missingPath.length + staleLive.length;
-
   return (
     <div>
       <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
@@ -161,7 +167,12 @@ export default async function AdminHealthPage() {
           Open scholarships table
         </Link>
       </div>
-
+      {capped && (
+        <p className="text-xs text-amber bg-amber-light rounded-lg px-3.5 py-2.5 mb-6">
+          Showing the first {ROW_CAP} scholarships by deadline. The catalog is larger than this
+          page loads on purpose; use the scholarships table for anything older.
+        </p>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
         <Tile
           value={unverified.length}
@@ -182,7 +193,6 @@ export default async function AdminHealthPage() {
           tone={staleLive.length > 0 ? "rose" : stale.length > 0 ? "amber" : "emerald"}
         />
       </div>
-
       <Section
         title="Unverified drafts"
         sub="Waiting on review. Past-deadline ones are usually dead listings: delete rather than verify."
@@ -195,7 +205,6 @@ export default async function AdminHealthPage() {
           ))
         )}
       </Section>
-
       <Section
         title="Live with no application path"
         sub="Students can see these but cannot apply. Add an application URL or how-to-apply text, or unverify."
@@ -217,7 +226,6 @@ export default async function AdminHealthPage() {
           ))
         )}
       </Section>
-
       <Section
         title="Past deadline"
         sub="Verified rows still show to students as Closed until unverified or extended. Unverified rows should usually be deleted."
