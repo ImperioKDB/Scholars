@@ -4,8 +4,9 @@ import Link from "next/link";
 import { MatchSeal } from "@/components/MatchSeal";
 import { ProviderMonogram } from "@/components/ProviderMonogram";
 import { ShareButton } from "@/components/ShareButton";
+import { DeadlineBadge } from "@/components/DeadlineBadge";
 import { saveReturnScroll } from "@/lib/scrollRestore";
-import { daysUntil, deadlineTone, formatDeadlineLabel, formatLastClosedLabel, formatOpensLabel } from "@/lib/dates";
+import { daysUntil, formatLastClosedLabel, formatOpensLabel } from "@/lib/dates";
 
 export type CardScholarship = {
   id: string;
@@ -29,23 +30,6 @@ export function Spinner({ className = "" }: { className?: string }) {
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
     </svg>
-  );
-}
-
-const DEADLINE_TONE_CLASSES: Record<ReturnType<typeof deadlineTone>, string> = {
-  closed: "bg-hairline text-navy-light",
-  urgent: "bg-rose-light text-rose",
-  soon: "bg-amber-light text-amber",
-  later: "bg-navy-50 text-navy-light",
-};
-
-function DeadlineBadge({ deadline }: { deadline: string | null }) {
-  const days = daysUntil(deadline);
-  if (days === null) return null;
-  return (
-    <span className={`text-xs font-mono font-medium px-2 py-1 rounded-full ${DEADLINE_TONE_CLASSES[deadlineTone(days)]}`}>
-      {formatDeadlineLabel(days)}
-    </span>
   );
 }
 
@@ -107,10 +91,9 @@ export function ScholarshipCard({
     scholarship.isOpenNow === false && !opensSoon && Boolean(scholarship.last_cycle_closed_at);
   return (
     // WHOLE-CARD TAP: the link is a stretched overlay (absolute inset-0)
-    // so every part of the card navigates, not just the inner content --
-    // the display:contents wrapper left padding/gaps dead. Save/Share sit
-    // at z-10 above the overlay so they stay independently clickable.
-    // Press feedback scales the whole card via has-[a:active].
+    // so every part of the card navigates, not just the inner content.
+    // Save/Share sit at z-10 above the overlay so they stay independently
+    // clickable. Press feedback scales the whole card via has-[a:active].
     <div className="relative bg-white rounded-xl border border-hairline p-5 flex flex-col gap-4 sm:flex-row shadow-card focus-within:ring-2 focus-within:ring-emerald focus-within:ring-offset-2 focus-within:ring-offset-parchment transition-transform duration-150 motion-reduce:transition-none has-[a:active]:scale-[0.99] motion-reduce:has-[a:active]:scale-100">
       {/* RETURN-SCROLL: record the list's scroll offset at tap time so
           "Back to matches" can restore it (see lib/scrollRestore.ts). */}
