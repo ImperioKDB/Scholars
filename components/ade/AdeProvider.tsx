@@ -16,6 +16,7 @@ type ConfirmApplyArgs = { scholarshipTitle: string; applicationUrl: string; alre
 type AdeContextValue = { confirmApply: (args: ConfirmApplyArgs) => void };
 
 const AdeContext = createContext<AdeContextValue | null>(null);
+
 export function useAde(): AdeContextValue {
   const ctx = useContext(AdeContext);
   if (!ctx) return { confirmApply: (args) => { window.open(args.applicationUrl, "_blank", "noreferrer"); } };
@@ -23,26 +24,32 @@ export function useAde(): AdeContextValue {
 }
 
 const ADE_ROUTES = ["/dashboard", "/applications", "/achievements", "/scholarships"];
+
 const STATUS_OPTIONS: { value: "submitted" | "in_progress" | "rejected"; label: string }[] = [
   { value: "submitted", label: "I applied" },
   { value: "in_progress", label: "Still working on it" },
   { value: "rejected", label: "Changed my mind" },
 ];
+
+// COLOR CONSISTENCY (refactor batch 1): tier confetti + avatar now use the
+// darkened WCAG tokens from tailwind.config.ts (emerald #15705A, amber
+// #966216) instead of the old pre-audit hexes, so Ade matches every other
+// surface in the app.
 const TIER_CONFETTI_COLORS: Record<string, string[]> = {
-  bronze: ["#C98A2E", "#0B1E3D", "#F7F5EF"],
+  bronze: ["#966216", "#0B1E3D", "#F7F5EF"],
   silver: ["#8B93A3", "#0B1E3D", "#F7F5EF"],
-  gold: ["#1B8A6B", "#C98A2E", "#0B1E3D"],
+  gold: ["#15705A", "#966216", "#0B1E3D"],
 };
 
 function AdeAvatar({ size = 36 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" className="shrink-0">
-      <circle cx="20" cy="20" r="20" fill="#1B8A6B" />
+      <circle cx="20" cy="20" r="20" fill="#15705A" />
       <ellipse cx="14.5" cy="19" rx="5" ry="6" fill="#F7F5EF" />
       <ellipse cx="25.5" cy="19" rx="5" ry="6" fill="#F7F5EF" />
       <circle cx="14.5" cy="19.5" r="2.2" fill="#0B1E3D" />
       <circle cx="25.5" cy="19.5" r="2.2" fill="#0B1E3D" />
-      <path d="M20 21.5l-2.3 3.5h4.6L20 21.5Z" fill="#C98A2E" />
+      <path d="M20 21.5l-2.3 3.5h4.6L20 21.5Z" fill="#966216" />
       <path d="M11 12.5 15 16M29 12.5 25 16" stroke="#F7F5EF" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
@@ -123,6 +130,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
     dismissedRef.current.add(`chk:${applicationId}`);
     setPassivePrompt(null);
   }
+
   async function snoozeCheckin(applicationId: string) {
     setSubmitting(true);
     await fetch(`/api/applications/${applicationId}/checkin`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "snooze" }) }).catch(() => {});
@@ -130,6 +138,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
     dismissedRef.current.add(`chk:${applicationId}`);
     setPassivePrompt(null);
   }
+
   async function markNotOpenYet(applicationId: string) {
     setSubmitting(true);
     await fetch(`/api/applications/${applicationId}/checkin`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "not_open_yet" }) }).catch(() => {});
@@ -137,6 +146,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
     dismissedRef.current.add(`chk:${applicationId}`);
     setPassivePrompt(null);
   }
+
   async function acknowledgeAchievement(achievementId: string) {
     setSubmitting(true);
     await fetch("/api/achievements/announce", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ achievement_id: achievementId }) }).catch(() => {});
@@ -167,11 +177,13 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
       setTrackError("Couldn't track it just now -- you can still continue without tracking.");
     }
   }
+
   function handleJustGo() {
     if (!activePrompt || activePrompt.kind !== "apply_guard") return;
     window.open(activePrompt.applicationUrl, "_blank", "noreferrer");
     setActivePrompt(null);
   }
+
   function handleContinueToApplication() {
     if (!activePrompt || activePrompt.kind !== "ready_to_open") return;
     fetch(`/api/applications/${activePrompt.applicationId}/click`, { method: "POST" }).catch(() => {});
@@ -218,8 +230,6 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
       <div className="fixed bottom-20 md:bottom-4 right-4 z-[90] flex flex-col items-end gap-2">
         {open && (
           <div ref={panelRef} role="dialog" aria-modal="true" aria-label="Ade, your application guide" onKeyDown={handlePanelKeyDown} aria-live="polite"
-            // AUDIT item 5: spring entrance on open (panel mounts when open
-            // flips, so the existing badge-pop-in keyframe plays once).
             className="badge-pop-in w-[calc(100vw-2rem)] max-w-80 bg-white rounded-2xl border border-hairline shadow-card p-4">
             <div className="flex items-start gap-3">
               <AdeAvatar />
