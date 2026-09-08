@@ -6,7 +6,9 @@ import { DeadlineBadge } from "@/components/DeadlineBadge";
 import type { CardScholarship } from "@/components/ScholarshipCard";
 import { StatusDonut } from "@/components/StatusDonut";
 import { DraftPanel, type Draft } from "@/components/DraftPanel";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useAde } from "@/components/ade/AdeProvider";
+import { fetchWithTimeout } from "@/lib/fetch";
 
 type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected";
 type ApplicationApiItem = Draft & {
@@ -30,20 +32,34 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
   const router = useRouter();
   const { confirmApply } = useAde();
   const [loadError, setLoadError] = useState<string | null>(initialError);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [applications, setApplications] = useState<ApplicationApiItem[]>(initialApplications);
   const [saved, setSaved] = useState<SavedApiItem[]>(initialSaved);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   // AUDIT item 2: ids of cards that just changed status, used to run a
   // one-shot highlight ring so the optimistic write is visibly acknowledged.
   const [flashIds, setFlashIds] = useState<Set<string>>(new Set());
+  // FINAL CLEANUP: native confirm() replaced with the shared focus-trapped
+  // ConfirmDialog (same component the admin scholarships pages use).
+  const [confirmState, setConfirmState] = useState<{
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   async function load() {
     setLoadError(null);
-    const [appsRes, savedRes] = await Promise.all([fetch("/api/applications"), fetch("/api/scholarships/save")]);
-    if (!appsRes.ok) { setLoadError("Couldn't load your applications. Try refreshing."); return; }
-    const appsData = await appsRes.json();
-    setApplications(appsData.applications ?? []);
-    if (savedRes.ok) { const savedData = await savedRes.json(); setSaved(savedData.saved ?? []); }
+    try {
+      const [appsRes, savedRes] = await Promise.all([
+        fetchWithTimeout("/api/applications"),
+        fetchWithTimeout("/api/scholarships/save"),
+      ]);
+      if (!appsRes.ok) { setLoadError("Couldn't load your applications. Try refreshing."); return; }
+      const appsData = await appsRes.json();
+      setApplications(appsData.applications ?? []);
+      if (savedRes.ok) { const savedData = await savedRes.json(); setSaved(savedData.saved ?? []); }
+    } catch {
+      setLoadError("Couldn't load your applications. Check your connection and try again.");
+    }
   }
 
   const trackedScholarshipIds = useMemo(() => new Set(applications.map((a) => a.scholarship.id)), [applications]);
@@ -56,29 +72,61 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
 
   async function startTracking(scholarshipId: string) {
     setPendingIds((p) => new Set(p).add(scholarshipId));
-    const res = await fetch("/api/applications", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scholarship_id: scholarshipId }) });
-    if (res.ok) await load();
+    setActionError(null);
+    try {
+      const res = await fetchWithTimeout("/api/applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scholarship_id: scholarshipId }),
+      });
+      if (res.ok) await load();
+      else setActionError("Couldn't start tracking. Try again.");
+    } catch {
+      setActionError("Couldn't start tracking. Check your connection and try again.");
+    }
     setPendingIds((p) => { const n = new Set(p); n.delete(scholarshipId); return n; });
   }
 
   async function updateStatus(applicationId: string, status: ApplicationStatus) {
     setPendingIds((p) => new Set(p).add(applicationId));
+    setActionError(null);
     setApplications((prev) => prev.map((a) => (a.id === applicationId ? { ...a, status } : a)));
     setFlashIds((prev) => new Set(prev).add(applicationId));
     setTimeout(() => setFlashIds((prev) => { const n = new Set(prev); n.delete(applicationId); return n; }), 750);
-    const res = await fetch(`/api/applications/${applicationId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
-    if (!res.ok) await load();
+    try {
+      const res = await fetchWithTimeout(`/api/applications/${applicationId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) await load();
+    } catch {
+      setActionError("Couldn't update status. Check your connection and try again.");
+      await load();
+    }
     setPendingIds((p) => { const n = new Set(p); n.delete(applicationId); return n; });
   }
 
-  async function stopTracking(applicationId: string) {
-    if (!confirm("Stop tracking this application?")) return;
+  async function doStopTracking(applicationId: string) {
     setPendingIds((p) => new Set(p).add(applicationId));
+    setActionError(null);
     const prev = applications;
     setApplications((cur) => cur.filter((a) => a.id !== applicationId));
-    const res = await fetch(`/api/applications/${applicationId}`, { method: "DELETE" });
-    if (!res.ok) setApplications(prev);
+    try {
+      const res = await fetchWithTimeout(`/api/applications/${applicationId}`, { method: "DELETE" });
+      if (!res.ok) setApplications(prev);
+    } catch {
+      setApplications(prev);
+      setActionError("Couldn't stop tracking. Check your connection and try again.");
+    }
     setPendingIds((p) => { const n = new Set(p); n.delete(applicationId); return n; });
+  }
+
+  function stopTracking(applicationId: string) {
+    setConfirmState({
+      message: "Stop tracking this application? It leaves your Applications list; any saved scholarship stays saved.",
+      onConfirm: () => doStopTracking(applicationId),
+    });
   }
 
   function handleDraftChange(applicationId: string, updated: Draft) {
@@ -92,15 +140,28 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
 
   return (
     <div>
+      {confirmState && (
+        <ConfirmDialog
+          message={confirmState.message}
+          onConfirm={confirmState.onConfirm}
+          onClose={() => setConfirmState(null)}
+          confirmLabel="Stop tracking"
+          tone="rose"
+        />
+      )}
       <div className="mb-8">
         <h1 className="font-display text-2xl font-semibold text-navy">Applications</h1>
         <p className="text-sm text-navy-light mt-1 mb-6">{applications.length} scholarship{applications.length === 1 ? "" : "s"} you&apos;re tracking.</p>
         <div className="bg-white rounded-xl border border-hairline p-5"><StatusDonut counts={counts} /></div>
       </div>
       {loadError && (
-        <p className="text-sm text-rose mb-6">{loadError}{" "}
+        <p className="text-sm text-rose mb-6" role="alert">
+          {loadError}{" "}
           <button type="button" onClick={() => { setLoadError(null); router.refresh(); }} className="font-medium underline">Try again</button>
         </p>
+      )}
+      {actionError && (
+        <p className="text-sm text-rose mb-6" role="alert">{actionError}</p>
       )}
       {untrackedSaved.length > 0 && (
         <div className="mb-10">
