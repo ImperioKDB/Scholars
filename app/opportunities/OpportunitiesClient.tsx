@@ -1,8 +1,8 @@
 "use client";
-
 import { useEffect, useRef, useState } from "react";
 import { OpportunityCard, type CardOpportunity } from "@/components/OpportunityCard";
 import { OPPORTUNITY_TYPE_OPTIONS } from "@/lib/admin/opportunity";
+import { fetchWithTimeout } from "@/lib/fetch";
 
 // app/opportunities/OpportunitiesClient.tsx
 //
@@ -12,6 +12,10 @@ import { OPPORTUNITY_TYPE_OPTIONS } from "@/lib/admin/opportunity";
 // and a type badge -- never MatchSeal, since there is no eligibility score
 // for these. A "Saved" section below the catalog mirrors the pattern
 // already used on Dashboard and Applications for saved scholarships.
+//
+// FINAL CLEANUP: fetches routed through fetchWithTimeout (10s abort) so a
+// hung backend can't freeze the UI, and the load error now carries
+// role="alert" plus a Retry button, matching DiscoverClient.
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 350;
 
@@ -36,36 +40,35 @@ export function OpportunitiesClient({ initialSaved }: { initialSaved: SavedApiIt
   );
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const requestIdRef = useRef(0);
-
   const filtersActive = keyword.trim() !== "" || type !== "" || discipline.trim() !== "";
 
   async function load(offset: number, replace: boolean) {
     const requestId = ++requestIdRef.current;
     setLoading(true);
     setLoadError(null);
-
     const params = new URLSearchParams();
     if (keyword.trim()) params.set("q", keyword.trim());
     if (type) params.set("type", type);
     if (discipline.trim()) params.set("discipline", discipline.trim());
     params.set("limit", String(PAGE_SIZE));
     params.set("offset", String(offset));
-
-    const res = await fetch("/api/opportunities?" + params.toString());
-    // Stale-response guard: a slow earlier request must never overwrite
-    // the results of a newer one.
-    if (requestId !== requestIdRef.current) return;
-
-    if (!res.ok) {
-      setLoadError("Couldn't load opportunities. Try again.");
-      setLoading(false);
-      return;
+    try {
+      const res = await fetchWithTimeout("/api/opportunities?" + params.toString());
+      if (requestId !== requestIdRef.current) return;
+      if (!res.ok) {
+        setLoadError("Couldn't load opportunities. Try again.");
+        setLoading(false);
+        return;
+      }
+      const data = await res.json();
+      const page = (data.opportunities ?? []) as CardOpportunity[];
+      setItems((prev) => (replace ? page : [...prev, ...page]));
+      setTotal(data.total ?? 0);
+      setNextOffset(offset + page.length);
+    } catch {
+      if (requestId !== requestIdRef.current) return;
+      setLoadError("Couldn't load opportunities. Check your connection and try again.");
     }
-    const data = await res.json();
-    const page = (data.opportunities ?? []) as CardOpportunity[];
-    setItems((prev) => (replace ? page : [...prev, ...page]));
-    setTotal(data.total ?? 0);
-    setNextOffset(offset + page.length);
     setLoading(false);
   }
 
@@ -76,12 +79,16 @@ export function OpportunitiesClient({ initialSaved }: { initialSaved: SavedApiIt
   }, [keyword, type, discipline]);
 
   async function refreshSaved() {
-    const res = await fetch("/api/opportunities/save");
-    if (!res.ok) return;
-    const data = await res.json();
-    const list: SavedApiItem[] = data.saved ?? [];
-    setSaved(list);
-    setSavedIds(new Set(list.map((s) => s.opportunity.id)));
+    try {
+      const res = await fetchWithTimeout("/api/opportunities/save");
+      if (!res.ok) return;
+      const data = await res.json();
+      const list: SavedApiItem[] = data.saved ?? [];
+      setSaved(list);
+      setSavedIds(new Set(list.map((s) => s.opportunity.id)));
+    } catch {
+      // Silent -- saved list is supplementary
+    }
   }
 
   async function toggleSave(opportunityId: string) {
@@ -93,24 +100,31 @@ export function OpportunitiesClient({ initialSaved }: { initialSaved: SavedApiIt
       return next;
     });
     setPendingIds((prev) => new Set(prev).add(opportunityId));
-
-    const res = wasSaved
-      ? await fetch(`/api/opportunities/save?opportunity_id=${opportunityId}`, { method: "DELETE" })
-      : await fetch("/api/opportunities/save", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ opportunity_id: opportunityId }),
+    try {
+      const res = wasSaved
+        ? await fetchWithTimeout(`/api/opportunities/save?opportunity_id=${opportunityId}`, { method: "DELETE" })
+        : await fetchWithTimeout("/api/opportunities/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ opportunity_id: opportunityId }),
+          });
+      if (!res.ok) {
+        setSavedIds((prev) => {
+          const next = new Set(prev);
+          if (wasSaved) next.add(opportunityId);
+          else next.delete(opportunityId);
+          return next;
         });
-
-    if (!res.ok) {
+      } else {
+        await refreshSaved();
+      }
+    } catch {
       setSavedIds((prev) => {
         const next = new Set(prev);
         if (wasSaved) next.add(opportunityId);
         else next.delete(opportunityId);
         return next;
       });
-    } else {
-      await refreshSaved();
     }
     setPendingIds((prev) => {
       const next = new Set(prev);
@@ -129,7 +143,6 @@ export function OpportunitiesClient({ initialSaved }: { initialSaved: SavedApiIt
           Fellowships, internships, competitions, and mentorships alongside your scholarship matches --
           verified, but not scored, since eligibility for these varies too much to gate automatically.
         </p>
-
         <div className="bg-white rounded-xl border border-hairline p-4">
           <label className="block mb-3">
             <span className="sr-only">Search by title or provider</span>
@@ -166,9 +179,14 @@ export function OpportunitiesClient({ initialSaved }: { initialSaved: SavedApiIt
           </div>
         </div>
       </div>
-
-      {loadError && <p className="text-sm text-rose mb-6">{loadError}</p>}
-
+      {loadError && (
+        <p className="text-sm text-rose mb-6" role="alert">
+          {loadError}{" "}
+          <button type="button" onClick={() => load(0, true)} className="font-medium underline">
+            Retry
+          </button>
+        </p>
+      )}
       {!loading && items.length === 0 && !loadError ? (
         <div className="bg-white rounded-xl border border-hairline p-8 text-center mb-12">
           <p className="text-sm text-navy-light">
@@ -188,9 +206,7 @@ export function OpportunitiesClient({ initialSaved }: { initialSaved: SavedApiIt
               />
             ))}
           </div>
-
-          {loading && <p className="text-sm text-navy-light mb-12">Loading&hellip;</p>}
-
+          {loading && <p className="text-sm text-navy-light mb-12" aria-live="polite">Loading&hellip;</p>}
           {!loading && hasMore && (
             <div className="mb-12 text-center">
               <button
@@ -202,7 +218,6 @@ export function OpportunitiesClient({ initialSaved }: { initialSaved: SavedApiIt
               </button>
             </div>
           )}
-
           {!loading && !hasMore && items.length > 0 && (
             <p className="text-sm text-navy-light text-center mb-12 leading-relaxed">
               {filtersActive
@@ -212,7 +227,6 @@ export function OpportunitiesClient({ initialSaved }: { initialSaved: SavedApiIt
           )}
         </>
       )}
-
       <h2 id="saved" className="font-display text-lg font-semibold text-navy mb-5 scroll-mt-20">
         Saved ({saved.length})
       </h2>
