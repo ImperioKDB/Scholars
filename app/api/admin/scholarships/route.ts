@@ -1,6 +1,6 @@
 // app/api/admin/scholarships/route.ts
-// GET  /api/admin/scholarships — list ALL scholarships (verified + unverified), admin only.
-// POST /api/admin/scholarships — create a scholarship, optionally with
+// GET  /api/admin/scholarships - list scholarships (verified + unverified), admin only.
+// POST /api/admin/scholarships - create a scholarship, optionally with
 //      inline eligibility rules, admin only.
 //
 // Defense in depth: RLS already restricts writes to is_admin(auth.uid()),
@@ -13,6 +13,12 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { assertAdmin } from '@/lib/admin/guard'
+
+// PERF (batch 1): same reliability cap the health page uses (ROW_CAP
+// there). A 10k-row catalog with embedded rules must not serialize into
+// one serverless response. At current catalog size the cap never bites;
+// when it eventually does, add real pagination to the admin list UI.
+const ADMIN_LIST_CAP = 1000;
 
 const ruleSchema = z.object({
   field: z.enum(['gpa', 'nationality', 'gender', 'financial_need', 'academic_level', 'discipline', 'career_goals']),
@@ -47,25 +53,32 @@ const scholarshipSchema = z.object({
 export async function GET(request: Request) {
   const limited = await checkRateLimit(request, { route: 'admin-scholarships', limit: 60 })
   if (limited) return limited
+
   const supabase = await createClient()
   const guard = await assertAdmin(supabase)
   if (!guard.ok) return guard.response
+
   const { data: scholarships, error } = await supabase
     .from('scholarships')
     .select('*, scholarship_rules ( id, field, operator, value )')
     .order('created_at', { ascending: false })
+    .limit(ADMIN_LIST_CAP)
+
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
   return NextResponse.json({ scholarships })
 }
 
 export async function POST(request: Request) {
   const limited = await checkRateLimit(request, { route: 'admin-scholarships', limit: 60 })
   if (limited) return limited
+
   const supabase = await createClient()
   const guard = await assertAdmin(supabase)
   if (!guard.ok) return guard.response
+
   const raw = await request.json().catch(() => null)
   const parsed = scholarshipSchema.safeParse(raw)
   if (!parsed.success) {
@@ -74,15 +87,19 @@ export async function POST(request: Request) {
       { status: 400 }
     )
   }
+
   const { rules, ...scholarshipFields } = parsed.data
+
   const { data: scholarship, error: insertError } = await supabase
     .from('scholarships')
     .insert({ ...scholarshipFields, created_by: guard.userId })
     .select('*')
     .single()
+
   if (insertError) {
     return NextResponse.json({ error: insertError.message }, { status: 500 })
   }
+
   if (rules.length > 0) {
     const { error: rulesError } = await supabase.from('scholarship_rules').insert(
       rules.map((r) => ({ ...r, scholarship_id: scholarship.id }))
@@ -98,10 +115,12 @@ export async function POST(request: Request) {
       )
     }
   }
+
   const { data: full } = await supabase
     .from('scholarships')
     .select('*, scholarship_rules ( id, field, operator, value )')
     .eq('id', scholarship.id)
     .single()
+
   return NextResponse.json({ scholarship: full ?? scholarship }, { status: 201 })
 }
