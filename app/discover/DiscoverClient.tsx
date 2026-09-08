@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ScholarshipCard, type CardScholarship } from "@/components/ScholarshipCard";
 import { isCurrentlyOpen } from "@/lib/discovery";
+import { fetchWithTimeout, FetchTimeoutError, FetchNetworkError } from "@/lib/fetch";
 
 const LEVEL_OPTIONS = [
   { value: "", label: "All levels" },
@@ -23,14 +24,15 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
   const [loadError, setLoadError] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set(initialSavedIds));
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
-  const requestIdRef = useRef(0);
 
+  const requestIdRef = useRef(0);
   const filtersActive = keyword.trim() !== "" || level !== "" || discipline.trim() !== "";
 
   async function load(offset: number, replace: boolean) {
     const requestId = ++requestIdRef.current;
     setLoading(true);
     setLoadError(null);
+
     const params = new URLSearchParams();
     if (keyword.trim()) params.set("q", keyword.trim());
     if (level) params.set("level", level);
@@ -38,18 +40,29 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
     params.set("limit", String(PAGE_SIZE));
     params.set("offset", String(offset));
 
-    const res = await fetch("/api/scholarships?" + params.toString());
-    if (requestId !== requestIdRef.current) return;
-    if (!res.ok) {
-      setLoadError("Couldn't load scholarships. Try again.");
-      setLoading(false);
-      return;
+    try {
+      const res = await fetchWithTimeout("/api/scholarships?" + params.toString());
+      if (requestId !== requestIdRef.current) return;
+      if (!res.ok) {
+        setLoadError("Couldn't load scholarships. Try again.");
+        setLoading(false);
+        return;
+      }
+      const data = await res.json();
+      const page = (data.scholarships ?? []) as CardScholarship[];
+      setItems((prev) => (replace ? page : [...prev, ...page]));
+      setTotal(data.total ?? 0);
+      setNextOffset(offset + page.length);
+    } catch (err) {
+      if (requestId !== requestIdRef.current) return;
+      if (err instanceof FetchTimeoutError) {
+        setLoadError("Request timed out. Check your connection and try again.");
+      } else if (err instanceof FetchNetworkError) {
+        setLoadError("Network issue. Check your connection and try again.");
+      } else {
+        setLoadError("Couldn't load scholarships. Try again.");
+      }
     }
-    const data = await res.json();
-    const page = (data.scholarships ?? []) as CardScholarship[];
-    setItems((prev) => (replace ? page : [...prev, ...page]));
-    setTotal(data.total ?? 0);
-    setNextOffset(offset + page.length);
     setLoading(false);
   }
 
@@ -62,6 +75,7 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
     () => items.filter((s) => isCurrentlyOpen(s)).map((s) => ({ ...s, isOpenNow: true })),
     [items]
   );
+
   const comingSoonItems = useMemo(
     () => items.filter((s) => !isCurrentlyOpen(s)).map((s) => ({ ...s, isOpenNow: false })),
     [items]
@@ -76,14 +90,25 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
       return next;
     });
     setPendingIds((prev) => new Set(prev).add(scholarshipId));
-    const res = wasSaved
-      ? await fetch(`/api/scholarships/save?scholarship_id=${scholarshipId}`, { method: "DELETE" })
-      : await fetch("/api/scholarships/save", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ scholarship_id: scholarshipId }),
+
+    try {
+      const res = wasSaved
+        ? await fetchWithTimeout(`/api/scholarships/save?scholarship_id=${scholarshipId}`, { method: "DELETE" })
+        : await fetchWithTimeout("/api/scholarships/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ scholarship_id: scholarshipId }),
+          });
+      if (!res.ok) {
+        setSavedIds((prev) => {
+          const next = new Set(prev);
+          if (wasSaved) next.add(scholarshipId);
+          else next.delete(scholarshipId);
+          return next;
         });
-    if (!res.ok) {
+      }
+    } catch (err) {
+      // Revert on network error
       setSavedIds((prev) => {
         const next = new Set(prev);
         if (wasSaved) next.add(scholarshipId);
@@ -140,9 +165,12 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
           </div>
         </div>
       </div>
-
-      {loadError && <p className="text-sm text-rose mb-6">{loadError}</p>}
-
+      {loadError && (
+        <p className="text-sm text-rose mb-6" role="alert">
+          {loadError}{" "}
+          <button type="button" onClick={() => load(0, true)} className="font-medium underline">Retry</button>
+        </p>
+      )}
       {!loading && items.length === 0 && !loadError ? (
         <div className="bg-white rounded-xl border border-hairline p-8 text-center">
           <p className="text-sm text-navy-light">No scholarships match that search. Try fewer filters or a different keyword.</p>
@@ -156,7 +184,6 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
               ))}
             </div>
           )}
-
           {comingSoonItems.length > 0 && (
             <div className="mt-10">
               <h2 className="font-display text-lg font-semibold text-navy mb-1">Coming soon</h2>
@@ -170,9 +197,7 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
               </div>
             </div>
           )}
-
-          {loading && <p className="text-sm text-navy-light mt-6">Loading&hellip;</p>}
-
+          {loading && <p className="text-sm text-navy-light mt-6" aria-live="polite">Loading&hellip;</p>}
           {!loading && hasMore && (
             <div className="mt-6 text-center">
               <button
@@ -184,7 +209,6 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
               </button>
             </div>
           )}
-
           {!loading && !hasMore && items.length > 0 && (
             <p className="text-sm text-navy-light text-center mt-8 leading-relaxed">
               {filtersActive
