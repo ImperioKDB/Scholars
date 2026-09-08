@@ -11,9 +11,8 @@
 -- postgres itself can read or write it, which is exactly the intent.
 --
 -- NO SEED: the old per-listing announcement feature did not exist before
--- this digest rewrite. The notifications table only contains
--- 'deadline_reminder' rows, so there are no 'new_listing' rows to seed
--- from. The announcement_log starts empty and fills as digests send.
+-- this digest rewrite, and the notifications enum has no 'new_listing'
+-- value. The announcement_log starts empty and fills as digests send.
 --
 -- IDEMPOTENT: safe to run more than once.
 create table if not exists public.announcement_log (
