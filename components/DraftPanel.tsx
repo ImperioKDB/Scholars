@@ -1,5 +1,4 @@
 "use client";
-
 import { useState } from "react";
 import { useAde } from "@/components/ade/AdeProvider";
 
@@ -22,7 +21,9 @@ import { useAde } from "@/components/ade/AdeProvider";
 // the provider's site and the post-deadline check-in has nothing to key
 // off of. scholarshipTitle is a new required prop -- DraftPanel didn't
 // previously need the scholarship's title for anything.
-
+//
+// AUDIT FIX (P5): added character count below the textarea. The limit is
+// 6000 chars (patchSchema in /api/applications/[id]/draft/route.ts).
 export type Draft = {
   draft_statement: string | null;
   draft_summary: {
@@ -32,6 +33,8 @@ export type Draft = {
   draft_generated_at: string | null;
   draft_confirmed_at: string | null;
 };
+
+const STATEMENT_MAX_CHARS = 6000;
 
 export function DraftPanel({
   applicationId,
@@ -57,6 +60,7 @@ export function DraftPanel({
   const hasDraft = Boolean(draft.draft_generated_at);
   const confirmed = Boolean(draft.draft_confirmed_at);
   const dirty = statement !== (draft.draft_statement ?? "");
+  const overLimit = statement.length > STATEMENT_MAX_CHARS;
 
   async function generate() {
     setGenerating(true);
@@ -75,6 +79,10 @@ export function DraftPanel({
   }
 
   async function save(confirm: boolean) {
+    if (overLimit) {
+      setError(`Statement is ${statement.length - STATEMENT_MAX_CHARS} characters over the limit.`);
+      return;
+    }
     setSaving(true);
     setError(null);
     const res = await fetch(`/api/applications/${applicationId}/draft`, {
@@ -122,7 +130,11 @@ export function DraftPanel({
         >
           {generating ? "Drafting\u2026" : "Generate application draft"}
         </button>
-        {error && <p className="text-xs text-rose mt-2">{error}</p>}
+        {error && (
+          <p className="text-xs text-rose mt-2" role="alert">
+            {error}
+          </p>
+        )}
       </div>
     );
   }
@@ -142,7 +154,6 @@ export function DraftPanel({
           {confirmed && !dirty ? "Confirmed" : "Needs review"}
         </span>
       </div>
-
       {open && (
         <div className="space-y-3">
           <div>
@@ -151,9 +162,19 @@ export function DraftPanel({
               className="w-full rounded-lg border border-hairline bg-white px-3 py-2.5 text-sm text-ink resize-y min-h-[140px] focus:border-navy outline-none"
               value={statement}
               onChange={(e) => setStatement(e.target.value)}
+              maxLength={STATEMENT_MAX_CHARS + 500} // soft cap, hard cap is on save
             />
+            {/* AUDIT FIX: character count */}
+            <p
+              className={`text-xs mt-1 text-right ${
+                overLimit ? "text-rose font-medium" : "text-navy-light"
+              }`}
+              aria-live="polite"
+            >
+              {statement.length}/{STATEMENT_MAX_CHARS} characters
+              {overLimit && ` (${statement.length - STATEMENT_MAX_CHARS} over limit)`}
+            </p>
           </div>
-
           {draft.draft_summary && (
             <div>
               <p className="text-xs font-medium text-ink mb-1.5">Application summary</p>
@@ -175,14 +196,16 @@ export function DraftPanel({
               </ul>
             </div>
           )}
-
-          {error && <p className="text-xs text-rose">{error}</p>}
-
+          {error && (
+            <p className="text-xs text-rose" role="alert">
+              {error}
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <button
               type="button"
               onClick={() => save(true)}
-              disabled={saving}
+              disabled={saving || overLimit}
               className="text-xs font-medium text-white bg-emerald rounded-full px-3 py-1.5 hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               {confirmed && !dirty ? "Confirmed \u2713" : "Confirm & use this draft"}
@@ -191,7 +214,7 @@ export function DraftPanel({
               <button
                 type="button"
                 onClick={() => save(false)}
-                disabled={saving}
+                disabled={saving || overLimit}
                 className="text-xs font-medium text-navy-light hover:text-navy disabled:opacity-50"
               >
                 Save edits
@@ -218,7 +241,6 @@ export function DraftPanel({
               </button>
             )}
           </div>
-
           <p className="text-[11px] text-navy-light">
             This draft isn&apos;t submitted anywhere. Review it, then copy it into the scholarship&apos;s own application
             page.
