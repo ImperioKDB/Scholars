@@ -98,7 +98,7 @@ export async function POST(request: Request) {
   }
 
   const pageUrl = request.headers.get('referer')
-  const { data, error: insertError } = await supabase.from('feedback').insert({
+  const { error: insertError } = await supabase.from('feedback').insert({
     profile_id: user.id,
     category: parsed.data.category,
     message: parsed.data.message,
@@ -130,5 +130,9 @@ export async function POST(request: Request) {
     logError(ROUTE, 'email_failed', undefined, err)
   }
 
-  return NextResponse.json({ ok: true, id: data.id }, { status: 201 })
+  // Client (FeedbackModal) only checks res.ok, never reads the body, so
+  // we don't need to return the inserted row's id. Keeping the response
+  // minimal also avoids the TS strict-null complaint on data?.id when
+  // .insert() isn't chained with .select().
+  return NextResponse.json({ ok: true }, { status: 201 })
 }
