@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useAde } from "@/components/ade/AdeProvider";
+import { fetchWithTimeout } from "@/lib/fetch";
 
 // components/DraftPanel.tsx
 //
@@ -13,17 +14,16 @@ import { useAde } from "@/components/ade/AdeProvider";
 // application_url, which is why that link sits right next to the confirm
 // button rather than being buried elsewhere on the card.
 //
-// "Open real application" now routes through useAde().confirmApply()
-// instead of a bare <a href> -- this application is always already
-// tracked (DraftPanel only renders inside a tracked application's card),
-// so it takes the alreadyTracked branch: record the /click timestamp,
-// then open the tab. Without this, Ade never learns the student left for
-// the provider's site and the post-deadline check-in has nothing to key
-// off of. scholarshipTitle is a new required prop -- DraftPanel didn't
-// previously need the scholarship's title for anything.
+// "Open real application" routes through useAde().confirmApply() instead of
+// a bare <a href> -- this application is always already tracked, so it
+// takes the alreadyTracked branch: record the /click timestamp, then open
+// the tab. Without this, Ade never learns the student left for the
+// provider's site and the post-deadline check-in has nothing to key off.
 //
-// AUDIT FIX (P5): added character count below the textarea. The limit is
-// 6000 chars (patchSchema in /api/applications/[id]/draft/route.ts).
+// AUDIT FIX (P5): character count below the textarea (limit 6000, matching
+// patchSchema in /api/applications/[id]/draft/route.ts).
+// FINAL CLEANUP: generate/save routed through fetchWithTimeout so a hung
+// Gemini call or backend can't freeze the panel indefinitely.
 export type Draft = {
   draft_statement: string | null;
   draft_summary: {
@@ -65,17 +65,22 @@ export function DraftPanel({
   async function generate() {
     setGenerating(true);
     setError(null);
-    const res = await fetch(`/api/applications/${applicationId}/draft`, { method: "POST" });
-    setGenerating(false);
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error ?? "Couldn't generate a draft. Try again.");
-      return;
+    try {
+      const res = await fetchWithTimeout(`/api/applications/${applicationId}/draft`, { method: "POST", timeoutMs: 30_000 });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? "Couldn't generate a draft. Try again.");
+        return;
+      }
+      const { draft: updated } = await res.json();
+      setStatement(updated.draft_statement ?? "");
+      onDraftChange(updated);
+      setOpen(true);
+    } catch {
+      setError("Couldn't reach the draft service. Check your connection and try again.");
+    } finally {
+      setGenerating(false);
     }
-    const { draft: updated } = await res.json();
-    setStatement(updated.draft_statement ?? "");
-    onDraftChange(updated);
-    setOpen(true);
   }
 
   async function save(confirm: boolean) {
@@ -85,24 +90,29 @@ export function DraftPanel({
     }
     setSaving(true);
     setError(null);
-    const res = await fetch(`/api/applications/${applicationId}/draft`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ draft_statement: statement, confirm }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error ?? "Couldn't save your changes.");
-      return;
+    try {
+      const res = await fetchWithTimeout(`/api/applications/${applicationId}/draft`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draft_statement: statement, confirm }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? "Couldn't save your changes.");
+        return;
+      }
+      const { draft: updated } = await res.json();
+      onDraftChange(updated);
+    } catch {
+      setError("Couldn't save your changes. Check your connection and try again.");
+    } finally {
+      setSaving(false);
     }
-    const { draft: updated } = await res.json();
-    onDraftChange(updated);
   }
 
   async function copyAll() {
     const facts = draft.draft_summary?.facts.map((f) => `${f.label}: ${f.value}`).join("\n") ?? "";
-    const text = `${statement}\n\n---\nApplication summary\n${facts}`;
+    const text = `${statement}\n---\nApplication summary\n${facts}`;
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -164,7 +174,6 @@ export function DraftPanel({
               onChange={(e) => setStatement(e.target.value)}
               maxLength={STATEMENT_MAX_CHARS + 500} // soft cap, hard cap is on save
             />
-            {/* AUDIT FIX: character count */}
             <p
               className={`text-xs mt-1 text-right ${
                 overLimit ? "text-rose font-medium" : "text-navy-light"
