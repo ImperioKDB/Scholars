@@ -4,7 +4,6 @@ import { Logo } from "@/components/Logo";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const { fullName } = await requireAdmin();
-
   return (
     <div className="min-h-screen bg-parchment">
       {/* AUDIT FIX (batch 5): keyboard skip link -- admin doesn't render
@@ -25,7 +24,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             </span>
           </div>
           {/* flex-wrap: nav items plus the admin name overflowed on
-              narrow screens once Health and now Opportunities were added. */}
+              narrow screens once Health and Opportunities were added. */}
           <nav className="flex items-center gap-6 text-sm flex-wrap justify-end">
             <Link href="/admin" className="text-navy-light hover:text-navy">
               Overview
@@ -38,6 +37,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             </Link>
             <Link href="/admin/opportunities" className="text-navy-light hover:text-navy">
               Opportunities
+            </Link>
+            <Link href="/admin/testimonials" className="text-navy-light hover:text-navy">
+              Testimonials
             </Link>
             <Link href="/dashboard" className="text-navy-light hover:text-navy">
               Back to app
