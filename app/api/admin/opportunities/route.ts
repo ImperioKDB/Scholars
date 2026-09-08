@@ -1,5 +1,5 @@
 // app/api/admin/opportunities/route.ts
-// GET  /api/admin/opportunities -- list ALL opportunities (verified + unverified), admin only.
+// GET  /api/admin/opportunities -- list opportunities (verified + unverified), admin only.
 // POST /api/admin/opportunities -- create an opportunity, admin only.
 //
 // Mirrors /api/admin/scholarships. No `rules` sub-resource -- opportunities
@@ -11,6 +11,10 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
+
+// PERF (batch 1): reliability cap, same rationale as the scholarships
+// admin list and the health page's ROW_CAP.
+const ADMIN_LIST_CAP = 1000;
 
 const opportunitySchema = z.object({
   type: z.enum(['fellowship', 'internship', 'competition', 'mentorship']),
@@ -64,13 +68,17 @@ export async function GET(request: Request) {
   const supabase = await createClient()
   const check = await requireAdmin(supabase)
   if (check.error) return check.error
+
   const { data: opportunities, error } = await supabase
     .from('opportunities')
     .select('*')
     .order('created_at', { ascending: false })
+    .limit(ADMIN_LIST_CAP)
+
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
   return NextResponse.json({ opportunities })
 }
 
@@ -81,6 +89,7 @@ export async function POST(request: Request) {
   const supabase = await createClient()
   const check = await requireAdmin(supabase)
   if (check.error) return check.error
+
   const raw = await request.json().catch(() => null)
   const parsed = opportunitySchema.safeParse(raw)
   if (!parsed.success) {
@@ -89,13 +98,16 @@ export async function POST(request: Request) {
       { status: 400 }
     )
   }
+
   const { data: opportunity, error: insertError } = await supabase
     .from('opportunities')
     .insert({ ...parsed.data, created_by: check.user!.id })
     .select('*')
     .single()
+
   if (insertError) {
     return NextResponse.json({ error: insertError.message }, { status: 500 })
   }
+
   return NextResponse.json({ opportunity }, { status: 201 })
 }
