@@ -10,6 +10,12 @@ import { createPublicClient } from "@/lib/supabase/public";
 // route's layout -- there is no Sidebar/AdeProvider shell here, this page
 // stands alone.
 //
+// PERF (batch 1): ISR. Share pages are the growth channel and change
+// rarely (verification flips). A 5-minute revalidation window keeps
+// WhatsApp previews fast and off the database. This route is eligible
+// for ISR because it reads through the cookie-free public client only.
+export const revalidate = 300;
+
 // Shows only facts every visitor can honestly see: title, provider,
 // amount, deadline, description. NEVER a match score or eligibility
 // status -- those are computed against a signed-in student's profile
@@ -21,7 +27,6 @@ import { createPublicClient } from "@/lib/supabase/public";
 // The ?ref=<sharer_profile_id> query param (added by ShareButton.tsx) is
 // captured into a cookie by middleware.ts before this component ever
 // renders -- this file doesn't need to read or forward it.
-
 const PUBLIC_COLUMNS =
   "id, title, provider_name, description, amount, deadline, level, discipline, verified";
 
@@ -45,18 +50,15 @@ async function loadScholarship(id: string): Promise<PublicScholarship | null> {
     .eq("id", id)
     .eq("verified", true)
     .maybeSingle();
-
   return data as PublicScholarship | null;
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const scholarship = await loadScholarship(id);
-
   if (!scholarship) {
     return { title: "Scholarship not found -- Scholars" };
   }
-
   return {
     title: scholarship.title + " -- Scholars",
     description:
@@ -77,24 +79,20 @@ function formatDeadline(deadline: string): string {
 export default async function PublicScholarshipPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const scholarship = await loadScholarship(id);
-
   if (!scholarship) {
     notFound();
   }
-
   return (
     <div className="min-h-screen bg-parchment flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
         <div className="mb-6">
           <Logo className="text-navy" />
         </div>
-
         <div className="bg-white rounded-2xl border border-hairline shadow-card p-6">
           <p className="text-xs font-medium text-navy-light mb-1">{scholarship.provider_name}</p>
           <h1 className="font-display text-2xl font-semibold text-navy leading-snug mb-4">
             {scholarship.title}
           </h1>
-
           <div className="flex flex-wrap items-center gap-2 mb-5">
             {scholarship.amount && (
               <span className="text-xs font-mono font-medium text-emerald bg-emerald-light px-2.5 py-1 rounded-full">
@@ -109,11 +107,9 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
               {scholarship.discipline ? " \u00b7 " + scholarship.discipline : ""}
             </span>
           </div>
-
           {scholarship.description && (
             <p className="text-sm text-ink leading-relaxed mb-5">{scholarship.description}</p>
           )}
-
           <div className="flex items-start gap-3 bg-navy-50 rounded-xl p-4 mb-5">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-navy-light shrink-0 mt-0.5" aria-hidden="true">
               <rect x="4" y="10" width="16" height="10" rx="2" />
@@ -125,7 +121,6 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
               GPA, state, discipline, and more -- automatically.
             </p>
           </div>
-
           <Link
             href="/signup?next=/onboarding"
             className="block text-center rounded-seal bg-navy text-white text-sm font-medium px-6 py-3.5 hover:bg-navy-light transition-colors"
