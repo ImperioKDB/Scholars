@@ -14,10 +14,10 @@
 // Postgres trigger on waec_results (migration: add_waec_results_table)
 // whenever this table changes, the same way profile_completeness is
 // trigger-computed rather than accepted from the client.
-
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { invalidateMatchesCache } from '@/lib/matching/matchCache'
 import { WAEC_SUBJECTS, WAEC_GRADES } from '@/lib/data/waec'
 
 const subjectValues = WAEC_SUBJECTS as unknown as [string, ...string[]]
@@ -34,51 +34,41 @@ const bodySchema = z.object({
 
 export async function GET() {
   const supabase = await createClient()
-
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
-
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
-
   const { data: results, error } = await supabase
     .from('waec_results')
     .select('subject, grade')
     .eq('profile_id', user.id)
     .order('subject', { ascending: true })
-
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
   return NextResponse.json({ results })
 }
 
 export async function POST(request: Request) {
   const supabase = await createClient()
-
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
-
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
-
   const raw = await request.json().catch(() => null)
   const parsed = bodySchema.safeParse(raw)
-
   if (!parsed.success) {
     return NextResponse.json(
       { error: 'Invalid WAEC data', issues: parsed.error.issues },
       { status: 400 }
     )
   }
-
   // De-dupe by subject -- a student shouldn't have two grades for one subject.
   const bySubject = new Map(parsed.data.results.map((r) => [r.subject, r.grade]))
   const rows = Array.from(bySubject.entries()).map(([subject, grade]) => ({
@@ -86,23 +76,22 @@ export async function POST(request: Request) {
     subject,
     grade,
   }))
-
   const { error: deleteError } = await supabase
     .from('waec_results')
     .delete()
     .eq('profile_id', user.id)
-
   if (deleteError) {
     return NextResponse.json({ error: deleteError.message }, { status: 500 })
   }
-
   if (rows.length > 0) {
     const { error: insertError } = await supabase.from('waec_results').insert(rows)
     if (insertError) {
       return NextResponse.json({ error: insertError.message }, { status: 500 })
     }
   }
-
+  // PERF (batch 1): WAEC results drive waec_credit_count and
+  // has_english_maths_credit rules, so cached matches must drop here too.
+  await invalidateMatchesCache(user.id)
   return NextResponse.json({
     results: rows.map(({ subject, grade }) => ({ subject, grade })),
   })
