@@ -20,6 +20,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { invalidateMatchesCache } from '@/lib/matching/matchCache'
 
 const profileSchema = z.object({
   full_name: z.string().trim().min(1).max(200).nullable().optional(),
@@ -102,6 +103,10 @@ export async function POST(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+  // PERF (batch 1): profile fields drive match evaluation, so the cached
+  // matches payload must be dropped the moment they change. Fail-open:
+  // a cache error never blocks the profile save (TTL bounds staleness).
+  await invalidateMatchesCache(user.id)
   return NextResponse.json({ profile })
 }
 
@@ -139,6 +144,8 @@ export async function DELETE() {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+  // PERF (batch 1): drop any cached matches for this user as well.
+  await invalidateMatchesCache(user.id)
   if (!count) {
     // No profile row existed yet -- nothing to delete, but the intent
     // is satisfied. Return success rather than 404 so the client can
