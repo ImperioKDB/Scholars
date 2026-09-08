@@ -24,8 +24,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               Admin
             </span>
           </div>
-          {/* flex-wrap: four nav items plus the admin name overflowed on
-              narrow screens with the Health link added. */}
+          {/* flex-wrap: nav items plus the admin name overflowed on
+              narrow screens once Health and now Opportunities were added. */}
           <nav className="flex items-center gap-6 text-sm flex-wrap justify-end">
             <Link href="/admin" className="text-navy-light hover:text-navy">
               Overview
@@ -35,6 +35,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             </Link>
             <Link href="/admin/scholarships" className="text-navy-light hover:text-navy">
               Scholarships
+            </Link>
+            <Link href="/admin/opportunities" className="text-navy-light hover:text-navy">
+              Opportunities
             </Link>
             <Link href="/dashboard" className="text-navy-light hover:text-navy">
               Back to app
