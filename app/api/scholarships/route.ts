@@ -1,6 +1,14 @@
+// app/api/scholarships/route.ts
+// GET /api/scholarships -- dumb browse/search catalog for /discover.
+//
+// SECURITY HARDENING (batch 2): keyword search hits PostgREST ilike on
+// every keystroke (debounced client-side), so a script could use this as
+// a free fuzzy-search oracle. 60/min per IP is far above real student
+// usage and below abuse.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { checkRateLimit } from '@/lib/ratelimit'
 
 const querySchema = z.object({
   level: z.enum(['undergrad', 'both']).optional(),
@@ -11,10 +19,11 @@ const querySchema = z.object({
 })
 
 export async function GET(request: Request) {
+  const limited = await checkRateLimit(request, { route: 'scholarships-browse', limit: 60 })
+  if (limited) return limited
   const supabase = await createClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (authError || !user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-
   const { searchParams } = new URL(request.url)
   const parsed = querySchema.safeParse({
     level: searchParams.get('level') ?? undefined,
@@ -26,9 +35,7 @@ export async function GET(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid query params', issues: parsed.error.issues }, { status: 400 })
   }
-
   const { level, discipline, q, limit, offset } = parsed.data
-
   let query = supabase
     .from('scholarships')
     .select(
@@ -39,17 +46,14 @@ export async function GET(request: Request) {
     .in('level', ['undergrad', 'both'])
     .order('deadline', { ascending: true })
     .range(offset, offset + limit - 1)
-
   if (level) query = query.eq('level', level)
   if (discipline) query = query.ilike('discipline', `%${discipline}%`)
   if (q) {
     const safe = q.replace(/[%,()]/g, ' ').trim()
     if (safe) query = query.or(`title.ilike.%${safe}%,provider_name.ilike.%${safe}%`)
   }
-
   const { data: scholarships, error, count } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
   return NextResponse.json({
     scholarships,
     total: count ?? scholarships?.length ?? 0,
