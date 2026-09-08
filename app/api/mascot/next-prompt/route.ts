@@ -17,25 +17,27 @@
 // never stacks questions. The "track this before you go" nudge is NOT
 // handled here -- that one is purely client-side (see
 // components/ade/AdeProvider.tsx's confirmApply).
-
+//
+// SECURITY HARDENING (batch 2): the client polls this on every window
+// focus event, so a student with many tabs (or a script) could hammer it.
+// 30/min per IP is far above real usage and below abuse.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { checkRateLimit } from '@/lib/ratelimit'
 
-export async function GET() {
+export async function GET(request: Request) {
+  const limited = await checkRateLimit(request, { route: 'mascot-next-prompt', limit: 30 })
+  if (limited) return limited
   const supabase = await createClient()
-
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
-
   if (authError || !user) {
     return NextResponse.json({ prompt: null })
   }
-
   const todayStr = new Date().toISOString().slice(0, 10)
   const nowIso = new Date().toISOString()
-
   const { data: clicked } = await supabase
     .from('applications')
     .select(
@@ -47,18 +49,15 @@ export async function GET() {
     .or(`checkin_snoozed_until.is.null,checkin_snoozed_until.lt.${nowIso}`)
     .order('link_clicked_at', { ascending: false })
     .limit(5)
-
   const clickedRows = (clicked ?? []) as unknown as {
     id: string
     link_clicked_at: string
     checkin_prompted_at: string | null
     scholarship: { id: string; title: string } | null
   }[]
-
   const clickedMatch = clickedRows.find(
     (row) => row.scholarship && (!row.checkin_prompted_at || row.checkin_prompted_at < row.link_clicked_at)
   )
-
   if (clickedMatch && clickedMatch.scholarship) {
     return NextResponse.json({
       prompt: {
@@ -70,7 +69,6 @@ export async function GET() {
       },
     })
   }
-
   const { data: overdue } = await supabase
     .from('applications')
     .select(
@@ -81,16 +79,13 @@ export async function GET() {
     .is('checkin_prompted_at', null)
     .or(`checkin_snoozed_until.is.null,checkin_snoozed_until.lt.${nowIso}`)
     .lt('scholarships.deadline', todayStr)
-
   const overdueRows = (overdue ?? []) as unknown as {
     id: string
     scholarships: { id: string; title: string; deadline: string }
   }[]
-
   const overdueMatch = overdueRows.sort((a, b) =>
     a.scholarships.deadline < b.scholarships.deadline ? -1 : 1
   )[0]
-
   if (overdueMatch) {
     return NextResponse.json({
       prompt: {
@@ -102,7 +97,6 @@ export async function GET() {
       },
     })
   }
-
   const { data: achievementRow } = await supabase
     .from('user_achievements')
     .select('achievement_id, unlocked_at, achievements ( label, description, xp_reward, tier )')
@@ -111,7 +105,6 @@ export async function GET() {
     .order('unlocked_at', { ascending: true })
     .limit(1)
     .maybeSingle()
-
   if (achievementRow && achievementRow.achievements) {
     const a = achievementRow.achievements as unknown as {
       label: string
@@ -130,6 +123,5 @@ export async function GET() {
       },
     })
   }
-
   return NextResponse.json({ prompt: null })
 }
