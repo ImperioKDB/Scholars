@@ -6,6 +6,13 @@ import { Footer } from "@/components/Footer";
 import { DeadlineBadge } from "@/components/DeadlineBadge";
 import { createPublicClient } from "@/lib/supabase/public";
 
+// PERF (batch 1): ISR. The live scholarship card hits Supabase at most
+// once per 5 minutes instead of on every landing-page visit. The data is
+// public and slow-moving (listings are verified by hand), so a short
+// revalidation window costs nothing in freshness. This route is eligible
+// for ISR because it reads through the cookie-free public client only.
+export const revalidate = 300;
+
 // AUDIT FIX (batch 5): the hero card used to show three hardcoded sample
 // matches, complete with invented match scores. A visitor has no profile
 // yet, so any score on this page would be fabricated. The card now shows
