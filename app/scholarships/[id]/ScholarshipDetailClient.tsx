@@ -1,10 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
 import { MatchSeal } from "@/components/MatchSeal";
 import { BackLink } from "@/components/BackLink";
 import { ShareButton } from "@/components/ShareButton";
+import { DeadlineBadge } from "@/components/DeadlineBadge";
 import { CompetitivenessBadge, type CompetitivenessTier } from "@/components/CompetitivenessBadge";
 import { RequirementsList, type Requirement } from "@/components/RequirementsList";
 
@@ -38,13 +38,6 @@ const TIER_LABELS: Record<ScholarshipDetail["tier"], string> = {
   unlikely: "Long shot",
 };
 
-const DEADLINE_TONE_CLASSES: Record<ReturnType<typeof deadlineTone>, string> = {
-  closed: "bg-hairline text-navy-light",
-  urgent: "bg-rose-light text-rose",
-  soon: "bg-amber-light text-amber",
-  later: "bg-navy-50 text-navy-light",
-};
-
 const STATUS_LABELS: Record<ApplicationStatus, string> = {
   in_progress: "In progress",
   submitted: "Submitted",
@@ -69,7 +62,6 @@ export function ScholarshipDetailClient({
   const [savePending, setSavePending] = useState(false);
   const [trackPending, setTrackPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const days = daysUntil(scholarship.deadline);
 
   // SCROLL FIX: always land at the top of the page when arriving from a
   // card click, regardless of where the previous page was scrolled.
@@ -129,11 +121,7 @@ export function ScholarshipDetailClient({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 mb-4">
-          {days !== null && (
-            <span className={"text-xs font-mono font-medium px-2 py-1 rounded-full " + DEADLINE_TONE_CLASSES[deadlineTone(days)]}>
-              {formatDeadlineLabel(days)}
-            </span>
-          )}
+          <DeadlineBadge deadline={scholarship.deadline} />
           {scholarship.amount && (
             <span className="text-xs font-mono font-medium text-emerald bg-emerald-light px-2 py-1 rounded-full">
               {scholarship.amount}
