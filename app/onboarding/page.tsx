@@ -1,5 +1,4 @@
 "use client";
-
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -22,7 +21,6 @@ import {
 import { INSTITUTION_OPTIONS, institutionTypeFor } from "@/lib/data/institutions";
 
 const STEPS = ["Personal", "Academic", "Eligibility", "Documents"];
-
 const DISCIPLINE_COMBO_OPTIONS = DISCIPLINE_OPTIONS.map((d) => ({ value: d, label: d }));
 
 // AUDIT FIX (batch 2): in-progress answers are persisted here on every
@@ -83,7 +81,6 @@ function OnboardingForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
-
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<ProfileForm>(EMPTY_PROFILE_FORM);
   const [waecRows, setWaecRows] = useState<WaecRow[]>([]);
@@ -93,6 +90,11 @@ function OnboardingForm() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // AUDIT FIX (batch 2): true once the student has edited anything that
+  // isn't yet on the server. Drives the beforeunload guard so an
+  // accidental tab close / refresh warns instead of silently relying on
+  // the localStorage draft alone.
+  const [dirty, setDirty] = useState(false);
 
   // Nudge CTAs (dashboard gap banner, scholarship card "Update profile"
   // links) can deep-link straight to the step that collects the field
@@ -116,17 +118,14 @@ function OnboardingForm() {
         router.replace("/login");
         return;
       }
-
       const [profileRes, waecRes] = await Promise.all([
         fetch("/api/profile"),
         fetch("/api/profile/waec"),
       ]);
-
       if (profileRes.status === 401) {
         router.replace("/login");
         return;
       }
-
       let serverForm: ProfileForm = { ...EMPTY_PROFILE_FORM };
       if (profileRes.ok) {
         const { profile } = await profileRes.json();
@@ -156,7 +155,6 @@ function OnboardingForm() {
         };
       }
       // 404 just means no profile row saved yet -- keep the empty form, not an error.
-
       let serverWaecRows: WaecRow[] = [];
       if (waecRes.ok) {
         const { results } = await waecRes.json();
@@ -166,7 +164,6 @@ function OnboardingForm() {
           grade: r.grade,
         }));
       }
-
       // Local draft wins over the server copy: it holds whatever was
       // typed most recently on this device, including fields never
       // saved. No draft -> seed from the server profile. Restoring the
@@ -192,7 +189,6 @@ function OnboardingForm() {
       }
       setLoading(false);
     }
-
     loadExistingProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -206,8 +202,28 @@ function OnboardingForm() {
     writeDraft({ form, waecRows, step, manualInstitution });
   }, [form, waecRows, step, manualInstitution, loading]);
 
+  // AUDIT FIX (batch 2): warn on tab close / refresh / external navigation
+  // while there are unsaved edits. Client-side navigation (Skip, Finish,
+  // sidebar links) does NOT fire beforeunload, so normal in-app movement
+  // is unaffected -- this only catches the accidental close.
+  useEffect(() => {
+    if (!dirty || saving) return;
+    function handler(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty, saving]);
+
   function update<K extends keyof ProfileForm>(key: K, value: ProfileForm[K]) {
     setForm((f) => ({ ...f, [key]: value }));
+    setDirty(true);
+  }
+
+  function updateWaecRows(rows: WaecRow[]) {
+    setWaecRows(rows);
+    setDirty(true);
   }
 
   // Selecting an institution from the Combobox sets both the name and the
@@ -220,6 +236,7 @@ function OnboardingForm() {
       institution_name: name,
       institution_type: (type ?? "") as ProfileForm["institution_type"],
     }));
+    setDirty(true);
   }
 
   // AUDIT FIX (batch 4): escape hatch for schools missing from the
@@ -229,6 +246,7 @@ function OnboardingForm() {
   function toggleManualInstitution() {
     setManualInstitution((m) => !m);
     setForm((f) => ({ ...f, institution_name: "", institution_type: "" }));
+    setDirty(true);
   }
 
   function validateStep(): string | null {
@@ -262,7 +280,6 @@ function OnboardingForm() {
     }
     setSaving(true);
     setError(null);
-
     const res = await fetch("/api/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -295,7 +312,6 @@ function OnboardingForm() {
         has_lga_certificate: form.has_lga_certificate,
       }),
     });
-
     if (res.status === 401) {
       setSaving(false);
       router.replace("/login");
@@ -306,7 +322,6 @@ function OnboardingForm() {
       setError("Couldn't save your profile. Please try again.");
       return;
     }
-
     const validWaecRows = waecRows.filter((r) => r.subject && r.grade);
     const waecRes = await fetch("/api/profile/waec", {
       method: "POST",
@@ -315,15 +330,14 @@ function OnboardingForm() {
         results: validWaecRows.map((r) => ({ subject: r.subject, grade: r.grade })),
       }),
     });
-
     setSaving(false);
     if (!waecRes.ok) {
       setError("Your profile saved, but your WAEC results didn't. You can retry from this page.");
       return;
     }
-
     // Everything is safely server-side now -- the local bridge draft has
-    // done its job.
+    // done its job, and the close-guard must not fire on the way out.
+    setDirty(false);
     clearDraft();
     router.push("/dashboard");
     router.refresh();
@@ -390,10 +404,8 @@ function OnboardingForm() {
           </button>
         </div>
       </header>
-
       <main className="mx-auto max-w-2xl px-6 py-12">
         <StepIndicator steps={STEPS} current={step} />
-
         <div className="bg-white rounded-2xl border border-hairline shadow-card p-8">
           <h1 className="font-display text-2xl font-semibold text-navy mb-1">
             {step === 0 && "Personal information"}
@@ -407,7 +419,6 @@ function OnboardingForm() {
             {step === 2 && "JAMB and WAEC results -- most Nigerian scholarships gate on these directly."}
             {step === 3 && "Tell us which documents you already have ready to submit."}
           </p>
-
           {step === 0 && (
             <>
               <FormField label="Full name">
@@ -480,7 +491,6 @@ function OnboardingForm() {
               </FormField>
             </>
           )}
-
           {step === 1 && (
             <>
               <FormField label="Field of study / discipline" hint="Search and select -- typing the exact course name works too.">
@@ -569,7 +579,6 @@ function OnboardingForm() {
               </FormField>
             </>
           )}
-
           {step === 2 && (
             <>
               <FormField label="JAMB / UTME score (optional)">
@@ -587,7 +596,7 @@ function OnboardingForm() {
                 label="WAEC / NECO / NABTEB results"
                 hint="Add each subject and the grade you got -- your credit count and English/Maths status are worked out from this automatically."
               >
-                <WaecResultsEditor rows={waecRows} onChange={setWaecRows} />
+                <WaecResultsEditor rows={waecRows} onChange={updateWaecRows} />
               </FormField>
               <FormField label="Do you have significant financial need?">
                 <div className="grid grid-cols-2 gap-3">
@@ -635,7 +644,6 @@ function OnboardingForm() {
               </FormField>
             </>
           )}
-
           {step === 3 && (
             <>
               <p className="text-sm font-medium text-ink mb-3">Documents ready to submit</p>
@@ -671,9 +679,7 @@ function OnboardingForm() {
               </FormField>
             </>
           )}
-
           {error && <p className="text-sm text-rose mb-4">{error}</p>}
-
           <div className="flex items-center justify-between mt-6 pt-6 border-t border-hairline">
             <button
               type="button"
