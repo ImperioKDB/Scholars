@@ -1,22 +1,26 @@
--- Feedback table: students submit bugs, feature requests, scholarship
--- issues, or general complaints. Stored for admin triage via the
--- Supabase dashboard (feedback_select_admin policy) and emailed to
--- support.scholarsteam@gmail.com via the /api/feedback route.
+-- In-app student feedback + self-serve account deletion support.
 --
--- profile_id is nullable on purpose: a future logged-out feedback path
--- (e.g. from the landing page) can still write here without a user.
--- ON DELETE SET NULL so deleting a student's profile keeps their past
--- feedback intact for historical triage.
+-- feedback: one row per submitted feedback form (see
+-- components/FeedbackWidget.tsx, app/api/feedback/route.ts). profile_id is
+-- set null on delete so historical feedback survives account deletion in
+-- anonymized form. category is constrained to the four options the widget
+-- offers; message length is checked here AND in the route's zod schema.
 --
--- NOT YET APPLIED. Run in the Supabase SQL editor (or MCP execute_sql).
--- Until it is applied, POST /api/feedback will fail on the insert; the
--- Brevo email still fires (dry-run-safe) so feedback isn't silently lost.
-
-create table public.feedback (
+-- profiles_delete_own: students can delete their own profile row. FK
+-- ON DELETE CASCADE on saved_scholarships / applications / waec_results /
+-- notifications / user_achievements / xp_events removes everything attached
+-- to it in one statement. The auth user row stays (Supabase Auth owns it);
+-- the Settings copy is honest about that and points at support for full
+-- erasure.
+--
+-- IDEMPOTENT: every policy is dropped-then-created, and the table uses
+-- IF NOT EXISTS, so this file is safe to run more than once (for example
+-- if an earlier partial version was already applied).
+create table if not exists public.feedback (
   id uuid primary key default gen_random_uuid(),
   profile_id uuid references public.profiles(id) on delete set null,
   category text not null check (category in ('bug', 'feature', 'scholarship', 'other')),
-  message text not null check (char_length(message) between 10 and 5000),
+  message text not null check (char_length(message) between 10 and 2000),
   contact_email text,
   page_url text,
   created_at timestamptz not null default now()
@@ -24,16 +28,17 @@ create table public.feedback (
 
 alter table public.feedback enable row level security;
 
-create policy "feedback_insert_authenticated"
+drop policy if exists "feedback_insert_own" on public.feedback;
+create policy "feedback_insert_own"
   on public.feedback for insert to authenticated
   with check (auth.uid() = profile_id);
 
+drop policy if exists "feedback_select_admin" on public.feedback;
 create policy "feedback_select_admin"
   on public.feedback for select
   using (is_admin(auth.uid()));
 
-create index if not exists idx_feedback_created_at
-  on public.feedback (created_at desc);
-
-comment on table public.feedback is
-  'In-app student feedback (bugs, feature requests, scholarship issues, other).';
+drop policy if exists "profiles_delete_own" on public.profiles;
+create policy "profiles_delete_own"
+  on public.profiles for delete
+  using (auth.uid() = id);
