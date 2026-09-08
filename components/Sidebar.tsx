@@ -1,10 +1,10 @@
 "use client";
-
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/Logo";
+import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { levelForXp } from "@/lib/xp/level";
 
 function DashboardIcon() {
@@ -17,7 +17,6 @@ function DashboardIcon() {
     </svg>
   );
 }
-
 function ApplicationsIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -27,7 +26,6 @@ function ApplicationsIcon() {
     </svg>
   );
 }
-
 function AchievementsIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -37,7 +35,6 @@ function AchievementsIcon() {
     </svg>
   );
 }
-
 function AdminIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -45,7 +42,6 @@ function AdminIcon() {
     </svg>
   );
 }
-
 function DiscoverIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -54,10 +50,6 @@ function DiscoverIcon() {
     </svg>
   );
 }
-
-// New: Opportunities nav icon (briefcase), for fellowships/internships/
-// competitions/mentorships -- a discovery surface parallel to Browse, not
-// nested under it (see the opportunities architecture decision doc).
 function OpportunitiesIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -67,7 +59,6 @@ function OpportunitiesIcon() {
     </svg>
   );
 }
-
 function SettingsIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -78,7 +69,6 @@ function SettingsIcon() {
     </svg>
   );
 }
-
 function MenuIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -86,7 +76,6 @@ function MenuIcon() {
     </svg>
   );
 }
-
 function CloseIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -94,7 +83,6 @@ function CloseIcon() {
     </svg>
   );
 }
-
 function SpinnerIcon() {
   return (
     <svg className="animate-spin h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none">
@@ -103,7 +91,6 @@ function SpinnerIcon() {
     </svg>
   );
 }
-
 function initialsFor(name: string | null): string {
   if (!name) return "?";
   const words = name.trim().split(/\s+/).filter(Boolean);
@@ -131,8 +118,6 @@ export function Sidebar({
   isAdmin: boolean;
   profileCompleteness: number;
   xpTotal: number;
-  // Public profile photo URL (profiles.avatar_url, migration 0010).
-  // Null falls back to the initials avatar.
   avatarUrl: string | null;
 }) {
   const pathname = usePathname();
@@ -251,7 +236,6 @@ export function Sidebar({
       >
         Skip to content
       </a>
-
       <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-60 border-r border-hairline bg-white">
         <div className="px-5 py-5 border-b border-hairline">
           <Logo className="text-navy" />
@@ -260,14 +244,12 @@ export function Sidebar({
         <div className="flex-1 px-3 py-4">{navList}</div>
         {accountBlock}
       </aside>
-
       <header className="md:hidden fixed top-0 inset-x-0 z-40 h-14 bg-white border-b border-hairline flex items-center gap-3 px-4">
         <button type="button" onClick={() => setMobileOpen(true)} aria-label="Open menu" className="text-navy p-1.5 -ml-1.5">
           <MenuIcon />
         </button>
         <Logo className="text-navy" />
       </header>
-
       <div
         className={[
           "md:hidden fixed inset-0 z-50 transition-opacity duration-200",
@@ -292,7 +274,6 @@ export function Sidebar({
           {accountBlock}
         </div>
       </div>
-
       <nav
         className={[
           "md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-hairline pb-[env(safe-area-inset-bottom)]",
@@ -329,6 +310,9 @@ export function Sidebar({
           })}
         </div>
       </nav>
+      {/* In-app feedback launcher (user feedback batch). Fixed bottom-left,
+          opposite Ade, on every authenticated student surface. */}
+      <FeedbackWidget />
     </>
   );
 }
