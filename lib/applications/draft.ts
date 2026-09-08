@@ -15,41 +15,37 @@
 // across dozens of different providers. "Confirming" a draft here means
 // "this is what I'll use" -- the student then copies it into the
 // scholarship's own application_url.
-
-export type DraftFact = { label: string; value: string };
-export type DraftChecklistItem = { item: string; have: boolean };
-export type DraftSummary = { facts: DraftFact[]; checklist: DraftChecklistItem[] };
-
+export type DraftFact = { label: string; value: string }
+export type DraftChecklistItem = { item: string; have: boolean }
+export type DraftSummary = { facts: DraftFact[]; checklist: DraftChecklistItem[] }
 export type DraftProfileInput = {
-  full_name: string | null;
-  institution_name: string | null;
-  institution_type: string | null;
-  discipline: string | null;
-  year_of_study: number | null;
-  state_of_origin: string | null;
-  lga_of_origin: string | null;
-  gpa: number | null;
-  jamb_score: number | null;
-  waec_credit_count: number | null;
-  has_english_maths_credit: boolean;
-  financial_need: boolean;
-  disability_status: boolean;
-  career_goals: string | null;
-  has_valid_id: boolean;
-  has_transcript: boolean;
-  has_recommendation_letter: boolean;
-  has_personal_statement: boolean;
-  has_lga_certificate: boolean;
-};
-
-type DraftWaecRow = { subject: string; grade: string };
-
+  full_name: string | null
+  institution_name: string | null
+  institution_type: string | null
+  discipline: string | null
+  year_of_study: number | null
+  state_of_origin: string | null
+  lga_of_origin: string | null
+  gpa: number | null
+  jamb_score: number | null
+  waec_credit_count: number | null
+  has_english_maths_credit: boolean
+  financial_need: boolean
+  disability_status: boolean
+  career_goals: string | null
+  has_valid_id: boolean
+  has_transcript: boolean
+  has_recommendation_letter: boolean
+  has_personal_statement: boolean
+  has_lga_certificate: boolean
+}
+type DraftWaecRow = { subject: string; grade: string }
 type DraftScholarshipInput = {
-  title: string;
-  provider_name: string;
-  description: string | null;
-  discipline: string | null;
-};
+  title: string
+  provider_name: string
+  description: string | null
+  discipline: string | null
+}
 
 const INSTITUTION_TYPE_LABELS: Record<string, string> = {
   federal_uni: "Federal University",
@@ -57,10 +53,10 @@ const INSTITUTION_TYPE_LABELS: Record<string, string> = {
   private_uni: "Private University",
   polytechnic: "Polytechnic / Monotechnic",
   college_of_education: "College of Education",
-};
+}
 
 function fullNameOf(profile: DraftProfileInput): string {
-  return profile.full_name?.trim() || "Student";
+  return profile.full_name?.trim() || "Student"
 }
 
 // Deterministic -- pulled straight from columns the student already
@@ -93,28 +89,25 @@ export function buildDraftSummary(profile: DraftProfileInput, waecResults: Draft
     },
     { label: "Financial need", value: profile.financial_need ? "Yes" : "No" },
     { label: "Disability status", value: profile.disability_status ? "Yes" : "No" },
-  ];
-
+  ]
   if (waecResults.length > 0) {
     facts.push({
       label: "WAEC subjects",
       value: waecResults.map((r) => `${r.subject}: ${r.grade}`).join(", "),
-    });
+    })
   }
-
   const checklist: DraftChecklistItem[] = [
     { item: "Valid means of identification", have: profile.has_valid_id },
     { item: "Academic transcript / statement of results", have: profile.has_transcript },
     { item: "Recommendation letter", have: profile.has_recommendation_letter },
     { item: "Personal statement / letter of motivation", have: profile.has_personal_statement },
     { item: "LGA / state of origin certificate", have: profile.has_lga_certificate },
-  ];
-
-  return { facts, checklist };
+  ]
+  return { facts, checklist }
 }
 
 function truncate(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max)}\u2026` : text;
+  return text.length > max ? `${text.slice(0, max)}\u2026` : text
 }
 
 // Everything the model needs is passed explicitly -- no hidden lookups --
@@ -124,8 +117,7 @@ export function buildStatementPrompt(
   scholarship: DraftScholarshipInput,
   metRequirementLabels: string[]
 ): string {
-  const name = fullNameOf(profile);
-
+  const name = fullNameOf(profile)
   return `You are helping a Nigerian undergraduate student draft a personal statement / letter of motivation for a specific scholarship application. Write in the student's voice -- first person, sincere, concrete, no generic filler ("passionate about", "since a young age"). 250-350 words. Plain paragraphs, no headers or bullet points.
 
 Student facts (use only what's relevant, do not invent anything beyond this):
@@ -149,35 +141,28 @@ Eligibility strengths this student meets (weave in naturally, don't list them me
     metRequirementLabels.length > 0 ? metRequirementLabels.join("; ") : "general eligibility"
   }
 
-Write the statement now. Do not include a greeting, a subject line, or a sign-off -- just the statement body.`;
+Write the statement now. Do not include a greeting, a subject line, or a sign-off -- just the statement body.`
 }
 
 // Google Gemini (AI Studio) -- free tier, no credit card required. Get a
 // key at https://aistudio.google.com/apikey and set it as GEMINI_API_KEY
 // in Vercel.
 //
-// MODEL NOTE (2026-09-01): gemini-2.5-flash-lite was retired for new
-// callers -- Google's API now returns a 404 NOT_FOUND pointing callers at
-// gemini-3.5-flash-lite instead (see the literal error text: "This model
-// models/gemini-2.5-flash-lite is no longer available to new users.
-// Please update your code to use models/gemini-3.5-flash-lite"). Switched
-// the model id below accordingly. If this model is retired in turn, the
-// same 404 pattern will show up in the draft-generation error banner on
-// the Applications page -- check that banner's text first, it names the
-// replacement model directly.
+// MODEL VERSION PIN (audit P3): pinned to gemini-3.5-flash-lite with
+// explicit fallback note. If this model is retired, the error banner on
+// the Applications page will show the replacement model name directly.
+// Update GEMINI_MODEL_ID below to the new model ID when that happens.
+const GEMINI_MODEL_ID = 'gemini-3.5-flash-lite'
+const GEMINI_FALLBACK_MODEL_ID = 'gemini-3.5-flash' // try this if primary 404s
+
 type GeminiResponse = {
-  candidates?: { content?: { parts?: { text?: string }[] } }[];
-  promptFeedback?: { blockReason?: string };
-};
+  candidates?: { content?: { parts?: { text?: string }[] } }[]
+  promptFeedback?: { blockReason?: string }
+}
 
-export async function generateStatement(prompt: string): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("Missing GEMINI_API_KEY env var");
-  }
-
+async function callGemini(modelId: string, apiKey: string, prompt: string): Promise<string> {
   const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -186,27 +171,47 @@ export async function generateStatement(prompt: string): Promise<string> {
         generationConfig: { maxOutputTokens: 700, temperature: 0.7 },
       }),
     }
-  );
-
+  )
   if (!resp.ok) {
-    const body = await resp.text().catch(() => "");
-    throw new Error(`Gemini API error ${resp.status}: ${body.slice(0, 300)}`);
+    const body = await resp.text().catch(() => "")
+    throw new Error(`Gemini API error ${resp.status}: ${body.slice(0, 300)}`)
   }
-
-  const data = (await resp.json()) as GeminiResponse;
-
+  const data = (await resp.json()) as GeminiResponse
   if (data.promptFeedback?.blockReason) {
-    throw new Error(`Gemini blocked the request: ${data.promptFeedback.blockReason}`);
+    throw new Error(`Gemini blocked the request: ${data.promptFeedback.blockReason}`)
   }
-
   const text = (data.candidates?.[0]?.content?.parts ?? [])
     .map((part) => part.text ?? "")
     .join("\n")
-    .trim();
-
+    .trim()
   if (!text) {
-    throw new Error("Gemini API returned no text content");
+    throw new Error("Gemini API returned no text content")
   }
+  return text
+}
 
-  return text;
+export async function generateStatement(prompt: string): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) {
+    throw new Error("Missing GEMINI_API_KEY env var")
+  }
+  try {
+    return await callGemini(GEMINI_MODEL_ID, apiKey, prompt)
+  } catch (primaryError) {
+    // If primary model is retired (404 NOT_FOUND), try fallback once.
+    const msg = primaryError instanceof Error ? primaryError.message : String(primaryError)
+    if (msg.includes('404') || msg.includes('NOT_FOUND') || msg.includes('no longer available')) {
+      try {
+        return await callGemini(GEMINI_FALLBACK_MODEL_ID, apiKey, prompt)
+      } catch (fallbackError) {
+        // Fallback also failed, surface original error with note
+        throw new Error(
+          `Primary model ${GEMINI_MODEL_ID} retired and fallback ${GEMINI_FALLBACK_MODEL_ID} also failed. ` +
+          `Check https://aistudio.google.com for current model IDs and update GEMINI_MODEL_ID in lib/applications/draft.ts. ` +
+          `Original error: ${msg}`
+        )
+      }
+    }
+    throw primaryError
+  }
 }
