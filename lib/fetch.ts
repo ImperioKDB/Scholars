@@ -7,6 +7,11 @@
 // assumes app is broken, leaves. This wrapper aborts after `timeoutMs`
 // (default 10s) and surfaces a clean error.
 //
+// PERF (batch 1): now accepts an optional caller-owned `signal` (e.g. to
+// abort stale search requests) and composes it with the internal timeout
+// controller. A caller-initiated abort rethrows the raw AbortError so
+// loaders can distinguish "I cancelled this" from "the network died".
+//
 // USAGE: replace `fetch(url, init)` with `fetchWithTimeout(url, init)`.
 // Catches AbortError and rethrows as a friendlier shape for callers.
 //
@@ -32,8 +37,15 @@ export async function fetchWithTimeout(
   url: string,
   init: RequestInit & { timeoutMs?: number } = {}
 ): Promise<Response> {
-  const { timeoutMs = 10_000, ...fetchInit } = init;
+  const { timeoutMs = 10_000, signal, ...fetchInit } = init;
+
   const controller = new AbortController();
+  const onExternalAbort = () => controller.abort();
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener("abort", onExternalAbort, { once: true });
+  }
+
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, {
@@ -42,11 +54,15 @@ export async function fetchWithTimeout(
     });
     return response;
   } catch (error) {
+    // Caller-initiated abort: rethrow untouched so the caller can bail
+    // out silently. Everything else maps to the friendly error types.
+    if (signal?.aborted) throw error;
     if (error instanceof DOMException && error.name === 'AbortError') {
       throw new FetchTimeoutError(url, timeoutMs);
     }
     throw new FetchNetworkError(url, error);
   } finally {
     clearTimeout(timer);
+    if (signal) signal.removeEventListener("abort", onExternalAbort);
   }
 }
