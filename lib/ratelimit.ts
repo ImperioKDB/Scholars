@@ -20,6 +20,10 @@
 //   - Limit exceeded: 429 with { error: "Too many requests" }, the exact
 //     body shape every route in this codebase already returns.
 //
+// PERF (batch 1): the in-memory fallback Map used to grow without bound
+// during a long Upstash outage. It is now swept down to live entries
+// whenever it overshoots IN_MEMORY_MAX_BUCKETS.
+//
 // USAGE (top of a route handler, before any other work):
 //   const limited = await checkRateLimit(request, { route: 'save', limit: 20 })
 //   if (limited) return limited
@@ -41,6 +45,7 @@ const limiters = new Map<string, Ratelimit>()
 const inMemoryBuckets = new Map<string, number[]>()
 const IN_MEMORY_WINDOW_MS = 60_000
 const IN_MEMORY_MAX_PER_MINUTE = 10 // conservative fallback
+const IN_MEMORY_MAX_BUCKETS = 5000 // bounded-growth cap (batch 1)
 
 function getRedis(): Redis | null {
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) return null
@@ -73,13 +78,26 @@ function checkInMemory(bucketKey: string, limit: number): boolean {
   const windowStart = now - IN_MEMORY_WINDOW_MS
   let timestamps = inMemoryBuckets.get(bucketKey) ?? []
   timestamps = timestamps.filter((t) => t > windowStart)
-  if (timestamps.length >= limit) {
+  const exceeded = timestamps.length >= limit
+  if (!exceeded) timestamps.push(now)
+
+  if (timestamps.length === 0) {
+    inMemoryBuckets.delete(bucketKey)
+  } else {
     inMemoryBuckets.set(bucketKey, timestamps)
-    return true
   }
-  timestamps.push(now)
-  inMemoryBuckets.set(bucketKey, timestamps)
-  return false
+
+  // Bounded growth (batch 1): when the bucket count overshoots the cap,
+  // sweep every bucket down to its live entries so a long Upstash outage
+  // cannot leak memory indefinitely.
+  if (inMemoryBuckets.size > IN_MEMORY_MAX_BUCKETS) {
+    for (const [key, values] of inMemoryBuckets) {
+      const fresh = values.filter((t) => t > windowStart)
+      if (fresh.length === 0) inMemoryBuckets.delete(key)
+      else inMemoryBuckets.set(key, fresh)
+    }
+  }
+  return exceeded
 }
 
 export async function checkRateLimit(
@@ -88,8 +106,10 @@ export async function checkRateLimit(
 ): Promise<NextResponse | null> {
   const client = getRedis()
   if (!client) return null // env not set: skip silently (dry-run-safe)
+
   const limiter = getLimiter(opts.route, opts.limit, client)
   const keys = [`ip:${clientIp(request)}`, ...(opts.extraKeys ?? [])]
+
   try {
     for (const key of keys) {
       const { success } = await limiter.limit(key)
