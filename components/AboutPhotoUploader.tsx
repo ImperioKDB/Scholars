@@ -2,6 +2,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { downscaleToJpeg } from "@/lib/images";
 import { StatusMessage } from "@/components/StatusMessage";
 
 // components/AboutPhotoUploader.tsx
@@ -16,46 +17,10 @@ import { StatusMessage } from "@/components/StatusMessage";
 // separate "edit" step. Remove deletes the object; the page falls back to
 // its placeholder. router.refresh() re-runs the server page so the new
 // object's updated_at (used as the cache-buster) is picked up immediately.
-//
-// The file is center-cropped and downscaled to a 640px square JPEG in the
-// browser before upload, same pattern as AvatarUploader, so uploads stay
-// small and consistent regardless of the source photo.
 const MAX_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const OUTPUT_SIZE = 640;
 const OBJECT_NAME = "about-portrait.jpg";
-
-function downscaleToJpeg(file: File): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const side = Math.min(img.width, img.height);
-      const sx = (img.width - side) / 2;
-      const sy = (img.height - side) / 2;
-      const canvas = document.createElement("canvas");
-      canvas.width = OUTPUT_SIZE;
-      canvas.height = OUTPUT_SIZE;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        reject(new Error("Canvas unavailable"));
-        return;
-      }
-      ctx.drawImage(img, sx, sy, side, side, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
-      canvas.toBlob(
-        (b) => (b ? resolve(b) : reject(new Error("Could not encode the image"))),
-        "image/jpeg",
-        0.85
-      );
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("That file isn't a readable image"));
-    };
-    img.src = url;
-  });
-}
 
 export function AboutPhotoUploader({ currentUrl }: { currentUrl: string | null }) {
   const supabase = createClient();
@@ -78,7 +43,7 @@ export function AboutPhotoUploader({ currentUrl }: { currentUrl: string | null }
     }
     setBusy(true);
     try {
-      const blob = await downscaleToJpeg(file);
+      const blob = await downscaleToJpeg(file, OUTPUT_SIZE);
       const { error: uploadError } = await supabase.storage
         .from("site")
         .upload(OBJECT_NAME, blob, { contentType: "image/jpeg", upsert: true });
@@ -111,15 +76,6 @@ export function AboutPhotoUploader({ currentUrl }: { currentUrl: string | null }
 
   return (
     <div className="flex flex-col gap-2">
-      {currentUrl && (
-        // AUDIT FIX (P10): loading="lazy" on non-hero images
-        <img
-          src={currentUrl}
-          alt="Founder portrait"
-          loading="lazy"
-          className="w-full aspect-square object-cover rounded-xl border border-hairline mb-2"
-        />
-      )}
       <div className="flex items-center gap-3 flex-wrap">
         <button
           type="button"
