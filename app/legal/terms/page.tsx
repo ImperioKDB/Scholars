@@ -6,8 +6,9 @@ export const metadata: Metadata = {
 };
 
 // Keep in sync with app/legal/privacy/page.tsx.
-// TODO before launch: replace with the real support inbox.
-const CONTACT_EMAIL = "support@scholars.ng";
+// FINAL CLEANUP: placeholder replaced with the live-domain support inbox.
+// Make sure this mailbox (or a forwarder for it) exists before launch.
+const CONTACT_EMAIL = "support@scholars.com.ng";
 const LAST_UPDATED = "2026";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -51,7 +52,7 @@ export default function TermsOfServicePage() {
       <Section title="4. Listings and the verified badge">
         <p>
           Scholarships are listed from public information. A verified badge means our team checked the
-          listing at a point in time; it is not an endorsement by the provider, and Scholars is not
+          listing at a point in time. It is not an endorsement by the provider, and Scholars is not
           affiliated with providers unless we explicitly say so. If you spot a listing that is wrong,
           stale, or fraudulent, report it to {CONTACT_EMAIL} and we will act on it.
         </p>
