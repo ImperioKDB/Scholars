@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/discover", "/saved", "/applications", "/admin", "/scholarships", "/settings"];
+const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/discover", "/opportunities", "/saved", "/applications", "/admin", "/scholarships", "/settings"];
 const AUTH_PREFIXES = ["/login", "/signup"];
 
 const REF_COOKIE_NAME = "ref_id";
@@ -118,6 +118,7 @@ export const config = {
     "/dashboard/:path*",
     "/onboarding/:path*",
     "/discover/:path*",
+    "/opportunities/:path*",
     "/saved/:path*",
     "/applications/:path*",
     "/admin/:path*",
