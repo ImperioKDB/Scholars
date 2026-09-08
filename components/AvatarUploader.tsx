@@ -2,6 +2,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { StatusMessage } from "@/components/StatusMessage";
 
 // components/AvatarUploader.tsx
 //
@@ -19,6 +20,10 @@ import { createClient } from "@/lib/supabase/client";
 // appears next to your name across the app immediately) and shows a green
 // confirmation line. router.refresh() preserves client state, so nothing
 // here resets.
+//
+// AUDIT FIX (batch 3): the confirmation and error lines are wrapped in
+// StatusMessage (role="status" aria-live="polite") so screen reader users
+// hear the outcome instead of only seeing it.
 //
 // The file is downscaled to a 256px square JPEG in the browser before
 // upload, so uploads stay small (~10-30KB), consistent, and within the
@@ -173,8 +178,8 @@ export function AvatarUploader({ initialUrl }: { initialUrl: string | null }) {
             </button>
           )}
         </div>
-        {notice && <p className="text-xs text-emerald">{notice}</p>}
-        {error && <p className="text-xs text-rose">{error}</p>}
+        <StatusMessage tone="success">{notice}</StatusMessage>
+        <StatusMessage tone="error">{error}</StatusMessage>
       </div>
       <input
         ref={inputRef}
