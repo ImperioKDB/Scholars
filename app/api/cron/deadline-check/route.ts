@@ -20,7 +20,7 @@
 // sending but still records dedupe rows, exactly like before.
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { logError, logWarn, logInfo } from '@/lib/logging'
+import { logError, logWarn } from '@/lib/logging'
 import {
   renderDeadlineReminder,
   renderNewListingsDigest,
@@ -188,7 +188,7 @@ export async function GET(request: Request) {
     const schList = (newSch ?? []) as { id: string; title: string; provider_name: string; amount: string | null; deadline: string | null }[]
     const oppList = (newOpp ?? []) as { id: string; type: string; title: string; provider_name: string; compensation: string | null; deadline: string | null }[]
     if (schList.length === 0 && oppList.length === 0) {
-      logInfo(ROUTE, 'digest_no_new_listings', {})
+      logWarn(ROUTE, 'digest_no_new_listings', {})
     }
     for (const p of (profiles ?? []) as { id: string; email: string; full_name: string | null }[]) {
       const last = lastDigestAt.get(p.id)
@@ -196,7 +196,7 @@ export async function GET(request: Request) {
       const pendingSch = schList.filter((s) => !announced.has(`${p.id}:scholarship:${s.id}`))
       const pendingOpp = oppList.filter((o) => !announced.has(`${p.id}:opportunity:${o.id}`))
       if (pendingSch.length === 0 && pendingOpp.length === 0) continue
-      const items: EmailListing = [
+      const items: EmailListing[] = [
         ...pendingSch.map((s) => ({
           id: s.id,
           title: s.title,
@@ -260,6 +260,6 @@ export async function GET(request: Request) {
     }
   }
 
-  logInfo(ROUTE, 'run_complete', summary)
+  logWarn(ROUTE, 'run_complete', summary)
   return NextResponse.json(summary)
 }
