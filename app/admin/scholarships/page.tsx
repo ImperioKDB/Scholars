@@ -1,7 +1,7 @@
 "use client";
-
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type Row = {
   id: string;
@@ -19,6 +19,14 @@ export default function AdminScholarshipsPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "verified" | "pending">("all");
+  // AUDIT FIX (batch 3): deleting a scholarship cascades to its rules and
+  // any saves/applications attached to it. window.confirm() on a phone is
+  // a misclick hazard with tiny buttons; the styled ConfirmDialog is
+  // focus-trapped, Esc-cancelable, and matches the app.
+  const [confirmState, setConfirmState] = useState<{
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   async function load() {
     setLoading(true);
@@ -63,16 +71,31 @@ export default function AdminScholarshipsPage() {
     }
   }
 
-  async function remove(row: Row) {
-    if (!confirm(`Delete "${row.title}"? This also deletes its eligibility rules.`)) return;
+  async function doRemove(row: Row) {
     const prev = rows;
     setRows((r) => r.filter((x) => x.id !== row.id));
     const res = await fetch(`/api/admin/scholarships/${row.id}`, { method: "DELETE" });
     if (!res.ok) setRows(prev);
   }
 
+  function remove(row: Row) {
+    setConfirmState({
+      message: `Delete "${row.title}"? This also deletes its eligibility rules.`,
+      onConfirm: () => doRemove(row),
+    });
+  }
+
   return (
     <div>
+      {confirmState && (
+        <ConfirmDialog
+          message={confirmState.message}
+          onConfirm={confirmState.onConfirm}
+          onClose={() => setConfirmState(null)}
+          confirmLabel="Delete"
+          tone="rose"
+        />
+      )}
       <div className="flex items-center justify-between mb-6">
         <h1 className="font-display text-2xl font-semibold text-navy">Scholarships</h1>
         <Link
@@ -82,7 +105,6 @@ export default function AdminScholarshipsPage() {
           + Add scholarship
         </Link>
       </div>
-
       <div className="flex items-center gap-2 mb-4">
         {(["all", "verified", "pending"] as const).map((f) => (
           <button
@@ -97,7 +119,6 @@ export default function AdminScholarshipsPage() {
           </button>
         ))}
       </div>
-
       <div className="bg-white rounded-xl border border-hairline overflow-hidden">
         {loading ? (
           <p className="text-sm text-navy-light p-5">Loading&hellip;</p>
