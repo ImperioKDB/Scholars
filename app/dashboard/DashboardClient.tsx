@@ -6,6 +6,7 @@ import { ScholarshipCard, Spinner, type CardScholarship } from "@/components/Sch
 import { consumeReturnScroll, saveReturnScroll } from "@/lib/scrollRestore";
 import { daysUntil, formatDeadlineLabel } from "@/lib/dates";
 import type { GapNudge } from "@/lib/matching/gaps";
+import { fetchWithTimeout, FetchTimeoutError, FetchNetworkError } from "@/lib/fetch";
 
 type MatchTier = "excellent" | "good" | "possible" | "unlikely";
 type MatchApiItem = CardScholarship & {
@@ -72,11 +73,14 @@ function DeadlineCard({ scholarship, days }: { scholarship: CardScholarship; day
   const [navigating, setNavigating] = useState(false);
   const [showSpinner, setShowSpinner] = useState(false);
   const spinnerTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => () => { if (spinnerTimeout.current) clearTimeout(spinnerTimeout.current); }, []);
+
   function handleNavigate() {
     setNavigating(true);
     spinnerTimeout.current = setTimeout(() => setShowSpinner(true), SPINNER_DELAY_MS);
   }
+
   return (
     <div className={[
       "relative shrink-0 w-56 bg-white rounded-xl border border-hairline p-4",
@@ -126,9 +130,6 @@ export function DashboardClient({
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<"all" | MatchTier>("all");
 
-  // RETURN-SCROLL: replay the offset saved when a scholarship card was
-  // tapped, once the real content (not the skeleton) is mounted. Consumed
-  // once, so sidebar navigation still lands at the top.
   useEffect(() => {
     const y = consumeReturnScroll("/dashboard");
     if (y === null) return;
@@ -137,12 +138,16 @@ export function DashboardClient({
   }, []);
 
   async function refreshSaved() {
-    const res = await fetch("/api/scholarships/save");
-    if (!res.ok) return;
-    const data = await res.json();
-    const list: SavedApiItem[] = data.saved ?? [];
-    setSaved(list);
-    setSavedIds(new Set(list.map((s) => s.scholarship.id)));
+    try {
+      const res = await fetchWithTimeout("/api/scholarships/save");
+      if (!res.ok) return;
+      const data = await res.json();
+      const list: SavedApiItem[] = data.saved ?? [];
+      setSaved(list);
+      setSavedIds(new Set(list.map((s) => s.scholarship.id)));
+    } catch (err) {
+      // Silent fail -- saved list is supplementary
+    }
   }
 
   const openMatches = useMemo(() => matches.filter((m) => m.isOpenNow), [matches]);
@@ -151,6 +156,7 @@ export function DashboardClient({
     () => (tab === "all" ? openMatches : openMatches.filter((m) => m.tier === tab)),
     [openMatches, tab]
   );
+
   const upcomingDeadlines = useMemo(() => {
     const map = new Map<string, CardScholarship>();
     for (const m of matches) map.set(m.id, m);
@@ -160,6 +166,7 @@ export function DashboardClient({
       .sort((a, b) => new Date(a.deadline as string).getTime() - new Date(b.deadline as string).getTime())
       .slice(0, 5);
   }, [matches, saved]);
+
   const closingSoonCount = useMemo(() => {
     const ids = new Set<string>();
     for (const m of matches) { const d = daysUntil(m.deadline); if (d !== null && d >= 0 && d <= 30) ids.add(m.id); }
@@ -171,18 +178,29 @@ export function DashboardClient({
     const wasSaved = savedIds.has(scholarshipId);
     setSavedIds((prev) => { const n = new Set(prev); if (wasSaved) n.delete(scholarshipId); else n.add(scholarshipId); return n; });
     setPendingIds((prev) => new Set(prev).add(scholarshipId));
-    const res = wasSaved
-      ? await fetch(`/api/scholarships/save?scholarship_id=${scholarshipId}`, { method: "DELETE" })
-      : await fetch("/api/scholarships/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scholarship_id: scholarshipId }) });
-    if (!res.ok) {
+
+    try {
+      const res = wasSaved
+        ? await fetchWithTimeout(`/api/scholarships/save?scholarship_id=${scholarshipId}`, { method: "DELETE" })
+        : await fetchWithTimeout("/api/scholarships/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ scholarship_id: scholarshipId }),
+          });
+      if (!res.ok) {
+        setSavedIds((prev) => { const n = new Set(prev); if (wasSaved) n.add(scholarshipId); else n.delete(scholarshipId); return n; });
+      } else {
+        await refreshSaved();
+      }
+    } catch (err) {
+      // Revert on network error
       setSavedIds((prev) => { const n = new Set(prev); if (wasSaved) n.add(scholarshipId); else n.delete(scholarshipId); return n; });
-    } else {
-      await refreshSaved();
     }
     setPendingIds((prev) => { const n = new Set(prev); n.delete(scholarshipId); return n; });
   }
 
   const firstName = fullName?.trim().split(/\s+/)[0];
+
   return (
     <div>
       <div className="mb-8">
@@ -209,7 +227,7 @@ export function DashboardClient({
         </div>
       </div>
       {loadError && (
-        <p className="text-sm text-rose mb-6">
+        <p className="text-sm text-rose mb-6" role="alert">
           {loadError}{" "}
           <button type="button" onClick={() => { setLoadError(null); router.refresh(); }} className="font-medium underline">Try again</button>
         </p>
