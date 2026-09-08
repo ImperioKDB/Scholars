@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/Logo";
-import { FeedbackWidget } from "@/components/FeedbackWidget";
+import { FeedbackModal } from "@/components/FeedbackWidget";
 import { levelForXp } from "@/lib/xp/level";
 
 function DashboardIcon() {
@@ -69,6 +69,13 @@ function SettingsIcon() {
     </svg>
   );
 }
+function FeedbackIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <path d="M21 11.5a7.5 7.5 0 0 1-7.5 7.5H7l-4 3V11.5A7.5 7.5 0 0 1 10.5 4h3A7.5 7.5 0 0 1 21 11.5Z" strokeLinejoin="round" />
+    </svg>
+  );
+}
 function MenuIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -125,6 +132,7 @@ export function Sidebar({
   const supabase = createClient();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [barVisible, setBarVisible] = useState(false);
   const barHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -213,8 +221,18 @@ export function Sidebar({
     </nav>
   );
 
+  // Account block: feedback lives here, directly above Log out, on both
+  // desktop and the mobile drawer. No floating pill anywhere.
   const accountBlock = (
     <div className="px-3 py-4 border-t border-hairline">
+      <button
+        type="button"
+        onClick={() => setFeedbackOpen(true)}
+        className="w-full inline-flex items-center gap-2.5 text-left rounded-lg px-3 py-2.5 text-sm font-medium text-navy-light hover:bg-navy-50 hover:text-navy transition-colors"
+      >
+        <FeedbackIcon />
+        Send feedback
+      </button>
       <button
         type="button"
         onClick={handleLogout}
@@ -310,9 +328,10 @@ export function Sidebar({
           })}
         </div>
       </nav>
-      {/* In-app feedback launcher (user feedback batch). Fixed bottom-left,
-          opposite Ade, on every authenticated student surface. */}
-      <FeedbackWidget />
+      {/* Feedback modal, triggered from the account block above. Rendered
+          once at the Sidebar root so it is not duplicated between the
+          desktop aside and the mobile drawer. */}
+      <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </>
   );
 }
