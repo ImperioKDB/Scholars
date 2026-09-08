@@ -10,8 +10,10 @@
 -- policies: only the service-role cron client (which bypasses RLS) and
 -- postgres itself can read or write it, which is exactly the intent.
 --
--- Seed from existing notifications so scholarships already announced by
--- the old per-listing code are not re-announced by the first digest run.
+-- NO SEED: the old per-listing announcement feature did not exist before
+-- this digest rewrite. The notifications table only contains
+-- 'deadline_reminder' rows, so there are no 'new_listing' rows to seed
+-- from. The announcement_log starts empty and fills as digests send.
 --
 -- IDEMPOTENT: safe to run more than once.
 create table if not exists public.announcement_log (
@@ -26,9 +28,3 @@ alter table public.announcement_log enable row level security;
 
 create index if not exists idx_announcement_log_profile_created
   on public.announcement_log (profile_id, created_at desc);
-
-insert into public.announcement_log (profile_id, listing_kind, listing_id, created_at)
-select profile_id, 'scholarship', scholarship_id, created_at
-from public.notifications
-where type = 'new_listing' and scholarship_id is not null
-on conflict do nothing;
