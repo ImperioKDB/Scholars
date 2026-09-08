@@ -1,7 +1,7 @@
 // app/api/cron/deadline-check/route.ts
 // GET /api/cron/deadline-check
 //
-// Triggered daily by Vercel Cron (see vercel.json). Three independent phases:
+// Triggered daily by Vercel Cron (see vercel.json). Independent phases:
 //
 //   Phase 1 -- deadline reminders (unchanged behavior): for every saved
 //   scholarship whose deadline falls within DEADLINE_REMINDER_DAYS from
@@ -29,18 +29,42 @@
 //   scholarships per run; anything beyond that is picked up by the next
 //   daily run while still inside the window.
 //
-// All phases dedupe against `notifications` by (profile_id, scholarship_id,
+//   Phase 4 -- new-opportunity alerts (added 2026-09-07): same pattern as
+//   Phase 3, applied to the `opportunities` table (fellowships,
+//   internships, competitions, mentorships -- see
+//   OPPORTUNITIES_ARCHITECTURE.md). Deliberately unfiltered, same as
+//   Phase 3 -- no discipline targeting, every profile gets emailed about
+//   every new verified opportunity. Dedupe via
+//   notifications.type='new_opportunity' + notifications.opportunity_id
+//   (added alongside the opportunities feature migration). Capped at
+//   MAX_NEW_PER_RUN per run, same constant Phase 3 uses -- intentionally
+//   shared, not duplicated, since "copy the pattern" was the explicit
+//   instruction and there's no reason yet for the two to diverge.
+//
+//   IMPORTANT: opportunities have no eligibility/scoring concept by
+//   design (no opportunity_rules table, no MatchSeal, no tiers -- see
+//   OPPORTUNITIES_ARCHITECTURE.md section 2). The email copy below
+//   reflects that honestly: it invites students to view the opportunity,
+//   it never claims to check whether they qualify, unlike the scholarship
+//   email below which legitimately can (a real per-profile score exists
+//   at /scholarships/[id]). Do not add "see if you qualify"-style copy
+//   here unless opportunity-level eligibility scoring is built first.
+//
+// All phases dedupe against `notifications` by (profile_id, target_id,
 // type), so a row already in the window on multiple consecutive cron runs
 // only sends once, and all phases share the same CRON_SECRET auth and the
 // same BREVO_API_KEY / REMINDER_FROM_EMAIL dry-run behavior.
 //
-// SECURITY HARDENING (phase 4): failures are now visible. Every query
-// failure is structured-logged via lib/logging.ts, and if email is
+// SECURITY HARDENING (phase 4, pre-existing): failures are visible. Every
+// query failure is structured-logged via lib/logging.ts, and if email is
 // configured and any phase ends with a non-empty `failed` array, a
 // one-line summary is POSTed to CRON_ALERT_WEBHOOK_URL (Slack incoming-
 // webhook format). Webhook unset = skipped silently, same dry-run-safe
 // pattern as BREVO_API_KEY. A webhook failure never fails the cron
-// response.
+// response. (Note: this comment predates the opportunities phase; the
+// numbering below now runs 1-4 content phases + a final failure-alerting
+// phase, not "phase 4" as a fixed label -- see inline phase comments for
+// the authoritative order.)
 //
 // AUTH: protected by CRON_SECRET, not by user session (there is no user
 // session in a cron trigger). Set CRON_SECRET as a normal env var in
@@ -54,6 +78,14 @@
 // DRY-RUN MODE: if BREVO_API_KEY or REMINDER_FROM_EMAIL aren't set, all
 // phases still evaluate matches and log what they would send, but send
 // nothing and write nothing to `notifications`.
+//
+// COST NOTE (added with Phase 4): this cron can now send up to
+// MAX_NEW_PER_RUN new-scholarship emails AND MAX_NEW_PER_RUN
+// new-opportunity emails per day, each fanned out to every profile. At
+// current scale (10 profiles) that's a worst case of ~100 emails/day,
+// comfortably under Brevo's 300/day free tier. Re-check this math before
+// raising MAX_NEW_PER_RUN or as the user base grows -- two independently
+// uncapped-per-user fan-outs on the same day is the failure mode to watch.
 //
 // ENV VARS NEEDED:
 //   CRON_SECRET            -- random string
@@ -105,6 +137,22 @@ interface NewScholarshipRow {
   amount: string | null
   deadline: string
   application_url: string | null
+}
+
+interface NewOpportunityRow {
+  id: string
+  type: string
+  title: string
+  provider_name: string
+  compensation: string | null
+  deadline: string | null
+}
+
+const OPPORTUNITY_TYPE_LABELS: Record<string, string> = {
+  fellowship: 'Fellowship',
+  internship: 'Internship',
+  competition: 'Competition',
+  mentorship: 'Mentorship',
 }
 
 async function sendReminderEmail(params: {
@@ -218,7 +266,61 @@ Deadline: <strong>${deadlineFormatted}</strong>
   }
 }
 
-// Phase 4 failure alerting. Slack incoming-webhook format is just
+// Opportunities have no eligibility concept (see file header) -- this copy
+// is deliberately an invitation to view, never a qualification claim.
+// Links to the list page, not a per-item detail page, because no
+// opportunity detail route exists yet (OPPORTUNITIES_ARCHITECTURE.md's
+// planned surface area only specifies a list + save/API routes).
+async function sendNewOpportunityEmail(params: { to: string; opportunity: NewOpportunityRow }) {
+  const apiKey = process.env.BREVO_API_KEY
+  const from = process.env.REMINDER_FROM_EMAIL
+  if (!apiKey || !from) throw new Error('Missing BREVO_API_KEY or REMINDER_FROM_EMAIL env vars')
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://scholars-eight.vercel.app'
+  const typeLabel = OPPORTUNITY_TYPE_LABELS[params.opportunity.type] ?? 'Opportunity'
+  const deadlineLine = params.opportunity.deadline
+    ? `Deadline: <strong>${new Date(params.opportunity.deadline + 'T00:00:00Z').toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        timeZone: 'UTC',
+      })}</strong><br/>`
+    : `<strong>Rolling -- no fixed deadline</strong><br/>`
+  const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: { 'api-key': apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({
+      sender: { email: from, name: 'Scholars' },
+      to: [{ email: params.to }],
+      subject: `New ${typeLabel} on Scholars: ${params.opportunity.title}`,
+      htmlContent: `
+<p>Hi,</p>
+<p>A new ${typeLabel.toLowerCase()} just went live on Scholars:</p>
+<p>
+<strong>${params.opportunity.title}</strong><br/>
+${params.opportunity.provider_name}<br/>
+${params.opportunity.compensation ? `${params.opportunity.compensation}<br/>` : ''}
+${deadlineLine}
+</p>
+<p><a href="${appUrl}/opportunities">View it on Scholars</a></p>
+<p>- Ade, from Scholars</p>
+`,
+    }),
+  })
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '')
+    throw new Error(`Brevo API error ${resp.status}: ${body.slice(0, 300)}`)
+  }
+}
+
+// Phase 5 (failure alerting) needs the failing row's target id regardless
+// of whether the phase failed on a scholarship_id or an opportunity_id --
+// this normalizes across both shapes rather than assuming one field name.
+function firstFailureId(f: { scholarship_id?: string; opportunity_id?: string }): string {
+  return (f.scholarship_id ?? f.opportunity_id ?? '').slice(0, 8)
+}
+
+// Phase 5 failure alerting. Slack incoming-webhook format is just
 // { text: string }, which most ops tools (Slack, Discord, Teams, generic
 // webhook receivers) accept or adapt trivially. Never throws.
 async function sendFailureAlert(summary: string) {
@@ -472,28 +574,119 @@ export async function GET(request: Request) {
     }
   }
 
-  // ---- Phase 4: failure alerting ----------------------------------------
+  // ---- Phase 4: new-opportunity alerts -----------------------------------
+  // Same pattern as Phase 3, reusing the same window/cap constants
+  // deliberately (see file header). Unfiltered by design -- opportunities
+  // have no per-profile eligibility to target against.
+  const { data: freshOpportunities, error: freshOpportunitiesError } = await supabase
+    .from('opportunities')
+    .select('id, type, title, provider_name, compensation, deadline')
+    .eq('verified', true)
+    .gte('updated_at', windowStartIso)
+    .order('updated_at', { ascending: false })
+    .limit(MAX_NEW_PER_RUN)
+  if (freshOpportunitiesError) {
+    logError(ROUTE, 'phase 4 query failed', undefined, freshOpportunitiesError)
+    return NextResponse.json({ error: freshOpportunitiesError.message }, { status: 500 })
+  }
+
+  const opportunityAlertResults = {
+    sent: 0,
+    would_send: [] as { profile_id: string; opportunity_id: string; title: string }[],
+    failed: [] as { opportunity_id: string; profile_id: string; error: string }[],
+  }
+  const freshOpportunityRows = (freshOpportunities ?? []) as NewOpportunityRow[]
+  if (freshOpportunityRows.length > 0) {
+    const { data: allProfilesForOpportunities, error: profilesForOpportunitiesError } = await supabase
+      .from('profiles')
+      .select('id')
+    if (profilesForOpportunitiesError) {
+      logError(ROUTE, 'phase 4 profiles query failed', undefined, profilesForOpportunitiesError)
+      return NextResponse.json({ error: profilesForOpportunitiesError.message }, { status: 500 })
+    }
+    const { data: alreadyAlertedOpportunities, error: alreadyAlertedOpportunitiesError } = await supabase
+      .from('notifications')
+      .select('profile_id, opportunity_id')
+      .eq('type', 'new_opportunity')
+      .in('opportunity_id', freshOpportunityRows.map((o) => o.id))
+    if (alreadyAlertedOpportunitiesError) {
+      logError(ROUTE, 'phase 4 dedupe query failed', undefined, alreadyAlertedOpportunitiesError)
+      return NextResponse.json({ error: alreadyAlertedOpportunitiesError.message }, { status: 500 })
+    }
+    const opportunityAlertedSet = new Set(
+      (alreadyAlertedOpportunities ?? []).map((n) => `${n.profile_id}:${n.opportunity_id}`)
+    )
+
+    for (const opportunity of freshOpportunityRows) {
+      for (const profile of allProfilesForOpportunities ?? []) {
+        const pairKey = `${profile.id}:${opportunity.id}`
+        if (opportunityAlertedSet.has(pairKey)) continue
+        if (!emailConfigured) {
+          opportunityAlertResults.would_send.push({
+            profile_id: profile.id,
+            opportunity_id: opportunity.id,
+            title: opportunity.title,
+          })
+          continue
+        }
+        const email = await emailFor(profile.id)
+        if (!email) {
+          opportunityAlertResults.failed.push({
+            opportunity_id: opportunity.id,
+            profile_id: profile.id,
+            error: 'No email on file for user',
+          })
+          continue
+        }
+        try {
+          await sendNewOpportunityEmail({ to: email, opportunity })
+          const { error: insertError } = await supabase.from('notifications').insert({
+            profile_id: profile.id,
+            opportunity_id: opportunity.id,
+            type: 'new_opportunity',
+            sent_at: new Date().toISOString(),
+          })
+          if (insertError) throw insertError
+          opportunityAlertResults.sent += 1
+        } catch (err) {
+          opportunityAlertResults.failed.push({
+            opportunity_id: opportunity.id,
+            profile_id: profile.id,
+            error: err instanceof Error ? err.message : 'Unknown error',
+          })
+        }
+      }
+    }
+  }
+
+  // ---- Phase 5: failure alerting ----------------------------------------
   // Only meaningful when email is actually configured (dry-run failures
   // are expected noise), and only when something actually failed.
   const failedCount =
-    reminderResults.failed.length + checkinResults.failed.length + alertResults.failed.length
+    reminderResults.failed.length +
+    checkinResults.failed.length +
+    alertResults.failed.length +
+    opportunityAlertResults.failed.length
   if (emailConfigured && failedCount > 0) {
     const firstFailures = [
       reminderResults.failed[0],
       checkinResults.failed[0],
       alertResults.failed[0],
+      opportunityAlertResults.failed[0],
     ].filter(Boolean)
     const summary =
       `:warning: Scholars cron ${ROUTE}: ` +
       `${reminderResults.failed.length} deadline-reminder failure(s), ` +
       `${checkinResults.failed.length} check-in failure(s), ` +
-      `${alertResults.failed.length} new-scholarship alert failure(s). ` +
+      `${alertResults.failed.length} new-scholarship alert failure(s), ` +
+      `${opportunityAlertResults.failed.length} new-opportunity alert failure(s). ` +
       `First errors: ` +
-      firstFailures.map((f) => `${f!.scholarship_id.slice(0, 8)}: ${f!.error}`).join(' | ')
+      firstFailures.map((f) => `${firstFailureId(f!)}: ${f!.error}`).join(' | ')
     logError(ROUTE, 'run completed with failures', {
       reminder_failures: reminderResults.failed.length,
       checkin_failures: checkinResults.failed.length,
       new_scholarship_failures: alertResults.failed.length,
+      new_opportunity_failures: opportunityAlertResults.failed.length,
     })
     await sendFailureAlert(summary)
   }
@@ -502,8 +695,10 @@ export async function GET(request: Request) {
     dry_run: !emailConfigured,
     reminder_window_days: reminderDays,
     new_scholarship_window_days: NEW_WINDOW_DAYS,
+    new_opportunity_window_days: NEW_WINDOW_DAYS,
     deadline_reminders: reminderResults,
     checkin_reminders: checkinResults,
     new_scholarship_alerts: alertResults,
+    new_opportunity_alerts: opportunityAlertResults,
   })
 }
