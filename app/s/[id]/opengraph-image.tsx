@@ -8,9 +8,16 @@ import { createPublicClient } from "@/lib/supabase/public";
 // which is the entire point of the share feature: the card has to be
 // recognizable as Scholars, and legible, before anyone taps it.
 //
+// PERF (batch 1): chat clients re-fetch previews aggressively. Revalidate
+// caps OG re-render cost at once per hour. If this file convention ever
+// ignores the segment config, behavior simply falls back to today's
+// per-request rendering -- nothing breaks either way.
+export const revalidate = 3600;
+
 // COLOR CONSISTENCY: the accent uses the darkened emerald token (#15705A)
 // instead of the old pre-audit #1B8A6B, matching the rest of the app.
 export const runtime = "edge";
+
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -25,6 +32,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
     .eq("id", id)
     .eq("verified", true)
     .maybeSingle();
+
   return new ImageResponse(
     (
       <div
