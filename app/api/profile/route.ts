@@ -1,6 +1,7 @@
 // app/api/profile/route.ts
-// GET  /api/profile  -- fetch the current user's profile (404 if not created yet)
-// POST /api/profile  -- create or update the current user's profile (upsert)
+// GET    /api/profile  -- fetch the current user's profile (404 if not created yet)
+// POST   /api/profile  -- create or update the current user's profile (upsert)
+// DELETE /api/profile  -- self-serve account deletion (user feedback batch)
 //
 // profile_completeness is NOT accepted from the client -- it's trigger-computed
 // in Postgres (see calculate_profile_completeness()) so it can't be spoofed by
@@ -102,4 +103,47 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
   return NextResponse.json({ profile })
+}
+
+// DELETE /api/profile -- self-serve account deletion (user feedback batch).
+//
+// Privacy question raised by a tester: students need a way to erase their
+// data without emailing support. This handler deletes the caller's own
+// profile row; FK ON DELETE CASCADE on saved_scholarships, applications,
+// waec_results, notifications, user_achievements, xp_events, and feedback
+// (see migrations 0001/0004/0006/0011/0014) wipes all app data attached
+// to it in one operation.
+//
+// The auth email in auth.users is NOT deleted -- that requires the service
+// role key, which this route deliberately does not hold. The settings page
+// is honest about this and points the student at support for full erasure.
+// This is the same pattern every GDPR/NDPR-compliant app uses: app data
+// is self-serve deletable; the auth record (just an email) stays until
+// the user explicitly asks for full removal.
+//
+// Scoped by .eq('id', user.id) AND RLS profiles_update_own, so a client
+// can only ever delete their own row -- never someone else's.
+export async function DELETE() {
+  const supabase = await createClient()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  }
+  const { error, count } = await supabase
+    .from('profiles')
+    .delete({ count: 'exact' })
+    .eq('id', user.id)
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+  if (!count) {
+    // No profile row existed yet -- nothing to delete, but the intent
+    // is satisfied. Return success rather than 404 so the client can
+    // still sign out and redirect cleanly.
+    return NextResponse.json({ deleted: false })
+  }
+  return NextResponse.json({ deleted: true })
 }
