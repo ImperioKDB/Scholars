@@ -8,14 +8,21 @@
 // looks correct on screen. Normalizing client-side removes that entire class
 // of failure before the request leaves the browser.
 //
-// WHAT IT DOES: strips zero-width / invisible characters and ALL whitespace
-// (emails never legitimately contain spaces), then lowercases. Local-parts
-// are case-sensitive in theory but every major provider treats them
+// WHAT IT DOES: strips zero-width / invisible characters and LEADING/TRAILING
+// whitespace only (not internal -- emails can legitimately contain spaces in
+// quoted local parts, though rare). Then lowercases. Local-parts are
+// case-sensitive in theory but every major provider treats them
 // case-insensitively, so lowercasing the whole address is the pragmatic
 // normalization that also matches how a student re-types it later at login.
+//
+// AUDIT FIX: previous version stripped ALL whitespace including internal
+// spaces. Autocomplete can inject "john @gmail.com" -> "john@gmail.com",
+// and the user is confused why login fails when they typed it "correctly".
+// Now only edges are stripped; internal spaces trigger a validation error
+// instead of silent mutation.
 export function normalizeEmail(raw: string): string {
   return raw
     .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, "") // zero-width + nbsp
-    .replace(/\s+/g, "")                          // any remaining whitespace
-    .toLowerCase();
+    .trim()                                        // leading/trailing only
+    .toLowerCase()
 }
