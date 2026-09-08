@@ -115,6 +115,6 @@ export async function getMatchForScholarship(scholarshipId: string): Promise<{
     return { match: null, profileCompleteness: profile.profile_completeness, error: "not_found" };
   }
 
-  const match = evaluateScholarship(profile, scholarship, (rules ?? []) as ScholarshipRule[]);
+  const match = evaluateScholarship(profile, scholarship as unknown as ScholarshipRow, (rules ?? []) as ScholarshipRule[]);
   return { match, profileCompleteness: profile.profile_completeness, error: null };
 }
