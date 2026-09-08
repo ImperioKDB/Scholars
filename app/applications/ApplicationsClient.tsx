@@ -2,13 +2,11 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ProviderMonogram } from "@/components/ProviderMonogram";
-import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
+import { DeadlineBadge } from "@/components/DeadlineBadge";
 import type { CardScholarship } from "@/components/ScholarshipCard";
 import { StatusDonut } from "@/components/StatusDonut";
 import { DraftPanel, type Draft } from "@/components/DraftPanel";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useAde } from "@/components/ade/AdeProvider";
-import { fetchWithTimeout, FetchTimeoutError, FetchNetworkError } from "@/lib/fetch";
 
 type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected";
 type ApplicationApiItem = Draft & {
@@ -26,11 +24,6 @@ const STATUS_TONE: Record<ApplicationStatus, string> = {
   accepted: "bg-emerald-light text-emerald", rejected: "bg-rose-light text-rose",
 };
 
-const DEADLINE_TONE_CLASSES: Record<ReturnType<typeof deadlineTone>, string> = {
-  closed: "bg-hairline text-navy-light", urgent: "bg-rose-light text-rose",
-  soon: "bg-amber-light text-amber", later: "bg-navy-50 text-navy-light",
-};
-
 export function ApplicationsClient({ initialApplications, initialSaved, initialError }: {
   initialApplications: ApplicationApiItem[]; initialSaved: SavedApiItem[]; initialError: string | null;
 }) {
@@ -40,42 +33,21 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
   const [applications, setApplications] = useState<ApplicationApiItem[]>(initialApplications);
   const [saved, setSaved] = useState<SavedApiItem[]>(initialSaved);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  // AUDIT item 2: ids of cards that just changed status, used to run a
+  // one-shot highlight ring so the optimistic write is visibly acknowledged.
   const [flashIds, setFlashIds] = useState<Set<string>>(new Set());
-  // AUDIT FIX (P6): modal confirm dialog state
-  const [confirmState, setConfirmState] = useState<{
-    message: string;
-    onConfirm: () => void;
-  } | null>(null);
-  // AUDIT FIX (P7): failed mutation retry state
-  const [failedAction, setFailedAction] = useState<{
-    id: string;
-    retry: () => void;
-    message: string;
-  } | null>(null);
 
   async function load() {
     setLoadError(null);
-    try {
-      const [appsRes, savedRes] = await Promise.all([
-        fetchWithTimeout("/api/applications"),
-        fetchWithTimeout("/api/scholarships/save"),
-      ]);
-      if (!appsRes.ok) { setLoadError("Couldn't load your applications. Try refreshing."); return; }
-      const appsData = await appsRes.json();
-      setApplications(appsData.applications ?? []);
-      if (savedRes.ok) { const savedData = await savedRes.json(); setSaved(savedData.saved ?? []); }
-    } catch (err) {
-      if (err instanceof FetchTimeoutError || err instanceof FetchNetworkError) {
-        setLoadError("Network issue. Check your connection and try again.");
-      } else {
-        setLoadError("Couldn't load your applications. Try refreshing.");
-      }
-    }
+    const [appsRes, savedRes] = await Promise.all([fetch("/api/applications"), fetch("/api/scholarships/save")]);
+    if (!appsRes.ok) { setLoadError("Couldn't load your applications. Try refreshing."); return; }
+    const appsData = await appsRes.json();
+    setApplications(appsData.applications ?? []);
+    if (savedRes.ok) { const savedData = await savedRes.json(); setSaved(savedData.saved ?? []); }
   }
 
   const trackedScholarshipIds = useMemo(() => new Set(applications.map((a) => a.scholarship.id)), [applications]);
   const untrackedSaved = useMemo(() => saved.filter((s) => !trackedScholarshipIds.has(s.scholarship.id)), [saved, trackedScholarshipIds]);
-
   const counts = useMemo(() => {
     const c: Record<ApplicationStatus, number> = { in_progress: 0, submitted: 0, accepted: 0, rejected: 0 };
     for (const a of applications) c[a.status] += 1;
@@ -84,66 +56,29 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
 
   async function startTracking(scholarshipId: string) {
     setPendingIds((p) => new Set(p).add(scholarshipId));
-    setFailedAction(null);
-    try {
-      const res = await fetchWithTimeout("/api/applications", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scholarship_id: scholarshipId }),
-      });
-      if (res.ok) await load();
-      else setFailedAction({ id: scholarshipId, retry: () => startTracking(scholarshipId), message: "Couldn't start tracking. Retry?" });
-    } catch (err) {
-      setFailedAction({ id: scholarshipId, retry: () => startTracking(scholarshipId), message: "Network issue. Retry?" });
-    }
+    const res = await fetch("/api/applications", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scholarship_id: scholarshipId }) });
+    if (res.ok) await load();
     setPendingIds((p) => { const n = new Set(p); n.delete(scholarshipId); return n; });
   }
 
   async function updateStatus(applicationId: string, status: ApplicationStatus) {
     setPendingIds((p) => new Set(p).add(applicationId));
-    setFailedAction(null);
     setApplications((prev) => prev.map((a) => (a.id === applicationId ? { ...a, status } : a)));
     setFlashIds((prev) => new Set(prev).add(applicationId));
     setTimeout(() => setFlashIds((prev) => { const n = new Set(prev); n.delete(applicationId); return n; }), 750);
-    try {
-      const res = await fetchWithTimeout(`/api/applications/${applicationId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (!res.ok) await load();
-    } catch (err) {
-      setFailedAction({
-        id: applicationId,
-        retry: () => updateStatus(applicationId, status),
-        message: "Couldn't update status. Retry?",
-      });
-      await load();
-    }
+    const res = await fetch(`/api/applications/${applicationId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+    if (!res.ok) await load();
     setPendingIds((p) => { const n = new Set(p); n.delete(applicationId); return n; });
   }
 
   async function stopTracking(applicationId: string) {
-    setConfirmState({
-      message: "Stop tracking this application? Your notes and draft will be lost.",
-      onConfirm: async () => {
-        setPendingIds((p) => new Set(p).add(applicationId));
-        setFailedAction(null);
-        const prev = applications;
-        setApplications((cur) => cur.filter((a) => a.id !== applicationId));
-        try {
-          const res = await fetchWithTimeout(`/api/applications/${applicationId}`, { method: "DELETE" });
-          if (!res.ok) {
-            setApplications(prev);
-            setFailedAction({ id: applicationId, retry: () => stopTracking(applicationId), message: "Couldn't remove. Retry?" });
-          }
-        } catch (err) {
-          setApplications(prev);
-          setFailedAction({ id: applicationId, retry: () => stopTracking(applicationId), message: "Network issue. Retry?" });
-        }
-        setPendingIds((p) => { const n = new Set(p); n.delete(applicationId); return n; });
-      },
-    });
+    if (!confirm("Stop tracking this application?")) return;
+    setPendingIds((p) => new Set(p).add(applicationId));
+    const prev = applications;
+    setApplications((cur) => cur.filter((a) => a.id !== applicationId));
+    const res = await fetch(`/api/applications/${applicationId}`, { method: "DELETE" });
+    if (!res.ok) setApplications(prev);
+    setPendingIds((p) => { const n = new Set(p); n.delete(applicationId); return n; });
   }
 
   function handleDraftChange(applicationId: string, updated: Draft) {
@@ -157,37 +92,15 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
 
   return (
     <div>
-      {confirmState && (
-        <ConfirmDialog
-          message={confirmState.message}
-          onConfirm={confirmState.onConfirm}
-          onClose={() => setConfirmState(null)}
-          confirmLabel="Stop tracking"
-          tone="rose"
-        />
-      )}
       <div className="mb-8">
         <h1 className="font-display text-2xl font-semibold text-navy">Applications</h1>
         <p className="text-sm text-navy-light mt-1 mb-6">{applications.length} scholarship{applications.length === 1 ? "" : "s"} you&apos;re tracking.</p>
         <div className="bg-white rounded-xl border border-hairline p-5"><StatusDonut counts={counts} /></div>
       </div>
       {loadError && (
-        <p className="text-sm text-rose mb-6" role="alert">
-          {loadError}{" "}
+        <p className="text-sm text-rose mb-6">{loadError}{" "}
           <button type="button" onClick={() => { setLoadError(null); router.refresh(); }} className="font-medium underline">Try again</button>
         </p>
-      )}
-      {failedAction && (
-        <div className="bg-amber-light border border-amber/20 rounded-lg p-3 mb-6 flex items-center justify-between gap-3" role="alert">
-          <p className="text-sm text-amber">{failedAction.message}</p>
-          <button
-            type="button"
-            onClick={() => { const retry = failedAction.retry; setFailedAction(null); retry(); }}
-            className="text-sm font-medium text-navy bg-white rounded-seal px-3 py-1.5 hover:bg-navy-50 transition-colors shrink-0"
-          >
-            Retry
-          </button>
-        </div>
       )}
       {untrackedSaved.length > 0 && (
         <div className="mb-10">
@@ -218,7 +131,6 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {applications.map((a) => {
-            const days = daysUntil(a.scholarship.deadline);
             return (
               <div key={a.id} className="relative bg-white rounded-xl border border-hairline p-5 flex gap-4 shadow-card">
                 {flashIds.has(a.id) && <span className="status-flash" aria-hidden="true" />}
@@ -232,9 +144,7 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
                     <button type="button" onClick={() => stopTracking(a.id)} disabled={pendingIds.has(a.id)} className="shrink-0 text-xs text-navy-light hover:text-rose disabled:opacity-50">Remove</button>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 mt-3">
-                    {days !== null && (
-                      <span className={`text-xs font-mono font-medium px-2 py-1 rounded-full ${DEADLINE_TONE_CLASSES[deadlineTone(days)]}`}>{formatDeadlineLabel(days)}</span>
-                    )}
+                    <DeadlineBadge deadline={a.scholarship.deadline} />
                     <span className={`text-xs font-medium px-2 py-1 rounded-full ${STATUS_TONE[a.status]}`}>{STATUS_LABELS[a.status]}</span>
                   </div>
                   <label className="block mt-3">
