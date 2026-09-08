@@ -8,14 +8,35 @@
 //     URL with query params, e.g. ?ref= referral ids) to third parties.
 //   - Permissions-Policy: switch off camera/mic/geolocation, none of which
 //     the app uses.
-//   - CSP REPORT-ONLY (batch 2): shipped as Report-Only first so a
-//     mis-allowed source can never break the live site. Violations surface
-//     in browser consoles (and any future report-to endpoint) so the
-//     policy can be tightened to an enforcing Content-Security-Policy in a
-//     later batch once it is observed clean. connect-src covers the
-//     Supabase project host the browser client talks to; img-src covers
-//     avatar/portrait objects served from Supabase Storage plus data:/blob:
-//     for the client-side canvas downscale path.
+//
+// CSP (audit item): shipped as REPORT-ONLY first. Browsers evaluate the
+// policy and POST a violation report to /api/csp-report (see that route)
+// every time something WOULD have been blocked, but block nothing. Once
+// Vercel Logs shows zero reports across a full browse pass, the header is
+// flipped to Content-Security-Policy (enforcing) in a one-line change.
+// Policy notes for this codebase:
+//   - script-src needs 'unsafe-inline' because Next.js App Router embeds
+//     its streaming flight data in inline <script> tags.
+//   - style-src needs 'unsafe-inline' because components set style={{}}
+//     attributes (progress bars, seals, confetti).
+//   - img-src allows the Supabase Storage host for avatars and the About
+//     portrait, plus data:/blob: for canvas-downscaled uploads.
+//   - connect-src only needs self + Supabase: HIBP, Gemini and Brevo calls
+//     all happen server-side, never from the browser.
+const CSP_REPORT_ONLY =
+  "default-src 'self'; " +
+  "script-src 'self' 'unsafe-inline'; " +
+  "style-src 'self' 'unsafe-inline'; " +
+  "img-src 'self' data: blob: https://*.supabase.co; " +
+  "font-src 'self' data:; " +
+  "connect-src 'self' https://*.supabase.co; " +
+  "object-src 'none'; " +
+  "base-uri 'self'; " +
+  "form-action 'self'; " +
+  "frame-ancestors 'none'; " +
+  "upgrade-insecure-requests; " +
+  "report-uri /api/csp-report";
+
 const nextConfig = {
   reactStrictMode: true,
   async headers() {
@@ -27,11 +48,7 @@ const nextConfig = {
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
-          {
-            key: 'Content-Security-Policy-Report-Only',
-            value:
-              "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co; font-src 'self' data:; connect-src 'self' https://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests",
-          },
+          { key: 'Content-Security-Policy-Report-Only', value: CSP_REPORT_ONLY },
         ],
       },
     ];
