@@ -2,6 +2,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { downscaleToJpeg } from "@/lib/images";
 import { StatusMessage } from "@/components/StatusMessage";
 
 // components/AvatarUploader.tsx
@@ -20,50 +21,9 @@ import { StatusMessage } from "@/components/StatusMessage";
 // appears next to your name across the app immediately) and shows a green
 // confirmation line. router.refresh() preserves client state, so nothing
 // here resets.
-//
-// AUDIT FIX (batch 3): the confirmation and error lines are wrapped in
-// StatusMessage (role="status" aria-live="polite") so screen reader users
-// hear the outcome instead of only seeing it.
-//
-// The file is downscaled to a 256px square JPEG in the browser before
-// upload, so uploads stay small (~10-30KB), consistent, and within the
-// bucket's 2MB limit even when the source photo is huge.
 const MAX_BYTES = 2 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const OUTPUT_SIZE = 256;
-
-function downscaleToJpeg(file: File): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      // Center-crop to a square, then scale down.
-      const side = Math.min(img.width, img.height);
-      const sx = (img.width - side) / 2;
-      const sy = (img.height - side) / 2;
-      const canvas = document.createElement("canvas");
-      canvas.width = OUTPUT_SIZE;
-      canvas.height = OUTPUT_SIZE;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        reject(new Error("Canvas unavailable"));
-        return;
-      }
-      ctx.drawImage(img, sx, sy, side, side, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
-      canvas.toBlob(
-        (b) => (b ? resolve(b) : reject(new Error("Could not encode the image"))),
-        "image/jpeg",
-        0.85
-      );
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("That file isn't a readable image"));
-    };
-    img.src = url;
-  });
-}
 
 export function AvatarUploader({ initialUrl }: { initialUrl: string | null }) {
   const supabase = createClient();
@@ -91,7 +51,7 @@ export function AvatarUploader({ initialUrl }: { initialUrl: string | null }) {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) throw new Error("Not signed in");
-      const blob = await downscaleToJpeg(file);
+      const blob = await downscaleToJpeg(file, OUTPUT_SIZE);
       const path = `${user.id}/avatar`;
       const { error: uploadError } = await supabase.storage
         .from("avatars")
@@ -108,8 +68,6 @@ export function AvatarUploader({ initialUrl }: { initialUrl: string | null }) {
       if (!res.ok) throw new Error("Couldn't save the photo to your profile");
       setUrl(publicUrl);
       setNotice("Photo saved. It now shows next to your name across Scholars.");
-      // Re-render the server layout (sidebar) in place so the new photo
-      // appears across the app without leaving this page.
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed. Try again.");
