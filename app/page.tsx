@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { ProviderMonogram } from "@/components/ProviderMonogram";
 import { HowItWorksRotator } from "@/components/HowItWorksRotator";
+import { TestimonialsSection } from "@/components/TestimonialsSection";
 import { Footer } from "@/components/Footer";
 import { DeadlineBadge } from "@/components/DeadlineBadge";
 import { createPublicClient } from "@/lib/supabase/public";
@@ -140,6 +141,9 @@ export default async function LandingPage() {
             <HowItWorksRotator />
           </div>
         </section>
+        {/* Social proof: real consented student testimonials. Renders
+            nothing until at least one row is consented and published. */}
+        <TestimonialsSection />
       </main>
       <Footer />
     </div>
