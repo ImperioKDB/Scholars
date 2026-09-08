@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AuthShell } from "@/components/AuthShell";
-import { FormField, inputClass } from "@/components/FormField";
+import { FormField } from "@/components/FormField";
+import { PasswordField } from "@/components/PasswordField";
 import { validatePasswordStrength } from "@/lib/auth/password";
 import { RECOVERY_REDIRECT_FLAG } from "@/components/AuthRescue";
 
@@ -136,13 +137,9 @@ export default function UpdatePasswordPage() {
           error={error ?? undefined}
           hint="At least 8 characters, with an uppercase letter, a lowercase letter, and a number."
         >
-          <input
-            className={inputClass}
-            type="password"
-            required
-            minLength={8}
+          <PasswordField
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={setPassword}
             placeholder="New password"
             autoComplete="new-password"
           />
