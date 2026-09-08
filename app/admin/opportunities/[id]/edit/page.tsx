@@ -1,8 +1,8 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { OpportunityFields } from "@/components/admin/OpportunityFields";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EMPTY_OPPORTUNITY, opportunitySchema, type OpportunityFormValues } from "@/lib/admin/opportunity";
 
 type AdminOpportunity = OpportunityFormValues & {
@@ -12,13 +12,15 @@ type AdminOpportunity = OpportunityFormValues & {
 export default function EditOpportunityPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-
   const [values, setValues] = useState<OpportunityFormValues>(EMPTY_OPPORTUNITY);
   const [errors, setErrors] = useState<Partial<Record<keyof OpportunityFormValues, string>>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+  // FINAL CLEANUP: native confirm() replaced with the shared focus-trapped
+  // ConfirmDialog, same as the scholarship edit page.
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -33,13 +35,11 @@ export default function EditOpportunityPage() {
       }
       const { opportunities } = await res.json();
       const opportunity = (opportunities as AdminOpportunity[]).find((o) => o.id === params.id);
-
       if (!opportunity) {
         setNotFound(true);
         setLoading(false);
         return;
       }
-
       setValues({
         type: opportunity.type,
         title: opportunity.title,
@@ -70,7 +70,6 @@ export default function EditOpportunityPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitError(null);
-
     const parsed = opportunitySchema.safeParse(values);
     if (!parsed.success) {
       const fieldErrors: typeof errors = {};
@@ -82,7 +81,6 @@ export default function EditOpportunityPage() {
     }
     setErrors({});
     setSaving(true);
-
     const res = await fetch(`/api/admin/opportunities/${params.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -104,21 +102,17 @@ export default function EditOpportunityPage() {
         research_notes: parsed.data.research_notes || null,
       }),
     });
-
     setSaving(false);
-
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       setSubmitError(body.error ?? "Couldn't save changes.");
       return;
     }
-
     router.push("/admin/opportunities");
     router.refresh();
   }
 
-  async function handleDelete() {
-    if (!confirm(`Delete "${values.title}"? This can't be undone.`)) return;
+  async function doDelete() {
     const res = await fetch(`/api/admin/opportunities/${params.id}`, { method: "DELETE" });
     if (res.ok) {
       router.push("/admin/opportunities");
@@ -132,28 +126,35 @@ export default function EditOpportunityPage() {
   if (loading) {
     return <p className="text-sm text-navy-light">Loading…</p>;
   }
-
   if (notFound) {
     return <p className="text-sm text-rose">Opportunity not found, or admin access is required.</p>;
   }
-
   return (
     <div>
+      {confirmDeleteOpen && (
+        <ConfirmDialog
+          message={`Delete "${values.title}"? This can't be undone.`}
+          onConfirm={doDelete}
+          onClose={() => setConfirmDeleteOpen(false)}
+          confirmLabel="Delete opportunity"
+          tone="rose"
+        />
+      )}
       <div className="flex items-center justify-between mb-1">
         <h1 className="font-display text-2xl font-semibold text-navy">Edit opportunity</h1>
-        <button onClick={handleDelete} className="text-sm font-medium text-rose hover:underline">
+        <button
+          onClick={() => setConfirmDeleteOpen(true)}
+          className="text-sm font-medium text-rose hover:underline"
+        >
           Delete opportunity
         </button>
       </div>
       <p className="text-sm text-navy-light mb-8">{values.title}</p>
-
       <form onSubmit={handleSubmit}>
         <div className="bg-white rounded-xl border border-hairline p-6 mb-6">
           <OpportunityFields values={values} errors={errors} onChange={update} />
         </div>
-
         {submitError && <p className="text-sm text-rose mb-4">{submitError}</p>}
-
         <div className="flex items-center gap-3">
           <button
             type="submit"
