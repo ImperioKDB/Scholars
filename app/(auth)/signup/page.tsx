@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AuthShell } from "@/components/AuthShell";
 import { FormField, inputClass } from "@/components/FormField";
+import { PasswordField } from "@/components/PasswordField";
 import { validatePasswordStrength } from "@/lib/auth/password";
 import { normalizeEmail } from "@/lib/auth/email";
+
 // Shown after a successful signUp() call when Supabase did NOT return a
 // live session -- i.e. email confirmation is required. Sending someone to
 // /onboarding at this point is a dead end: it's a protected route, there's
@@ -21,6 +23,7 @@ import { normalizeEmail } from "@/lib/auth/email";
 function CheckEmailScreen({ email, onResend }: { email: string; onResend: () => Promise<void> }) {
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
+
   async function handleResend() {
     setResending(true);
     setResent(false);
@@ -28,6 +31,7 @@ function CheckEmailScreen({ email, onResend }: { email: string; onResend: () => 
     setResending(false);
     setResent(true);
   }
+
   return (
     <AuthShell heading="Check your email" sub="One more step before you can sign in.">
       <div className="rounded-xl border border-hairline bg-navy-50 p-5 mb-6">
@@ -53,6 +57,7 @@ function CheckEmailScreen({ email, onResend }: { email: string; onResend: () => 
     </AuthShell>
   );
 }
+
 export default function SignupPage() {
   const router = useRouter();
   const supabase = createClient();
@@ -63,12 +68,15 @@ export default function SignupPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
+
   // Normalize once per render so signUp, resend, and the confirm screen all
   // see the same cleaned address (no stray spaces / invisible chars).
   const cleanEmail = normalizeEmail(email);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
     // AUTH SECURITY AUDIT (password strength): client-side enforcement of
     // the shared policy; Supabase's own policy is the server backstop.
     const issues = validatePasswordStrength(password);
@@ -76,7 +84,9 @@ export default function SignupPage() {
       setError("Password needs " + issues.join(", ") + ".");
       return;
     }
+
     setLoading(true);
+
     // AUTH SECURITY AUDIT (breach check): fail-open -- a HIBP outage must
     // never block signup, and the strength rules still apply either way.
     let breached = false;
@@ -97,6 +107,7 @@ export default function SignupPage() {
       setError("This password appears in known breach data. Pick something less common.");
       return;
     }
+
     const { data, error: signUpError } = await supabase.auth.signUp({
       email: cleanEmail,
       password,
@@ -106,10 +117,12 @@ export default function SignupPage() {
       },
     });
     setLoading(false);
+
     if (signUpError) {
       setError(signUpError.message);
       return;
     }
+
     // A session on the response means email confirmation is off for this
     // project -- the account is immediately usable, so go straight in.
     // No session means a confirmation link was sent instead.
@@ -119,6 +132,7 @@ export default function SignupPage() {
     }
     setAwaitingConfirmation(true);
   }
+
   async function handleGoogle() {
     setError(null);
     setGoogleLoading(true);
@@ -127,12 +141,15 @@ export default function SignupPage() {
       options: { redirectTo: `${window.location.origin}/auth/callback?next=/onboarding` },
     });
   }
+
   async function handleResend() {
     await supabase.auth.resend({ type: "signup", email: cleanEmail });
   }
+
   if (awaitingConfirmation) {
     return <CheckEmailScreen email={cleanEmail} onResend={handleResend} />;
   }
+
   return (
     <AuthShell
       heading="Create your account"
@@ -166,13 +183,9 @@ export default function SignupPage() {
           error={error ?? undefined}
           hint="At least 8 characters, with an uppercase letter, a lowercase letter, and a number."
         >
-          <input
-            className={inputClass}
-            type="password"
-            required
-            minLength={8}
+          <PasswordField
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={setPassword}
             placeholder="At least 8 characters"
             autoComplete="new-password"
           />
