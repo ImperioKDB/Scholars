@@ -1,16 +1,16 @@
 // app/api/feedback/route.ts
-// POST /api/feedback  { category, message, contact_email? }
+// POST /api/feedback { category, message, contact_email? }
 //
-// In-app feedback intake. Inserts a row into the public.feedback table
-// (migration 0014) and, when Brevo is configured, emails the message to
-// support.scholarsteam@gmail.com. Dry-run-safe the same way the deadline
-// cron is: missing BREVO_API_KEY / REMINDER_FROM_EMAIL logs but doesn't
-// fail the request, so a student's feedback is never silently lost just
-// because the email backend isn't wired up yet.
+// In-app feedback intake (components/FeedbackWidget.tsx FeedbackModal,
+// triggered from the Sidebar account block). Inserts a row into
+// public.feedback (migration 0014) and emails the support inbox via Brevo,
+// same dry-run-safe pattern as the deadline cron: missing BREVO_API_KEY /
+// REMINDER_FROM_EMAIL logs and skips the email instead of failing the
+// request, so feedback is never lost because email isn't configured yet.
 //
-// Rate limit: 3 submissions per hour per user. Generous for legitimate
-// reports (a student may file one bug, one idea, and one scholarship issue
-// in the same sitting) but a hard brake on inbox spam.
+// Rate limited 5/hour per user on top of the IP bucket -- feedback is a
+// low-volume, high-intent action, so the cap is generous for humans and
+// still a brake on scripts.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -22,12 +22,18 @@ const SUPPORT_INBOX = 'support.scholarsteam@gmail.com'
 
 const bodySchema = z.object({
   category: z.enum(['bug', 'feature', 'scholarship', 'other']),
-  message: z.string().trim().min(10).max(5000),
-  contact_email: z.string().email().nullable().optional(),
+  message: z.string().trim().min(10, 'Please write at least 10 characters.').max(2000),
+  contact_email: z.string().email().nullish(),
 })
 
-async function emailFeedback(params: {
-  to: string
+const CATEGORY_LABELS: Record<string, string> = {
+  bug: 'Something is broken',
+  feature: 'Feature request',
+  scholarship: 'Scholarship issue',
+  other: 'Other',
+}
+
+async function sendFeedbackEmail(params: {
   category: string
   message: string
   contactEmail: string | null
@@ -39,35 +45,24 @@ async function emailFeedback(params: {
     logWarn(ROUTE, 'email_skipped_dry_run', { category: params.category })
     return
   }
-  const categoryLabel =
-    params.category === 'bug'
-      ? 'Bug report'
-      : params.category === 'feature'
-        ? 'Feature request'
-        : params.category === 'scholarship'
-          ? 'Scholarship issue'
-          : 'Other feedback'
+  const escaped = params.message
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
   const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
-    headers: {
-      'api-key': apiKey,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
+    headers: { 'api-key': apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({
       sender: { email: from, name: 'Scholars feedback' },
-      to: [{ email: params.to }],
+      to: [{ email: SUPPORT_INBOX }],
       replyTo: params.contactEmail ? { email: params.contactEmail } : undefined,
-      subject: `[Scholars feedback] ${categoryLabel}`,
+      subject: `[Scholars feedback] ${CATEGORY_LABELS[params.category] ?? params.category}`,
       htmlContent: `
-<p><strong>Category:</strong> ${categoryLabel}</p>
+<p><strong>Category:</strong> ${CATEGORY_LABELS[params.category] ?? params.category}</p>
 ${params.contactEmail ? `<p><strong>Reply to:</strong> ${params.contactEmail}</p>` : ''}
 ${params.pageUrl ? `<p><strong>From page:</strong> ${params.pageUrl}</p>` : ''}
 <p><strong>Message:</strong></p>
-<p style="white-space:pre-wrap">${params.message
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')}</p>
+<p style="white-space:pre-wrap">${escaped}</p>
 `,
     }),
   })
@@ -86,10 +81,9 @@ export async function POST(request: Request) {
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
-  // 3/hour per user -- generous for real reports, a brake on spam.
   const limited = await checkRateLimit(request, {
     route: 'feedback',
-    limit: 3,
+    limit: 5,
     extraKeys: [`user:${user.id}`],
   })
   if (limited) return limited
@@ -103,35 +97,37 @@ export async function POST(request: Request) {
     )
   }
 
-  const pageUrl = request.headers.get('referer') ?? null
-  const { data, error: insertError } = await supabase
-    .from('feedback')
-    .insert({
-      profile_id: user.id,
-      category: parsed.data.category,
-      message: parsed.data.message,
-      contact_email: parsed.data.contact_email ?? null,
-      page_url: pageUrl,
-    })
-    .select('id')
-    .single()
+  const pageUrl = request.headers.get('referer')
+  const { data, error: insertError } = await supabase.from('feedback').insert({
+    profile_id: user.id,
+    category: parsed.data.category,
+    message: parsed.data.message,
+    contact_email: parsed.data.contact_email ?? null,
+    page_url: pageUrl,
+  })
   if (insertError) {
     logError(ROUTE, 'insert_failed', undefined, insertError)
-    return NextResponse.json({ error: insertError.message }, { status: 500 })
+    // 42501 = RLS denied the insert. In practice this means the feedback
+    // policies from migration 0014 are missing in this database (partial
+    // run, or run against a different project). Show a plain sentence
+    // instead of leaking raw Postgres text to a student.
+    const friendly =
+      insertError.code === '42501'
+        ? "We couldn't save your feedback yet because our database permissions are still being set up. Please try again shortly, or email support.scholarsteam@gmail.com directly."
+        : insertError.message
+    return NextResponse.json({ error: friendly }, { status: 500 })
   }
 
   try {
-    await emailFeedback({
-      to: SUPPORT_INBOX,
+    await sendFeedbackEmail({
       category: parsed.data.category,
       message: parsed.data.message,
       contactEmail: parsed.data.contact_email ?? null,
       pageUrl,
     })
   } catch (err) {
-    // Email failure is logged but never fails the request -- the row is
-    // already in the DB, so triage can still happen via Supabase.
-    logError(ROUTE, 'email_failed', { feedback_id: data.id }, err)
+    // Row is already stored, so triage can still happen from the database.
+    logError(ROUTE, 'email_failed', undefined, err)
   }
 
   return NextResponse.json({ ok: true, id: data.id }, { status: 201 })
