@@ -6,8 +6,9 @@ export const metadata: Metadata = {
 };
 
 // Keep in sync with app/legal/terms/page.tsx.
-// TODO before launch: replace with the real support inbox.
-const CONTACT_EMAIL = "support@scholars.ng";
+// FINAL CLEANUP: placeholder replaced with the live-domain support inbox.
+// Make sure this mailbox (or a forwarder for it) exists before launch.
+const CONTACT_EMAIL = "support@scholars.com.ng";
 const LAST_UPDATED = "2026";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
