@@ -4,45 +4,24 @@ import Link from "next/link";
 
 // components/CookieConsent.tsx
 //
-// Essential-only cookie consent banner, mounted in the root layout.
-// Scholars uses only cookies that are strictly necessary to run the app:
-//   - Supabase auth session cookie (keeps the student signed in)
-//   - A short-lived referral attribution cookie (only set if the student
-//     arrived via someone's share link, so the referrer gets credit)
-//   - Onboarding-draft localStorage (never leaves the device)
-// We do not run analytics, advertising, or cross-site tracking. The banner
-// reflects that honestly: one Accept button, no granular toggles to
-// fiddle with, and a link to the privacy policy for anyone who wants the
-// detail.
+// Essential-only cookie consent banner, mounted once in the root layout so
+// it covers public and authenticated pages alike. Scholars sets no
+// advertising or cross-site tracking cookies, so there is nothing to
+// granularly decline: the banner states plainly what the essential cookies
+// do and offers a single Accept. Consent persists in localStorage; a
+// missing or unparsable value re-shows the banner.
 //
-// Consent is stored in localStorage under CONSENT_KEY with a 1-year
-// expiry encoded in the value ("essential:<expiry-ms>"). A missing key,
-// an expired value, or a tampered value all re-show the banner.
-const CONSENT_KEY = "scholars.cookie_consent";
-const CONSENT_TTL_MS = 365 * 24 * 60 * 60 * 1000; // 1 year
+// Sits above the mobile tap-to-reveal tab bar (z-[96]) on purpose: until
+// the student answers, consent is the most important thing on screen. Once
+// accepted it disappears for good on that device.
+const CONSENT_KEY = "scholars.cookie.consent";
 
 function readConsent(): boolean {
   if (typeof window === "undefined") return false;
   try {
-    const raw = window.localStorage.getItem(CONSENT_KEY);
-    if (!raw) return false;
-    if (!raw.startsWith("essential:")) return false;
-    const expiry = Number(raw.slice("essential:".length));
-    if (!Number.isFinite(expiry)) return false;
-    return expiry > Date.now();
+    return window.localStorage.getItem(CONSENT_KEY) === "essential";
   } catch {
     return false;
-  }
-}
-
-function writeConsent() {
-  try {
-    window.localStorage.setItem(
-      CONSENT_KEY,
-      "essential:" + String(Date.now() + CONSENT_TTL_MS)
-    );
-  } catch {
-    // storage blocked -- degrade to showing the banner next load
   }
 }
 
@@ -53,36 +32,38 @@ export function CookieConsent() {
     setShow(!readConsent());
   }, []);
 
-  if (!show) return null;
-
   function accept() {
-    writeConsent();
+    try {
+      window.localStorage.setItem(CONSENT_KEY, "essential");
+    } catch {
+      // storage blocked -- banner re-shows next visit, acceptable
+    }
     setShow(false);
   }
 
+  if (!show) return null;
+
   return (
     <div
-      role="dialog"
+      role="region"
       aria-label="Cookie consent"
-      className="fixed bottom-0 inset-x-0 z-[95] bg-white border-t border-hairline shadow-[0_-2px_12px_rgba(11,30,61,0.08)]"
+      className="fixed bottom-0 inset-x-0 z-[96] bg-white border-t border-hairline shadow-[0_-2px_12px_rgba(11,30,61,0.08)] pb-[env(safe-area-inset-bottom)]"
     >
-      <div className="mx-auto max-w-5xl px-5 py-4 md:py-5 flex flex-col md:flex-row md:items-center gap-3 md:gap-6">
+      <div className="mx-auto max-w-5xl px-5 py-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-6">
         <p className="text-sm text-ink leading-relaxed flex-1">
-          Scholars uses only essential cookies to keep you signed in and save
-          your in-progress profile. We don&apos;t track you across the web or serve ads.{" "}
+          Scholars uses essential cookies only: keeping you signed in, crediting referrals, and
+          saving your in-progress profile on this device. No ads, no cross-site tracking.{" "}
           <Link href="/legal/privacy" className="text-navy font-medium hover:underline">
             Privacy policy
           </Link>
         </p>
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={accept}
-            className="rounded-seal bg-navy text-white text-sm font-medium px-5 py-2 hover:bg-navy-light transition-colors"
-          >
-            Accept
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={accept}
+          className="shrink-0 rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors"
+        >
+          Accept
+        </button>
       </div>
     </div>
   );
