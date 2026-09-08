@@ -8,19 +8,13 @@
 //      followed up on yet (or was clicked again since the last check-in).
 //   2. An application whose deadline has passed and is still "in_progress"
 //      with no in-app check-in shown yet.
-//   3. An achievement unlocked but not yet announced (unlocks happen
-//      entirely in Postgres triggers -- see migration
-//      add_xp_and_achievements -- this just surfaces the oldest one this
-//      route hasn't shown yet, one at a time, same "never stack" rule as
-//      the other two).
+//   3. An achievement unlocked but not yet announced.
 // Deliberately returns at most one prompt -- Ade asks one thing at a time,
-// never stacks questions. The "track this before you go" nudge is NOT
-// handled here -- that one is purely client-side (see
-// components/ade/AdeProvider.tsx's confirmApply).
+// never stacks questions.
 //
-// SECURITY HARDENING (batch 2): the client polls this on every window
-// focus event, so a student with many tabs (or a script) could hammer it.
-// 30/min per IP is far above real usage and below abuse.
+// REFACTOR BATCH 1: rate-limit parity (30/min per IP). Ade polls on every
+// window focus event, so a student with many tabs open (or a script) could
+// otherwise hammer this endpoint far past normal usage.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
