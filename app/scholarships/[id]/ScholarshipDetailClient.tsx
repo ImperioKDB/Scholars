@@ -7,6 +7,7 @@ import { ShareButton } from "@/components/ShareButton";
 import { DeadlineBadge } from "@/components/DeadlineBadge";
 import { CompetitivenessBadge, type CompetitivenessTier } from "@/components/CompetitivenessBadge";
 import { RequirementsList, type Requirement } from "@/components/RequirementsList";
+import { fetchWithTimeout } from "@/lib/fetch";
 
 type ScholarshipDetail = {
   id: string;
@@ -74,16 +75,21 @@ export function ScholarshipDetailClient({
     const wasSaved = saved;
     setSaved(!wasSaved);
     setSavePending(true);
-    const res = wasSaved
-      ? await fetch("/api/scholarships/save?scholarship_id=" + scholarship.id, { method: "DELETE" })
-      : await fetch("/api/scholarships/save", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ scholarship_id: scholarship.id }),
-        });
-    if (!res.ok) {
+    try {
+      const res = wasSaved
+        ? await fetchWithTimeout("/api/scholarships/save?scholarship_id=" + scholarship.id, { method: "DELETE" })
+        : await fetchWithTimeout("/api/scholarships/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ scholarship_id: scholarship.id }),
+          });
+      if (!res.ok) {
+        setSaved(wasSaved);
+        setActionError("Couldn't update saved status. Try again.");
+      }
+    } catch {
       setSaved(wasSaved);
-      setActionError("Couldn't update saved status. Try again.");
+      setActionError("Couldn't update saved status. Check your connection and try again.");
     }
     setSavePending(false);
   }
@@ -91,17 +97,21 @@ export function ScholarshipDetailClient({
   async function startTracking() {
     setActionError(null);
     setTrackPending(true);
-    const res = await fetch("/api/applications", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scholarship_id: scholarship.id }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setApplication(data.application ?? { id: "", status: "in_progress" });
-      router.refresh();
-    } else {
-      setActionError("Couldn't start tracking. Try again.");
+    try {
+      const res = await fetchWithTimeout("/api/applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scholarship_id: scholarship.id }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setApplication(data.application ?? { id: "", status: "in_progress" });
+        router.refresh();
+      } else {
+        setActionError("Couldn't start tracking. Try again.");
+      }
+    } catch {
+      setActionError("Couldn't start tracking. Check your connection and try again.");
     }
     setTrackPending(false);
   }
@@ -150,7 +160,7 @@ export function ScholarshipDetailClient({
         {scholarship.description && (
           <p className="text-sm text-ink leading-relaxed mb-6 mt-4">{scholarship.description}</p>
         )}
-        {actionError && <p className="text-sm text-rose mb-4">{actionError}</p>}
+        {actionError && <p className="text-sm text-rose mb-4" role="alert">{actionError}</p>}
         <div className="flex flex-wrap items-center gap-3 mb-8 pb-8 border-b border-hairline">
           {scholarship.application_url && (
             <a
