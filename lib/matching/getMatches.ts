@@ -2,10 +2,21 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserAndProfile } from "@/lib/supabase/currentUser";
 import { rankScholarships, evaluateScholarship } from "./engine";
 import { toMatchableProfile } from "./profileMapper";
-import type { MatchableProfile, ScholarshipMatch, ScholarshipRule } from "./types";
+import { getCachedMatches, setCachedMatches } from "./matchCache";
+import type { MatchableProfile, ScholarshipMatch, ScholarshipRule, ScholarshipRow } from "./types";
 
-const SCHOLARSHIP_COLUMNS =
-  "id, title, provider_name, description, amount, deadline, opens_at, last_cycle_closed_at, application_url, how_to_apply, level, discipline, verified, awards_available, estimated_applicant_pool, competitiveness_tier, historical_acceptance_rate";
+// PERF (batch 1): list evaluation drops `description`. Cards and the
+// dashboard never render it, and pulling a large text column for every
+// scholarship on every dashboard load was pure payload weight. The detail
+// page fetches its own copy via SCHOLARSHIP_DETAIL_COLUMNS.
+const SCHOLARSHIP_LIST_COLUMNS =
+  "id, title, provider_name, amount, deadline, opens_at, last_cycle_closed_at, application_url, how_to_apply, level, discipline, verified, awards_available, estimated_applicant_pool, competitiveness_tier, historical_acceptance_rate";
+const SCHOLARSHIP_DETAIL_COLUMNS = SCHOLARSHIP_LIST_COLUMNS + ", description";
+
+type CachedMatchPayload = {
+  matches: ScholarshipMatch[];
+  profileCompleteness: number;
+};
 
 export async function getMatchesForCurrentUser(): Promise<{
   matches: ScholarshipMatch[];
@@ -16,6 +27,21 @@ export async function getMatchesForCurrentUser(): Promise<{
   if (!user) return { matches: [], profileCompleteness: 0, error: "not_authenticated" };
   if (!profileRow) return { matches: [], profileCompleteness: 0, error: "profile_not_found" };
 
+  // PERF (batch 1): warm-cache path. Returns the exact same payload
+  // shape, so callers (dashboard, POST /api/scholarships/match, gaps)
+  // are unchanged. TTL bounds staleness at 10 minutes; profile and WAEC
+  // writes invalidate explicitly. Defensive shape check: a corrupted
+  // cache entry falls through to a fresh evaluation instead of crashing.
+  const cached = await getCachedMatches(user.id);
+  if (cached && typeof cached === "object" && Array.isArray((cached as CachedMatchPayload).matches)) {
+    const payload = cached as CachedMatchPayload;
+    return {
+      matches: payload.matches,
+      profileCompleteness: payload.profileCompleteness,
+      error: null,
+    };
+  }
+
   const profile: MatchableProfile = toMatchableProfile(profileRow);
   const supabase = createClient();
 
@@ -23,7 +49,7 @@ export async function getMatchesForCurrentUser(): Promise<{
     await Promise.all([
       supabase
         .from("scholarships")
-        .select(SCHOLARSHIP_COLUMNS)
+        .select(SCHOLARSHIP_LIST_COLUMNS)
         .eq("verified", true)
         .in("level", ["undergrad", "both"]),
       supabase.from("scholarship_rules").select("id, scholarship_id, field, operator, value"),
@@ -33,6 +59,11 @@ export async function getMatchesForCurrentUser(): Promise<{
     return { matches: [], profileCompleteness: profile.profile_completeness, error: "fetch_failed" };
   }
 
+  const rows = ((scholarships ?? []) as unknown as ScholarshipRow[]).map((s) => ({
+    ...s,
+    description: null as string | null,
+  }));
+
   const rulesByScholarship = new Map<string, ScholarshipRule[]>();
   for (const rule of rules ?? []) {
     const list = rulesByScholarship.get(rule.scholarship_id) ?? [];
@@ -40,7 +71,13 @@ export async function getMatchesForCurrentUser(): Promise<{
     rulesByScholarship.set(rule.scholarship_id, list);
   }
 
-  const matches = rankScholarships(profile, scholarships, rulesByScholarship);
+  const matches = rankScholarships(profile, rows, rulesByScholarship);
+
+  await setCachedMatches(user.id, {
+    matches,
+    profileCompleteness: profile.profile_completeness,
+  });
+
   return { matches, profileCompleteness: profile.profile_completeness, error: null };
 }
 
@@ -60,7 +97,7 @@ export async function getMatchForScholarship(scholarshipId: string): Promise<{
     await Promise.all([
       supabase
         .from("scholarships")
-        .select(SCHOLARSHIP_COLUMNS)
+        .select(SCHOLARSHIP_DETAIL_COLUMNS)
         .eq("id", scholarshipId)
         .eq("verified", true)
         .in("level", ["undergrad", "both"])
