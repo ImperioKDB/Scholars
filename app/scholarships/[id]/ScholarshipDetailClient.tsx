@@ -78,6 +78,18 @@ export function ScholarshipDetailClient({
   const [trackPending, setTrackPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // APPLY CLICK TRACKING: the detail page apply link used to be a
+  // plain anchor, so Ade never learned the student left for the
+  // provider's portal unless they happened to use Open application
+  // on the Applications page. Recording the click here (tracked
+  // applications only) is what makes Ade's next-visit check-in fire.
+  function recordApplyClick() {
+    if (!application) return;
+    fetchWithTimeout(`/api/applications/${application.id}/click`, {
+      method: "POST",
+    }).catch(() => {});
+  }
+
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
@@ -180,7 +192,7 @@ export function ScholarshipDetailClient({
               target="_blank"
               rel="noreferrer"
               className="rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors"
-            >
+             onClick={recordApplyClick}>
               Apply on provider&apos;s site &rarr;
             </a>
           )}
