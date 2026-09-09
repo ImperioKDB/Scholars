@@ -9,11 +9,21 @@ import { PasswordField } from "@/components/PasswordField";
 import { normalizeEmail } from "@/lib/auth/email";
 
 // AUTH SECURITY AUDIT (brute-force brake, client side): progressive
-// lockout stored in localStorage. This is UX-level only -- a determined
-// attacker bypasses it trivially -- the real brakes are Supabase's own
-// server-side auth rate limits. What this adds is honest feedback and a
-// slowdown for casual credential-stuffing against a real device.
+// lockout stored in localStorage. UX-level only -- the real brakes are
+// Supabase's own server-side auth rate limits.
 const LOCK_KEY = "scholars_login_lockout";
+
+// REDIRECT FIX (test feedback): OAuth and confirmation redirects now use
+// the canonical app URL from NEXT_PUBLIC_APP_URL when set, instead of
+// whatever origin the browser happens to be on. A preview or stale custom
+// domain that isn't in Supabase's redirect allowlist gets silently
+// replaced by the Site URL (the homepage flash testers saw); pointing
+// every flow at the canonical origin keeps the allowlist match stable.
+function appBase(): string {
+  if (typeof window === "undefined") return process.env.NEXT_PUBLIC_APP_URL || "";
+  return process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+}
+
 type LockState = { count: number; until: number };
 
 function readLock(): LockState {
@@ -52,37 +62,30 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(searchParams.get("error"));
-
   const cleanEmail = normalizeEmail(email);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-
     const lock = readLock();
     if (lock.until > Date.now()) {
       const secs = Math.ceil((lock.until - Date.now()) / 1000);
       setError(`Too many failed attempts. Try again in ${secs} second${secs === 1 ? "" : "s"}.`);
       return;
     }
-
     setLoading(true);
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email: cleanEmail,
       password,
     });
     setLoading(false);
-
     if (signInError) {
       const count = lock.count + 1;
-      // 5th consecutive failure starts a 30s backoff, doubling each time,
-      // capped at 5 minutes. A success clears it entirely.
       const until = count >= 5 ? Date.now() + Math.min(30_000 * 2 ** (count - 5), 300_000) : 0;
       writeLock({ count, until });
       setError("That email and password don't match an account.");
       return;
     }
-
     clearLock();
     router.push("/dashboard");
     router.refresh();
@@ -91,13 +94,9 @@ function LoginForm() {
   async function handleGoogle() {
     setError(null);
     setGoogleLoading(true);
-    // Route through /auth/callback rather than straight to /dashboard --
-    // that's the route that actually exchanges Google's ?code= for a
-    // session before landing on a protected page. See
-    // app/auth/callback/route.ts.
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=/dashboard` },
+      options: { redirectTo: `${appBase()}/auth/callback?next=/dashboard` },
     });
   }
 
@@ -144,7 +143,7 @@ function LoginForm() {
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
           )}
-          {loading ? "Logging in\u2026" : "Log in"}
+          {loading ? "Logging in…" : "Log in"}
         </button>
       </form>
       <div className="flex items-center gap-3 my-6">
@@ -163,7 +162,7 @@ function LoginForm() {
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
         )}
-        {googleLoading ? "Redirecting\u2026" : "Continue with Google"}
+        {googleLoading ? "Redirecting…" : "Continue with Google"}
       </button>
       <p className="text-sm text-navy-light mt-8 text-center">
         Don&apos;t have an account?{" "}
@@ -175,9 +174,6 @@ function LoginForm() {
   );
 }
 
-// useSearchParams() requires a Suspense boundary in the App Router --
-// wrapping here (rather than inside AuthShell) keeps AuthShell reusable
-// for pages that don't need query params.
 export default function LoginPage() {
   return (
     <Suspense fallback={null}>
