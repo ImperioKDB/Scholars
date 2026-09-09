@@ -3,12 +3,9 @@
 -- or a PostgREST resource-embed join in the cited file, and without an
 -- index each one is a sequential scan at MVP scale and worse beyond it.
 --
--- NOT YET APPLIED. Apply live via the Supabase SQL editor (or MCP
--- execute_sql) using the steps in the phase-2 review note, per this
--- repo's convention that migration files are reference records and the
--- live schema is the source of truth. After applying, this file stays
--- the reference record -- do not re-run it (IF NOT EXISTS makes re-runs
--- harmless anyway).
+-- APPLIED LIVE via the Supabase SQL editor. This file is now a reference
+-- record only, per project convention -- do not re-run against the live
+-- project (IF NOT EXISTS makes re-runs harmless anyway).
 --
 -- Two of the single-column indexes below (applications.profile_id,
 -- saved_scholarships.profile_id) overlap the leading column of the
