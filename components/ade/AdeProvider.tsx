@@ -188,11 +188,22 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
     <AdeContext.Provider value={contextValue}>
       {children}
       {confettiColors && <Confetti colors={confettiColors} />}
-      {isActive && prompt && (
+      {/* Always present on app routes; the red dot and the panel
+          content are prompt-driven, not the button itself. */}
+      {isActive && (
         <div className="fixed bottom-24 md:bottom-6 right-4 md:right-6 z-[95] flex flex-col items-end gap-3">
           {open && (
             <div className="bg-white rounded-2xl border border-hairline shadow-card p-5 w-[19rem] max-w-[calc(100vw-2rem)]">
-              {prompt.type === "checkin" ? (
+              {!prompt ? (
+                <>
+                  <p className="font-display text-base font-semibold text-navy mb-1">Ade is here</p>
+                  <p className="text-sm text-ink leading-relaxed">
+                    Nothing needs your attention right now. I check in after you open a
+                    scholarship portal, when a tracked deadline passes, and when you
+                    unlock an achievement.
+                  </p>
+                </>
+              ) : prompt.type === "checkin" ? (
                 <>
                   <p className="font-display text-base font-semibold text-navy mb-1">Ade says hi</p>
                   <p className="text-sm text-ink leading-relaxed mb-4">
@@ -261,7 +272,9 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
             }
           >
             <span className="font-display text-lg font-semibold" aria-hidden="true">A</span>
-            <span className="absolute top-0.5 right-0.5 w-3 h-3 rounded-full bg-rose border-2 border-white" aria-hidden="true" />
+            {prompt && (
+              <span className="absolute top-0.5 right-0.5 w-3 h-3 rounded-full bg-rose border-2 border-white" aria-hidden="true" />
+            )}
           </button>
         </div>
       )}
