@@ -17,6 +17,14 @@ import { TestimonialsRotator, type TestimonialItem } from "@/components/Testimon
 // an empty social-proof band.
 const COLUMNS = "id, quote, full_name, role, photo_url";
 
+type DbRow = {
+  id: string;
+  quote: string;
+  full_name: string;
+  role: string;
+  photo_url: string | null;
+};
+
 export async function TestimonialsSection() {
   const supabase = createPublicClient();
   let { data, error } = await supabase
@@ -36,12 +44,17 @@ export async function TestimonialsSection() {
   }
   if (error || !data || data.length === 0) return null;
 
-  const items = (data as TestimonialItem[]).map((r) => ({
+  // Type the DB rows explicitly as snake_case, then map into the camelCase
+  // TestimonialItem shape the rotator expects. Casting the raw Supabase
+  // array directly to TestimonialItem[] trips strict TS because the
+  // property names do not overlap (full_name vs fullName).
+  const rows = data as DbRow[];
+  const items: TestimonialItem[] = rows.map((r) => ({
     id: r.id,
     quote: r.quote,
     fullName: r.full_name,
     role: r.role,
-    photoUrl: (r as TestimonialItem & { photo_url?: string | null }).photo_url ?? r.photoUrl ?? null,
+    photoUrl: r.photo_url,
   }));
 
   return (
