@@ -1,6 +1,13 @@
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
 
+// components/AuthShell.tsx
+// COLOR FIX (test feedback): the left panel used to carry a white 6%
+// radial wash over bg-navy, which lightened it visibly away from the
+// app's navy (#0B1E3D) everywhere else (buttons, seals, sidebar text).
+// The wash is gone. The panel base is now exactly the navy token, with a
+// same-family vignette (darker navy at the corners, a faint navy-light
+// glow top-left) for depth without shifting the hue or the value.
 export function AuthShell({
   children,
   heading,
@@ -14,19 +21,14 @@ export function AuthShell({
     <div className="min-h-screen grid md:grid-cols-2">
       <div className="hidden md:flex flex-col justify-between bg-navy text-white p-12 relative overflow-hidden">
         <div
-          className="absolute inset-0 opacity-[0.06]"
+          className="absolute inset-0"
           style={{
             backgroundImage:
-              "radial-gradient(circle at 20% 20%, white 0, transparent 45%), radial-gradient(circle at 80% 70%, white 0, transparent 40%)",
+              "radial-gradient(circle at 82% 88%, rgba(6,15,31,0.55) 0%, transparent 55%), radial-gradient(circle at 15% 10%, rgba(20,49,92,0.35) 0%, transparent 45%)",
           }}
         />
         <Logo className="relative" />
         <div className="relative max-w-sm">
-          {/* Was a fabricated "12,000+ scholarships tracked" stat -- the
-              live seed data is nowhere near that number, and claiming it
-              here is exactly the kind of thing that breaks trust the
-              moment a new signup sees 5 real matches. Replaced with a
-              true, still-differentiating claim instead of a fake count. */}
           <p className="font-mono text-xs uppercase tracking-widest text-emerald mb-4">
             Matched to real eligibility, not keywords
           </p>
@@ -49,11 +51,6 @@ export function AuthShell({
           </h1>
           <p className="text-sm text-navy-light mb-8">{sub}</p>
           {children}
-          {/* AUDIT FIX (batch 3): the audit flagged that no privacy policy
-              or terms were visible anywhere in the product. Auth is where
-              that consent conversation belongs -- this one line covers
-              login, signup, and both reset-password screens, since they
-              all render through this shell. */}
           <p className="text-xs text-navy-light mt-8 leading-relaxed">
             By continuing, you agree to our{" "}
             <Link href="/legal/terms" className="text-navy font-medium hover:underline">
