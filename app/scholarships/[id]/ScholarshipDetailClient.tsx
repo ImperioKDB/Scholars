@@ -230,10 +230,10 @@ export function ScholarshipDetailClient({
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-ink text-sm leading-snug">{s.title}</p>
                   <p className="text-xs text-navy-light mt-0.5">{s.provider_name}</p>
-                </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  {s.amount && <span className="text-xs font-mono text-emerald">{s.amount}</span>}
-                  <DeadlineBadge deadline={s.deadline} />
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <DeadlineBadge deadline={s.deadline} />
+                    {s.amount && <span className="text-xs font-mono text-emerald">{s.amount}</span>}
+                  </div>
                 </div>
               </Link>
             ))}
