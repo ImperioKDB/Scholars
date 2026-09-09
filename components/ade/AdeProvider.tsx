@@ -271,7 +271,16 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
               (attention ? "ade-attention" : "")
             }
           >
-            <span className="font-display text-lg font-semibold" aria-hidden="true">A</span>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+            <path d="M6.2 5.2L4.6 3.4M17.8 5.2l1.6-1.8" strokeLinecap="round" />
+            <path d="M12 3.5c-4.4 0-7.5 3-7.5 7.2 0 4.9 3.4 9.3 7.5 9.3s7.5-4.4 7.5-9.3c0-4.2-3.1-7.2-7.5-7.2Z" strokeLinejoin="round" />
+            <circle cx="9" cy="10.5" r="2.6" />
+            <circle cx="15" cy="10.5" r="2.6" />
+            <circle cx="9" cy="10.5" r="0.6" fill="currentColor" stroke="none" />
+            <circle cx="15" cy="10.5" r="0.6" fill="currentColor" stroke="none" />
+            <path d="M12 12.6l-1.3 2.1h2.6L12 12.6Z" strokeLinejoin="round" />
+            <path d="M9.3 17.2c.8.8 1.7 1.2 2.7 1.2s1.9-.4 2.7-1.2" strokeLinecap="round" />
+            </svg>
             {prompt && (
               <span className="absolute top-0.5 right-0.5 w-3 h-3 rounded-full bg-rose border-2 border-white" aria-hidden="true" />
             )}
