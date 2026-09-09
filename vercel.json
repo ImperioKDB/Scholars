@@ -6,7 +6,7 @@
   "crons": [
     {
       "path": "/api/cron/deadline-check",
-      "schedule": "0 */2 * * *"
+      "schedule": "0 8 * * *"
     }
   ]
 }
