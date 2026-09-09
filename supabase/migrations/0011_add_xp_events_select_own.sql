@@ -8,8 +8,9 @@
 -- Enabling RLS here is a no-op if already enabled; the select-own policy
 -- is the only policy added, so no other access changes.
 --
--- NOT YET APPLIED. Run in the Supabase SQL editor (or MCP execute_sql).
--- If you skip it, referral progress shows 0 and everything else works.
+-- APPLIED LIVE via the Supabase SQL editor. This file is now a reference
+-- record only, per project convention -- do not re-run against the live
+-- project.
 alter table public.xp_events enable row level security;
 drop policy if exists "xp_events_select_own" on public.xp_events;
 create policy "xp_events_select_own" on public.xp_events
