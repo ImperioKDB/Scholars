@@ -10,6 +10,7 @@ import { ProviderMonogram } from "@/components/ProviderMonogram";
 import { CompetitivenessBadge, type CompetitivenessTier } from "@/components/CompetitivenessBadge";
 import { RequirementsList, type Requirement } from "@/components/RequirementsList";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { useAde } from "@/components/ade/AdeProvider";
 
 type ScholarshipDetail = {
   id: string;
@@ -72,6 +73,7 @@ export function ScholarshipDetailClient({
   similar: SimilarScholarship[];
 }) {
   const router = useRouter();
+  const { interceptApply } = useAde();
   const [saved, setSaved] = useState(initialSaved);
   const [application, setApplication] = useState(initialApplication);
   const [savePending, setSavePending] = useState(false);
@@ -187,14 +189,20 @@ export function ScholarshipDetailClient({
         {actionError && <p className="text-sm text-rose mb-4" role="alert">{actionError}</p>}
         <div className="flex flex-wrap items-center gap-3 mb-8 pb-8 border-b border-hairline">
           {scholarship.application_url && (
-            <a
-              href={scholarship.application_url}
-              target="_blank"
-              rel="noreferrer"
+            <button
+              type="button"
+              onClick={() =>
+                interceptApply({
+                  scholarshipId: scholarship.id,
+                  scholarshipTitle: scholarship.title,
+                  applicationUrl: scholarship.application_url as string,
+                  applicationId: application ? application.id : null,
+                })
+              }
               className="rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors"
-             onClick={recordApplyClick}>
-              Apply on provider&apos;s site &rarr;
-            </a>
+            >
+              Apply on provider’s site →
+            </button>
           )}
           <button
             type="button"
