@@ -1,22 +1,19 @@
 // app/api/admin/digest/route.ts
-// POST /api/admin/digest -- manual trigger for the new-listing digest.
+// POST /api/admin/digest -- the admin "send the digest now" button.
 //
-// Admin-only: the middleware /api/admin gate plus assertAdmin here, same
-// defense in depth as every other admin route. Rate limited 5/min so a
-// stuck button cannot fan out sends.
+// Auth: the middleware /api/admin gate plus an inline is_admin check here,
+// the same defense in depth as the other admin routes. No cron secret
+// involved: this rides on your logged-in admin session.
 //
-// Passes minIntervalMs: 0 on purpose. An admin pressing this just added
-// listings and wants them out now; the 2-hour re-blast throttle (which the
-// cron uses) would make the button a no-op right after a scheduled run.
-// Listing-level dedupe via announcement_log still guarantees each student
-// receives each listing exactly once, so pressing twice the same day only
-// sends listings added since the first press.
+// Rate limited to 5 calls per minute so a stuck button cannot fan out
+// sends. maxDuration 300 so a large student base is not cut off mid-send.
 //
-// maxDuration 300 so a large student base is not cut off mid-send by the
-// default function timeout.
+// Passes minIntervalMs: 0 on purpose. Listing-level dedupe in
+// announcement_log still guarantees each student receives each listing
+// exactly once, so a second press the same day only sends listings
+// verified since the first press.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { assertAdmin } from '@/lib/admin/guard'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { runNewListingDigest } from '@/lib/email/digest'
 
@@ -26,8 +23,20 @@ export async function POST(request: Request) {
   const limited = await checkRateLimit(request, { route: 'admin-digest', limit: 5 })
   if (limited) return limited
   const supabase = await createClient()
-  const guard = await assertAdmin(supabase)
-  if (!guard.ok) return guard.response
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  }
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.is_admin) {
+    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+  }
   const summary = await runNewListingDigest({ minIntervalMs: 0 })
   return NextResponse.json({ summary })
 }
