@@ -1,15 +1,26 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { SendDigestButton } from "@/components/admin/SendDigestButton";
 
 async function getStats() {
   const supabase = createClient();
-  const [{ count: totalScholarships }, { count: verifiedScholarships }, { count: totalProfiles }, { count: totalSaved }] =
-    await Promise.all([
-      supabase.from("scholarships").select("*", { count: "exact", head: true }),
-      supabase.from("scholarships").select("*", { count: "exact", head: true }).eq("verified", true),
-      supabase.from("profiles").select("*", { count: "exact", head: true }),
-      supabase.from("saved_scholarships").select("*", { count: "exact", head: true }),
-    ]);
+  const [
+    { count: totalScholarships },
+    { count: verifiedScholarships },
+    { count: totalProfiles },
+    { count: totalSaved },
+    lastLog,
+  ] = await Promise.all([
+    supabase.from("scholarships").select("*", { count: "exact", head: true }),
+    supabase.from("scholarships").select("*", { count: "exact", head: true }).eq("verified", true),
+    supabase.from("profiles").select("*", { count: "exact", head: true }),
+    supabase.from("saved_scholarships").select("*", { count: "exact", head: true }),
+    supabase
+      .from("announcement_log")
+      .select("created_at")
+      .order("created_at", { ascending: false })
+      .limit(1),
+  ]);
   const { data: recent } = await supabase
     .from("scholarships")
     .select("id, title, provider_name, deadline, verified, level")
@@ -20,6 +31,7 @@ async function getStats() {
     verifiedScholarships: verifiedScholarships ?? 0,
     totalProfiles: totalProfiles ?? 0,
     totalSaved: totalSaved ?? 0,
+    lastDigestAt: (lastLog?.data?.[0]?.created_at as string | undefined) ?? null,
     recent: recent ?? [],
   };
 }
@@ -34,10 +46,6 @@ export default async function AdminOverviewPage() {
   ];
   return (
     <div>
-      {/* MOBILE FIX: header stacked the add-button beside the heading and
-          let its label wrap to two lines on narrow screens. It now stacks
-          vertically on mobile (column) and sits inline on sm+, and the
-          button label is whitespace-nowrap so it never breaks mid-label. */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="font-display text-2xl font-semibold text-navy">Admin overview</h1>
@@ -57,6 +65,17 @@ export default async function AdminOverviewPage() {
             <p className="text-sm text-navy-light mt-1">{c.label}</p>
           </div>
         ))}
+      </div>
+      <div className="bg-white rounded-xl border border-hairline p-5 mb-10">
+        <h2 className="font-display text-lg font-semibold text-navy mb-1">New-listing email digest</h2>
+        <p className="text-sm text-navy-light mb-4">
+          Bundles every verified scholarship and opportunity added in the last 7 days into one email
+          per student, skipping anything they have already been told about. The scheduled job runs
+          daily at 9:00am Nigeria time; press this to send immediately after adding listings. Each
+          listing reaches each student at most once, so pressing twice the same day only sends what
+          was verified since the first press.
+        </p>
+        <SendDigestButton lastDigestAt={stats.lastDigestAt} />
       </div>
       <div className="bg-white rounded-xl border border-hairline overflow-hidden">
         <div className="px-5 py-4 border-b border-hairline flex items-center justify-between">
