@@ -1,15 +1,26 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { SendDigestButton } from "@/components/admin/SendDigestButton";
 
 async function getStats() {
   const supabase = createClient();
-  const [{ count: totalScholarships }, { count: verifiedScholarships }, { count: totalProfiles }, { count: totalSaved }] =
-    await Promise.all([
-      supabase.from("scholarships").select("*", { count: "exact", head: true }),
-      supabase.from("scholarships").select("*", { count: "exact", head: true }).eq("verified", true),
-      supabase.from("profiles").select("*", { count: "exact", head: true }),
-      supabase.from("saved_scholarships").select("*", { count: "exact", head: true }),
-    ]);
+  const [
+    { count: totalScholarships },
+    { count: verifiedScholarships },
+    { count: totalProfiles },
+    { count: totalSaved },
+    lastLog,
+  ] = await Promise.all([
+    supabase.from("scholarships").select("*", { count: "exact", head: true }),
+    supabase.from("scholarships").select("*", { count: "exact", head: true }).eq("verified", true),
+    supabase.from("profiles").select("*", { count: "exact", head: true }),
+    supabase.from("saved_scholarships").select("*", { count: "exact", head: true }),
+    supabase
+      .from("announcement_log")
+      .select("created_at")
+      .order("created_at", { ascending: false })
+      .limit(1),
+  ]);
   const { data: recent } = await supabase
     .from("scholarships")
     .select("id, title, provider_name, deadline, verified, level")
@@ -20,6 +31,7 @@ async function getStats() {
     verifiedScholarships: verifiedScholarships ?? 0,
     totalProfiles: totalProfiles ?? 0,
     totalSaved: totalSaved ?? 0,
+    lastDigestAt: (lastLog?.data?.[0]?.created_at as string | undefined) ?? null,
     recent: recent ?? [],
   };
 }
@@ -32,7 +44,6 @@ export default async function AdminOverviewPage() {
     { label: "Students", value: stats.totalProfiles },
     { label: "Saves", value: stats.totalSaved },
   ];
-
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
@@ -47,7 +58,6 @@ export default async function AdminOverviewPage() {
           + Add scholarship
         </Link>
       </div>
-
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
         {cards.map((c) => (
           <div key={c.label} className="bg-white rounded-xl border border-hairline p-5">
@@ -56,7 +66,17 @@ export default async function AdminOverviewPage() {
           </div>
         ))}
       </div>
-
+      <div className="bg-white rounded-xl border border-hairline p-5 mb-10">
+        <h2 className="font-display text-lg font-semibold text-navy mb-1">New-listing email digest</h2>
+        <p className="text-sm text-navy-light mb-4">
+          Bundles every verified scholarship and opportunity added in the last 7 days into one email
+          per student, skipping anything they&apos;ve already been told about. The scheduled job runs
+          daily at 16:00 UTC; use this to send immediately after adding listings. Each listing is
+          announced to each student at most once, so pressing twice the same day only sends what was
+          added since the first press.
+        </p>
+        <SendDigestButton lastDigestAt={stats.lastDigestAt} />
+      </div>
       <div className="bg-white rounded-xl border border-hairline overflow-hidden">
         <div className="px-5 py-4 border-b border-hairline flex items-center justify-between">
           <h2 className="font-display text-lg font-semibold text-navy">Recently added</h2>
@@ -67,10 +87,6 @@ export default async function AdminOverviewPage() {
         {stats.recent.length === 0 ? (
           <p className="text-sm text-navy-light p-5">No scholarships yet.</p>
         ) : (
-          // AUDIT FIX (batch 8): same overflow treatment as the
-          // scholarships list -- the table used to bleed off the right
-          // edge on phones with no way to reach the last columns.
-          // min-w keeps the columns readable; the wrapper scrolls.
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[560px]">
               <tbody>
