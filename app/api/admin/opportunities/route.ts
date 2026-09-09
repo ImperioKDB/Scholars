@@ -8,6 +8,7 @@
 // is_admin(auth.uid()), but profile.is_admin is also checked server-side so
 // a non-admin gets a clean 403 instead of a Postgres RLS error.
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/navigation'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
@@ -64,32 +65,26 @@ async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>) 
 export async function GET(request: Request) {
   const limited = await checkRateLimit(request, { route: 'admin-opportunities', limit: 60 })
   if (limited) return limited
-
   const supabase = await createClient()
   const check = await requireAdmin(supabase)
   if (check.error) return check.error
-
   const { data: opportunities, error } = await supabase
     .from('opportunities')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(ADMIN_LIST_CAP)
-
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
   return NextResponse.json({ opportunities })
 }
 
 export async function POST(request: Request) {
   const limited = await checkRateLimit(request, { route: 'admin-opportunities', limit: 60 })
   if (limited) return limited
-
   const supabase = await createClient()
   const check = await requireAdmin(supabase)
   if (check.error) return check.error
-
   const raw = await request.json().catch(() => null)
   const parsed = opportunitySchema.safeParse(raw)
   if (!parsed.success) {
@@ -98,16 +93,16 @@ export async function POST(request: Request) {
       { status: 400 }
     )
   }
-
   const { data: opportunity, error: insertError } = await supabase
     .from('opportunities')
     .insert({ ...parsed.data, created_by: check.user!.id })
     .select('*')
     .single()
-
   if (insertError) {
     return NextResponse.json({ error: insertError.message }, { status: 500 })
   }
-
+  // SHARE PAGES: /o/[id] is ISR (revalidate 300) -- drop its cached render
+  // so a new opportunity's share page is live immediately.
+  revalidatePath('/o/[id]')
   return NextResponse.json({ opportunity }, { status: 201 })
 }
