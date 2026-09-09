@@ -5,6 +5,11 @@ const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/discover", "/opportun
 const AUTH_PREFIXES = ["/login", "/signup"];
 const REF_COOKIE_NAME = "ref_id";
 const REF_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
+// Mirror of the client-side consent choice written by
+// components/CookieConsent.tsx. Middleware runs server-side and cannot read
+// localStorage, so the modal also sets this cookie so referral credit can
+// honor a "rejected" choice.
+const CONSENT_COOKIE_NAME = "scholars_consent";
 
 // AUTH SECURITY AUDIT: session cookies written server-side are pinned to
 // SameSite=lax and Secure in production. Secure is safe here because
@@ -36,7 +41,11 @@ export async function middleware(request: NextRequest) {
     const shareResponse = NextResponse.next();
     const ref = request.nextUrl.searchParams.get("ref");
     const alreadyHasRef = request.cookies.get(REF_COOKIE_NAME)?.value;
-    if (ref && !alreadyHasRef) {
+    const consentChoice = request.cookies.get(CONSENT_COOKIE_NAME)?.value;
+    // Honor a rejected consent choice: no referral credit cookie for
+    // browsers that declined. Accept (or no recorded choice yet) keeps
+    // the previous behavior.
+    if (ref && !alreadyHasRef && consentChoice !== "rejected") {
       shareResponse.cookies.set(REF_COOKIE_NAME, ref, {
         maxAge: REF_COOKIE_MAX_AGE,
         httpOnly: true,
@@ -48,7 +57,6 @@ export async function middleware(request: NextRequest) {
   }
 
   let response = NextResponse.next({ request: { headers: request.headers } });
-
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -70,7 +78,6 @@ export async function middleware(request: NextRequest) {
       },
     }
   );
-
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -103,11 +110,9 @@ export async function middleware(request: NextRequest) {
     redirectUrl.searchParams.set("next", path);
     return NextResponse.redirect(redirectUrl);
   }
-
   if (isAuthPage && user) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
-
   return response;
 }
 
