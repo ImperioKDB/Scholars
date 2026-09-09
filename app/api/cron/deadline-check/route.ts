@@ -1,25 +1,32 @@
 // app/api/cron/deadline-check/route.ts
 // GET /api/cron/deadline-check   (Vercel Cron, every 2 hours: "0 */2 * * *")
 //
+// AUTH: two accepted paths --
+//   1. Bearer CRON_SECRET (the header Vercel Cron itself sends). This is
+//      the scheduled path.
+//   2. An authenticated ADMIN session opening this URL in a browser. This
+//      is the ops fallback: when CRON_SECRET is unknown, missing, or being
+//      rotated, an admin simply visits the URL while logged in and the job
+//      runs. Non-admin sessions and anonymous requests get 401, so the
+//      fallback adds no public surface.
+//
 // Phase 1 - Deadline reminders: one branded email per saved scholarship
 //           whose deadline falls inside DEADLINE_REMINDER_DAYS, deduped by
 //           the notifications table (type 'deadline_reminder').
-// Phase 2 - New-listing DIGEST: instead of one email per new listing (which
-//           produced a wall of near-identical emails the minute a batch was
-//           verified), collect every verified scholarship AND opportunity
-//           created in the last 7 days that this student has not yet been
-//           told about, and send ONE digest email (max 6 tiles + "and N
-//           more"). A 2-hour per-student guard (announcement_log.created_at)
-//           means even repeated manual cron triggers cannot re-blast a
-//           student inside the window; pending listings simply wait for the
-//           next window.
-// Phase 3 - Failure alert: if anything failed and CRON_ALERT_WEBHOOK_URL is
-//           set, POST a summary so silent breakage pages you.
+// Phase 2 - New-listing DIGEST: collect every verified scholarship AND
+//           opportunity created in the last 7 days that this student has
+//           not been told about, send ONE digest email (max 6 tiles plus
+//           "and N more"). A 2-hour per-student guard (announcement_log)
+//           prevents re-blasting inside the window.
+// Phase 3 - Failure alert: if anything failed and CRON_ALERT_WEBHOOK_URL
+//           is set, POST a one-line summary.
 //
 // Dry-run safe: missing BREVO_API_KEY / REMINDER_FROM_EMAIL logs and skips
-// sending but still records dedupe rows, exactly like before.
+// sending but still records dedupe rows. The response JSON reports
+// dry_run so a manual trigger tells you immediately whether email is live.
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
+import { createClient } from '@/lib/supabase/server'
 import { logError, logWarn } from '@/lib/logging'
 import {
   renderDeadlineReminder,
@@ -78,8 +85,27 @@ async function sendEmail(params: {
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET
   const auth = request.headers.get('authorization')
-  if (!secret || auth !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const bearerOk = Boolean(secret) && auth === `Bearer ${secret}`
+  if (!bearerOk) {
+    // Admin manual-trigger fallback (see header comment). Cookie-based
+    // client: on a Vercel Cron call there are no cookies, so this resolves
+    // to "no user" and falls through to 401 unless the bearer matched.
+    const sessionClient = await createClient()
+    const {
+      data: { user },
+    } = await sessionClient.auth.getUser()
+    let isAdmin = false
+    if (user) {
+      const { data: profile } = await sessionClient
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .single()
+      isAdmin = Boolean(profile?.is_admin)
+    }
+    if (!isAdmin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
   }
 
   const supabase = createServiceClient()
@@ -259,7 +285,6 @@ export async function GET(request: Request) {
       }).catch(() => {})
     }
   }
-
   logWarn(ROUTE, 'run_complete', summary)
   return NextResponse.json(summary)
 }
