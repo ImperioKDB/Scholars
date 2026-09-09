@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/Logo";
@@ -8,6 +8,7 @@ import { FormField, inputClass, selectClass, textareaClass } from "@/components/
 import { Combobox } from "@/components/Combobox";
 import { WaecResultsEditor, type WaecRow } from "@/components/WaecResultsEditor";
 import { Skeleton } from "@/components/Skeleton";
+import { getLGAsForState } from "@/lib/data/lgas";
 import {
   DISCIPLINE_OPTIONS,
   GENDER_OPTIONS,
@@ -23,24 +24,13 @@ import { INSTITUTION_OPTIONS, institutionTypeFor } from "@/lib/data/institutions
 const STEPS = ["Personal", "Academic", "Eligibility", "Documents"];
 const DISCIPLINE_COMBO_OPTIONS = DISCIPLINE_OPTIONS.map((d) => ({ value: d, label: d }));
 
-// AUDIT FIX (batch 2): in-progress answers are persisted here on every
-// change. A refresh, an accidental tab close, or "Skip for now" used to
-// throw away everything typed since the last server save. The server
-// profile stays the source of truth once saved -- this only bridges
-// unsaved input. Cleared the moment handleFinish() succeeds.
 const ONBOARDING_DRAFT_KEY = "scholars.onboarding.draft.v1";
 
 type OnboardingDraft = {
   form: ProfileForm;
   waecRows: WaecRow[];
   step: number;
-  // AUDIT FIX (batch 4): which institution input mode was active, so a
-  // refresh mid-way through the "my school isn't listed" path restores
-  // the manual fields instead of dropping back to the curated search.
   manualInstitution: boolean;
-  // NEW (user feedback batch): parallel escape hatch for discipline,
-  // since new courses appear every session and no curated list stays
-  // current. Restored the same way manualInstitution is.
   manualDiscipline: boolean;
 };
 
@@ -52,8 +42,6 @@ function readDraft(): OnboardingDraft | null {
     const parsed = JSON.parse(raw) as Partial<OnboardingDraft>;
     if (!parsed || typeof parsed !== "object" || !parsed.form) return null;
     return {
-      // Spread over the empty form so keys added to ProfileForm later
-      // don't leave a restored draft with undefined fields.
       form: { ...EMPTY_PROFILE_FORM, ...parsed.form },
       waecRows: Array.isArray(parsed.waecRows) ? parsed.waecRows : [],
       step: typeof parsed.step === "number" ? parsed.step : 0,
@@ -69,8 +57,7 @@ function writeDraft(draft: OnboardingDraft) {
   try {
     window.localStorage.setItem(ONBOARDING_DRAFT_KEY, JSON.stringify(draft));
   } catch {
-    // Storage blocked or full -- persistence is best-effort, never worth
-    // breaking the form over.
+    // storage blocked -- persistence is best-effort
   }
 }
 
@@ -89,28 +76,21 @@ function OnboardingForm() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<ProfileForm>(EMPTY_PROFILE_FORM);
   const [waecRows, setWaecRows] = useState<WaecRow[]>([]);
-  // false = curated Combobox search (default), true = free-text "my
-  // school isn't listed" mode. See toggleManualInstitution below.
   const [manualInstitution, setManualInstitution] = useState(false);
-  // NEW: parallel escape hatch for discipline. Same UX pattern as the
-  // institution escape hatch -- swap modes clears the field on purpose
-  // so a half-typed value from one mode can't silently save under the
-  // other. See toggleManualDiscipline below.
   const [manualDiscipline, setManualDiscipline] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // AUDIT FIX (batch 2): true once the student has edited anything that
-  // isn't yet on the server. Drives the beforeunload guard so an
-  // accidental tab close / refresh warns instead of silently relying on
-  // the localStorage draft alone.
   const [dirty, setDirty] = useState(false);
 
-  // Nudge CTAs (dashboard gap banner, scholarship card "Update profile"
-  // links) can deep-link straight to the step that collects the field
-  // they're pointing at, e.g. /onboarding?step=2 for WAEC results,
-  // instead of dropping every visitor on step 0. A deep link always
-  // beats a restored draft's saved step -- the link is the newer intent.
+  // LGA options derive from the selected state ONLY. No state -> empty
+  // list -> the combobox renders disabled with a hint, never a 774-item
+  // dump. Picking a state swaps in just that state's LGAs, alphabetical.
+  const lgaOptions = useMemo(
+    () => getLGAsForState(form.state_of_origin).map((l) => ({ value: l, label: l })),
+    [form.state_of_origin]
+  );
+
   const stepParam = Number(searchParams.get("step"));
   const hasStepParam = !Number.isNaN(stepParam) && stepParam >= 0 && stepParam < STEPS.length;
 
@@ -121,9 +101,7 @@ function OnboardingForm() {
 
   useEffect(() => {
     async function loadExistingProfile() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         router.replace("/login");
         return;
@@ -164,7 +142,6 @@ function OnboardingForm() {
           has_lga_certificate: profile.has_lga_certificate ?? false,
         };
       }
-      // 404 just means no profile row saved yet -- keep the empty form, not an error.
       let serverWaecRows: WaecRow[] = [];
       if (waecRes.ok) {
         const { results } = await waecRes.json();
@@ -174,11 +151,6 @@ function OnboardingForm() {
           grade: r.grade,
         }));
       }
-      // Local draft wins over the server copy: it holds whatever was
-      // typed most recently on this device, including fields never
-      // saved. No draft -> seed from the server profile. Restoring the
-      // draft does NOT depend on the profile fetch succeeding, so a
-      // flaky network can't wipe out local input either.
       const draft = readDraft();
       if (draft) {
         setForm({ ...serverForm, ...draft.form });
@@ -191,19 +163,10 @@ function OnboardingForm() {
       } else {
         setForm(serverForm);
         setWaecRows(serverWaecRows);
-        // AUDIT FIX (batch 4): a saved institution that isn't in the
-        // curated list must have been entered through the manual path --
-        // restore that mode so the name stays visible and editable.
         if (serverForm.institution_name && !institutionTypeFor(serverForm.institution_name)) {
           setManualInstitution(true);
         }
-        // NEW: same restore logic for discipline. A saved course name
-        // that isn't in DISCIPLINE_OPTIONS came through the manual path,
-        // so restore that mode so it stays visible and editable.
-        if (
-          serverForm.discipline &&
-          !DISCIPLINE_OPTIONS.includes(serverForm.discipline)
-        ) {
+        if (serverForm.discipline && !DISCIPLINE_OPTIONS.includes(serverForm.discipline)) {
           setManualDiscipline(true);
         }
       }
@@ -213,19 +176,11 @@ function OnboardingForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Persist every change once the initial load has completed, so a
-  // refresh mid-flow restores exactly what was on screen. Gated on
-  // `loading` so the pre-hydration empty state never overwrites a real
-  // draft.
   useEffect(() => {
     if (loading) return;
     writeDraft({ form, waecRows, step, manualInstitution, manualDiscipline });
   }, [form, waecRows, step, manualInstitution, manualDiscipline, loading]);
 
-  // AUDIT FIX (batch 2): warn on tab close / refresh / external navigation
-  // while there are unsaved edits. Client-side navigation (Skip, Finish,
-  // sidebar links) does NOT fire beforeunload, so normal in-app movement
-  // is unaffected -- this only catches the accidental close.
   useEffect(() => {
     if (!dirty || saving) return;
     function handler(e: BeforeUnloadEvent) {
@@ -241,14 +196,24 @@ function OnboardingForm() {
     setDirty(true);
   }
 
+  // Changing state of origin must never leave a stale LGA behind: if the
+  // current LGA doesn't belong to the new state, clear it so the combobox
+  // starts clean instead of showing a value from the wrong state.
+  function updateStateOfOrigin(value: string) {
+    setForm((f) => {
+      const lgas = getLGAsForState(value);
+      const keepLga =
+        value === f.state_of_origin ? f.lga_of_origin : lgas.includes(f.lga_of_origin) ? f.lga_of_origin : "";
+      return { ...f, state_of_origin: value, lga_of_origin: keepLga };
+    });
+    setDirty(true);
+  }
+
   function updateWaecRows(rows: WaecRow[]) {
     setWaecRows(rows);
     setDirty(true);
   }
 
-  // Selecting an institution from the Combobox sets both the name and the
-  // type in one step -- there's no separate "institution type" question
-  // anymore, since the type comes from the matched institution record.
   function selectInstitution(name: string) {
     const type = institutionTypeFor(name);
     setForm((f) => ({
@@ -259,22 +224,12 @@ function OnboardingForm() {
     setDirty(true);
   }
 
-  // AUDIT FIX (batch 4): escape hatch for schools missing from the
-  // curated list (lib/data/institutions.ts). Swapping modes clears both
-  // institution fields on purpose -- a half-typed value carried across
-  // modes could silently save the wrong thing on Finish.
   function toggleManualInstitution() {
     setManualInstitution((m) => !m);
     setForm((f) => ({ ...f, institution_name: "", institution_type: "" }));
     setDirty(true);
   }
 
-  // NEW (user feedback batch): escape hatch for courses missing from the
-  // curated list (lib/data/courses.ts). Same swap-clears-field pattern
-  // as toggleManualInstitution -- a half-typed Combobox filter that never
-  // committed must not carry over into the free-text input, and vice
-  // versa. The discipline column is already free text, so a manual entry
-  // saves straight to the DB with no conversion step.
   function toggleManualDiscipline() {
     setManualDiscipline((m) => !m);
     setForm((f) => ({ ...f, discipline: "" }));
@@ -330,12 +285,7 @@ function OnboardingForm() {
         institution_name: form.institution_name.trim() || null,
         institution_type: form.institution_type || null,
         jamb_score: form.jamb_score ? Number(form.jamb_score) : null,
-        // waec_credit_count / has_english_maths_credit are intentionally
-        // omitted here -- they're derived automatically by the
-        // sync_waec_summary_fields() Postgres trigger from whatever gets
-        // saved to /api/profile/waec just below, so sending a manually
-        // tracked value from this form would only be overwritten a moment
-        // later anyway.
+        waec_credit_count: form.waec_credit_count ? Number(form.waec_credit_count) : null,
         disability_status: form.disability_status,
         has_valid_id: form.has_valid_id,
         has_transcript: form.has_transcript,
@@ -358,17 +308,13 @@ function OnboardingForm() {
     const waecRes = await fetch("/api/profile/waec", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        results: validWaecRows.map((r) => ({ subject: r.subject, grade: r.grade })),
-      }),
+      body: JSON.stringify({ results: validWaecRows.map((r) => ({ subject: r.subject, grade: r.grade })) }),
     });
     setSaving(false);
     if (!waecRes.ok) {
       setError("Your profile saved, but your WAEC results didn't. You can retry from this page.");
       return;
     }
-    // Everything is safely server-side now -- the local bridge draft has
-    // done its job, and the close-guard must not fire on the way out.
     setDirty(false);
     clearDraft();
     router.push("/dashboard");
@@ -376,15 +322,10 @@ function OnboardingForm() {
   }
 
   async function handleSkip() {
-    // Deliberately does NOT clear the draft -- skipping is "later," not
-    // "never," and the next visit restores right where this one stopped.
     router.push("/dashboard");
   }
 
   if (loading) {
-    // Mirrors the real layout below (header, StepIndicator, card with
-    // heading/subtext/fields) instead of a plain "Loading your profile..."
-    // line, so the page doesn't visibly re-lay-out once data arrives.
     return (
       <div className="min-h-screen bg-parchment">
         <header className="border-b border-hairline bg-white">
@@ -413,10 +354,6 @@ function OnboardingForm() {
                 </div>
               ))}
             </div>
-            <div className="flex items-center justify-between mt-6 pt-6 border-t border-hairline">
-              <Skeleton className="h-4 w-10" />
-              <Skeleton className="h-10 w-28 rounded-seal" />
-            </div>
           </div>
         </main>
       </div>
@@ -428,10 +365,7 @@ function OnboardingForm() {
       <header className="border-b border-hairline bg-white">
         <div className="mx-auto max-w-2xl px-6 py-5 flex items-center justify-between">
           <Logo className="text-navy" />
-          <button
-            onClick={handleSkip}
-            className="text-sm text-navy-light hover:text-navy"
-          >
+          <button onClick={handleSkip} className="text-sm text-navy-light hover:text-navy">
             Skip for now
           </button>
         </div>
@@ -447,255 +381,109 @@ function OnboardingForm() {
           </h1>
           <p className="text-sm text-navy-light mb-8">
             {step === 0 && "Tell us who you are so we can personalize your matches."}
-            {step === 1 && "Your institution and field of study -- this drives most of your matches."}
+            {step === 1 && "Your institution and field of study drive most of your matches."}
             {step === 2 && "JAMB and WAEC results -- most Nigerian scholarships gate on these directly."}
             {step === 3 && "Tell us which documents you already have ready to submit."}
           </p>
+
           {step === 0 && (
             <>
               <FormField label="Full name">
-                <input
-                  className={inputClass}
-                  type="text"
-                  value={form.full_name}
-                  onChange={(e) => update("full_name", e.target.value)}
-                  placeholder="Enter your full name"
-                />
+                <input className={inputClass} type="text" value={form.full_name} onChange={(e) => update("full_name", e.target.value)} placeholder="Enter your full name" />
               </FormField>
               <FormField label="Date of birth" hint="Used to check age-based eligibility rules.">
-                <input
-                  className={inputClass}
-                  type="date"
-                  value={form.date_of_birth}
-                  onChange={(e) => update("date_of_birth", e.target.value)}
-                />
+                <input className={inputClass} type="date" value={form.date_of_birth} onChange={(e) => update("date_of_birth", e.target.value)} />
               </FormField>
-              {/* PRIVACY TRANSPARENCY (user feedback batch): a student
-                  asked "will the developer see my personal details". The
-                  honest answer is yes -- admins can read profile rows via
-                  the Supabase dashboard. Rather than hide that fact, we
-                  state it plainly here alongside the real privacy
-                  promises: never sold, never shared with providers without
-                  explicit consent, deletable at any time from Settings. */}
-              <div className="rounded-lg bg-navy-50 border border-hairline px-3.5 py-2.5 -mt-2 mb-4">
-                <p className="text-xs text-navy-light leading-relaxed">
-                  <strong className="text-navy">Who can see this?</strong> Only the small Scholars
-                  team, to run your matches and respond to support requests. Scholarship providers
-                  never see your profile -- they only see the applications you choose to send them.
-                  We don&apos;t sell or share your data, and you can delete your account and everything
-                  in it from Settings at any time.
-                </p>
-              </div>
               <FormField label="Nationality">
-                <input
-                  className={inputClass}
-                  list="nationality-suggestions"
-                  value={form.nationality}
-                  onChange={(e) => update("nationality", e.target.value)}
-                  placeholder="e.g. Nigerian"
-                />
+                <input className={inputClass} list="nationality-suggestions" value={form.nationality} onChange={(e) => update("nationality", e.target.value)} placeholder="e.g. Nigerian" />
                 <datalist id="nationality-suggestions">
-                  {NATIONALITY_SUGGESTIONS.map((n) => (
-                    <option key={n} value={n} />
-                  ))}
+                  {NATIONALITY_SUGGESTIONS.map((n) => (<option key={n} value={n} />))}
                 </datalist>
               </FormField>
               <FormField label="State of origin" hint="Many state government scholarships require an exact match.">
-                <select
-                  className={selectClass}
-                  value={form.state_of_origin}
-                  onChange={(e) => update("state_of_origin", e.target.value)}
-                >
+                <select className={selectClass} value={form.state_of_origin} onChange={(e) => updateStateOfOrigin(e.target.value)}>
                   <option value="">Select a state</option>
-                  {NIGERIAN_STATES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
+                  {NIGERIAN_STATES.map((s) => (<option key={s} value={s}>{s}</option>))}
                 </select>
               </FormField>
-              <FormField label="LGA of origin">
-                <input
-                  className={inputClass}
-                  type="text"
-                  value={form.lga_of_origin}
-                  onChange={(e) => update("lga_of_origin", e.target.value)}
-                  placeholder="e.g. Ikeja"
-                />
+              <FormField
+                label="LGA of origin"
+                hint={form.state_of_origin ? undefined : "Select your state of origin first."}
+              >
+                {form.state_of_origin ? (
+                  <Combobox
+                    options={lgaOptions}
+                    value={form.lga_of_origin}
+                    onChange={(value) => update("lga_of_origin", value)}
+                    placeholder={`Search ${form.state_of_origin} LGAs`}
+                    emptyMessage={`No LGA matches in ${form.state_of_origin}.`}
+                  />
+                ) : (
+                  <input className={inputClass + " opacity-60"} type="text" disabled placeholder="Select your state first" value="" onChange={() => {}} />
+                )}
               </FormField>
               <FormField label="Gender (optional)">
-                <select
-                  className={selectClass}
-                  value={form.gender}
-                  onChange={(e) => update("gender", e.target.value)}
-                >
+                <select className={selectClass} value={form.gender} onChange={(e) => update("gender", e.target.value)}>
                   <option value="">Prefer not to say</option>
-                  {GENDER_OPTIONS.map((g) => (
-                    <option key={g} value={g}>
-                      {g}
-                    </option>
-                  ))}
+                  {GENDER_OPTIONS.map((g) => (<option key={g} value={g}>{g}</option>))}
                 </select>
               </FormField>
             </>
           )}
+
           {step === 1 && (
             <>
-              <FormField
-                label="Field of study / discipline"
-                hint={
-                  manualDiscipline
-                    ? "Type your course's official name exactly as it appears on your admission letter -- we use this for matching."
-                    : "Search and select -- typing the exact course name works too."
-                }
-              >
+              <FormField label="Field of study / discipline" hint="Search and select -- typing the exact course name works too.">
                 {manualDiscipline ? (
-                  <input
-                    className={inputClass}
-                    type="text"
-                    value={form.discipline}
-                    onChange={(e) => update("discipline", e.target.value)}
-                    placeholder="e.g. Mechatronics Engineering"
-                  />
+                  <input className={inputClass} type="text" value={form.discipline} onChange={(e) => update("discipline", e.target.value)} placeholder="e.g. Mechatronics Engineering" />
                 ) : (
-                  <Combobox
-                    options={DISCIPLINE_COMBO_OPTIONS}
-                    value={form.discipline}
-                    onChange={(value) => update("discipline", value)}
-                    placeholder="Search a course, e.g. Computer Science"
-                  />
+                  <Combobox options={DISCIPLINE_COMBO_OPTIONS} value={form.discipline} onChange={(value) => update("discipline", value)} placeholder="Search a course, e.g. Computer Science" />
                 )}
               </FormField>
-              {/* DISCIPLINE ESCAPE HATCH (user feedback batch): a FUTA
-                  student reported his new course isn't in the list. The
-                  curated list in lib/data/courses.ts will never stay
-                  current -- new courses appear every academic session.
-                  Mirrors the existing institution escape hatch pattern
-                  exactly, so the UX is already familiar. Swapping modes
-                  clears the field on purpose (see toggleManualDiscipline). */}
-              <button
-                type="button"
-                onClick={toggleManualDiscipline}
-                className="-mt-2 mb-4 text-xs font-medium text-navy hover:underline"
-              >
-                {manualDiscipline
-                  ? "Search the list instead"
-                  : "Can't find your course? Enter it manually"}
+              <button type="button" onClick={toggleManualDiscipline} className="-mt-2 mb-4 text-xs font-medium text-navy hover:underline">
+                {manualDiscipline ? "Search the list instead" : "Can't find your course? Enter it manually"}
               </button>
-              <FormField
-                label="Institution"
-                hint={
-                  manualInstitution
-                    ? "Type your school's official name and pick its type -- we use both for matching."
-                    : "Search and select -- this sets your institution type automatically, so there's nothing else to fill in here."
-                }
-              >
+              <FormField label="Institution" hint={manualInstitution ? "Type your school's official name and pick its type." : "Search and select -- this sets your institution type automatically."}>
                 {manualInstitution ? (
                   <div className="space-y-2">
-                    <input
-                      className={inputClass}
-                      type="text"
-                      value={form.institution_name}
-                      onChange={(e) => update("institution_name", e.target.value)}
-                      placeholder="e.g. Federal University of Technology, Akure"
-                    />
-                    <select
-                      className={selectClass}
-                      value={form.institution_type}
-                      onChange={(e) => update("institution_type", e.target.value as ProfileForm["institution_type"])}
-                    >
+                    <input className={inputClass} type="text" value={form.institution_name} onChange={(e) => update("institution_name", e.target.value)} placeholder="e.g. Federal University of Technology, Akure" />
+                    <select className={selectClass} value={form.institution_type} onChange={(e) => update("institution_type", e.target.value as ProfileForm["institution_type"])}>
                       <option value="">Select institution type</option>
-                      {INSTITUTION_TYPE_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
+                      {INSTITUTION_TYPE_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
                     </select>
                   </div>
                 ) : (
-                  <Combobox
-                    options={INSTITUTION_OPTIONS}
-                    value={form.institution_name}
-                    onChange={selectInstitution}
-                    placeholder="Search your university, polytechnic, or college"
-                  />
+                  <Combobox options={INSTITUTION_OPTIONS} value={form.institution_name} onChange={selectInstitution} placeholder="Search your university, polytechnic, or college" />
                 )}
               </FormField>
-              {/* AUDIT FIX (batch 4): the curated institution list will
-                  never cover every school, and a hard stop here was a
-                  documented onboarding drop-off. The escape hatch swaps
-                  in a free-text name + explicit type select. */}
-              <button
-                type="button"
-                onClick={toggleManualInstitution}
-                className="-mt-2 mb-4 text-xs font-medium text-navy hover:underline"
-              >
+              <button type="button" onClick={toggleManualInstitution} className="-mt-2 mb-4 text-xs font-medium text-navy hover:underline">
                 {manualInstitution ? "Search the list instead" : "Can't find your school? Enter it manually"}
               </button>
               <FormField label="Year of study" hint="Some scholarships only cover early or final years.">
-                <select
-                  className={selectClass}
-                  value={form.year_of_study}
-                  onChange={(e) => update("year_of_study", e.target.value)}
-                >
+                <select className={selectClass} value={form.year_of_study} onChange={(e) => update("year_of_study", e.target.value)}>
                   <option value="">Select</option>
-                  {YEAR_OF_STUDY_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
+                  {YEAR_OF_STUDY_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
                 </select>
               </FormField>
               <FormField label="GPA / CGPA (optional)" hint="Enter it on your institution's own scale, e.g. 3.72.">
-                <input
-                  className={inputClass}
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="5"
-                  value={form.gpa}
-                  onChange={(e) => update("gpa", e.target.value)}
-                  placeholder="3.72"
-                />
+                <input className={inputClass} type="number" step="0.01" min="0" max="5" value={form.gpa} onChange={(e) => update("gpa", e.target.value)} placeholder="3.72" />
               </FormField>
             </>
           )}
+
           {step === 2 && (
             <>
               <FormField label="JAMB / UTME score (optional)">
-                <input
-                  className={inputClass}
-                  type="number"
-                  min="0"
-                  max="400"
-                  value={form.jamb_score}
-                  onChange={(e) => update("jamb_score", e.target.value)}
-                  placeholder="e.g. 280"
-                />
+                <input className={inputClass} type="number" min="0" max="400" value={form.jamb_score} onChange={(e) => update("jamb_score", e.target.value)} placeholder="e.g. 280" />
               </FormField>
-              <FormField
-                label="WAEC / NECO / NABTEB results"
-                hint="Add each subject and the grade you got -- your credit count and English/Maths status are worked out from this automatically."
-              >
+              <FormField label="WAEC / NECO / NABTEB results" hint="Add each subject and the grade you got -- credit count and English/Maths status are derived automatically.">
                 <WaecResultsEditor rows={waecRows} onChange={updateWaecRows} />
               </FormField>
               <FormField label="Do you have significant financial need?">
                 <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { label: "Yes", value: true },
-                    { label: "No", value: false },
-                  ].map((opt) => (
-                    <button
-                      key={opt.label}
-                      type="button"
-                      onClick={() => update("financial_need", opt.value)}
-                      className={[
-                        "rounded-lg border px-4 py-3 text-sm font-medium transition-colors",
-                        form.financial_need === opt.value
-                          ? "border-navy bg-navy-50 text-navy"
-                          : "border-hairline text-navy-light hover:border-navy/40",
-                      ].join(" ")}
-                    >
+                  {[{ label: "Yes", value: true }, { label: "No", value: false }].map((opt) => (
+                    <button key={opt.label} type="button" onClick={() => update("financial_need", opt.value)}
+                      className={["rounded-lg border px-4 py-3 text-sm font-medium transition-colors", form.financial_need === opt.value ? "border-navy bg-navy-50 text-navy" : "border-hairline text-navy-light hover:border-navy/40"].join(" ")}>
                       {opt.label}
                     </button>
                   ))}
@@ -703,21 +491,9 @@ function OnboardingForm() {
               </FormField>
               <FormField label="Do you live with a disability?">
                 <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { label: "Yes", value: true },
-                    { label: "No", value: false },
-                  ].map((opt) => (
-                    <button
-                      key={opt.label}
-                      type="button"
-                      onClick={() => update("disability_status", opt.value)}
-                      className={[
-                        "rounded-lg border px-4 py-3 text-sm font-medium transition-colors",
-                        form.disability_status === opt.value
-                          ? "border-navy bg-navy-50 text-navy"
-                          : "border-hairline text-navy-light hover:border-navy/40",
-                      ].join(" ")}
-                    >
+                  {[{ label: "Yes", value: true }, { label: "No", value: false }].map((opt) => (
+                    <button key={opt.label} type="button" onClick={() => update("disability_status", opt.value)}
+                      className={["rounded-lg border px-4 py-3 text-sm font-medium transition-colors", form.disability_status === opt.value ? "border-navy bg-navy-50 text-navy" : "border-hairline text-navy-light hover:border-navy/40"].join(" ")}>
                       {opt.label}
                     </button>
                   ))}
@@ -725,6 +501,7 @@ function OnboardingForm() {
               </FormField>
             </>
           )}
+
           {step === 3 && (
             <>
               <p className="text-sm font-medium text-ink mb-3">Documents ready to submit</p>
@@ -736,55 +513,31 @@ function OnboardingForm() {
                   { key: "has_personal_statement" as const, label: "Personal statement / letter of motivation" },
                   { key: "has_lga_certificate" as const, label: "LGA / state of origin certificate" },
                 ].map((item) => (
-                  <label
-                    key={item.key}
-                    className="flex items-center gap-3 rounded-lg border border-hairline px-4 py-3 cursor-pointer hover:border-navy/40"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={form[item.key]}
-                      onChange={(e) => update(item.key, e.target.checked)}
-                      className="rounded border-hairline"
-                    />
+                  <label key={item.key} className="flex items-center gap-3 rounded-lg border border-hairline px-4 py-3 cursor-pointer hover:border-navy/40">
+                    <input type="checkbox" checked={form[item.key]} onChange={(e) => update(item.key, e.target.checked)} className="rounded border-hairline" />
                     <span className="text-sm text-ink">{item.label}</span>
                   </label>
                 ))}
               </div>
               <FormField label="Career goals (optional)" hint="A sentence or two -- helps us surface relevant awards.">
-                <textarea
-                  className={textareaClass}
-                  value={form.career_goals}
-                  onChange={(e) => update("career_goals", e.target.value)}
-                  placeholder="e.g. Become a research scientist focused on renewable energy."
-                />
+                <textarea className={textareaClass} value={form.career_goals} onChange={(e) => update("career_goals", e.target.value)} placeholder="e.g. Become a research scientist focused on renewable energy." />
               </FormField>
             </>
           )}
+
           {error && <p className="text-sm text-rose mb-4">{error}</p>}
           <div className="flex items-center justify-between mt-6 pt-6 border-t border-hairline">
-            <button
-              type="button"
-              onClick={goBack}
-              disabled={step === 0 || saving}
-              className="text-sm font-medium text-navy-light hover:text-navy disabled:opacity-0 disabled:pointer-events-none"
-            >
+            <button type="button" onClick={goBack} disabled={step === 0 || saving}
+              className="text-sm font-medium text-navy-light hover:text-navy disabled:opacity-0 disabled:pointer-events-none">
               Back
             </button>
             {step < STEPS.length - 1 ? (
-              <button
-                type="button"
-                onClick={goNext}
-                className="rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors"
-              >
+              <button type="button" onClick={goNext} className="rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors">
                 Continue
               </button>
             ) : (
-              <button
-                type="button"
-                onClick={handleFinish}
-                disabled={saving}
-                className="inline-flex items-center gap-2 rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60"
-              >
+              <button type="button" onClick={handleFinish} disabled={saving}
+                className="inline-flex items-center gap-2 rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60">
                 {saving && (
                   <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -801,11 +554,6 @@ function OnboardingForm() {
   );
 }
 
-// useSearchParams() (used above to support /onboarding?step=N deep links
-// from nudge CTAs) requires a Suspense boundary in the App Router -- same
-// fix already applied in app/(auth)/login/page.tsx. Without this, "next
-// build" fails prerendering /onboarding with "useSearchParams() should be
-// wrapped in a suspense boundary".
 export default function OnboardingPage() {
   return (
     <Suspense fallback={null}>
