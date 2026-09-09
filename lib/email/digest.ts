@@ -1,20 +1,19 @@
 // lib/email/digest.ts
-// New-listing digest, extracted from app/api/cron/deadline-check/route.ts
-// so the scheduled cron AND the admin manual trigger
-// (app/api/admin/digest/route.ts) run the exact same logic.
+// New-listing digest, shared by the scheduled cron and the admin manual
+// trigger (app/api/admin/digest/route.ts) so both run identical logic.
 //
-// Semantics (unchanged from the cron's phase 2):
-//   - Collect every verified scholarship (undergrad/both) and opportunity
-//     created in the last DIGEST_WINDOW_DAYS days.
+// Semantics:
+//   - Collect every verified scholarship (undergrad or both) and every
+//     verified opportunity created in the last DIGEST_WINDOW_DAYS days.
 //   - Per student, skip listings already present in announcement_log, so
 //     each student receives each listing exactly once, ever.
 //   - Bundle everything pending into ONE email (max DIGEST_CAP tiles plus
-//     an "and N more" line), never one email per listing.
-//   - minIntervalMs (the per-student re-blast throttle) is applied only
-//     when the caller passes it: the cron passes 2 hours, the admin manual
-//     trigger passes 0 because an admin pressing the button just added
-//     listings and wants them out now. Listing-level dedupe still holds.
-//   - Record every pending listing in announcement_log AFTER a successful
+//     an "and N more" line). Never one email per listing.
+//   - minIntervalMs is the per-student re-blast throttle. The cron passes
+//     2 hours; the admin button passes 0 because an admin pressing it just
+//     added listings and wants them out now. Listing-level dedupe still
+//     holds either way.
+//   - Record every pending listing in announcement_log after a successful
 //     send (or a dry run), so nothing is re-announced later.
 import { createServiceClient } from '@/lib/supabase/service'
 import { logError } from '@/lib/logging'
@@ -84,7 +83,7 @@ export async function runNewListingDigest(opts: { minIntervalMs?: number } = {})
     const oppList = (newOpp ?? []) as { id: string; type: string; title: string; provider_name: string; compensation: string | null; deadline: string | null }[]
     for (const p of (profiles ?? []) as { id: string; email: string; full_name: string | null }[]) {
       const last = lastDigestAt.get(p.id)
-      if (minIntervalMs > 0 && last && now - last < minIntervalMs) continue // inside throttle
+      if (minIntervalMs > 0 && last && now - last < minIntervalMs) continue
       const pendingSch = schList.filter((s) => !announced.has(`${p.id}:scholarship:${s.id}`))
       const pendingOpp = oppList.filter((o) => !announced.has(`${p.id}:opportunity:${o.id}`))
       if (pendingSch.length === 0 && pendingOpp.length === 0) continue
