@@ -7,9 +7,9 @@
 -- object name 'about-portrait.jpg' means the page never needs a DB row to
 -- know the URL; existence is probed with a storage list() at render time.
 --
--- NOT YET APPLIED. Run in the Supabase SQL editor (or MCP execute_sql).
--- Until it is applied, /about renders its placeholder and the uploader
--- surfaces a clear error; nothing else breaks.
+-- APPLIED LIVE via the Supabase SQL editor. This file is now a reference
+-- record only, per project convention -- do not re-run against the live
+-- project.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('site', 'site', true, 5242880, array['image/jpeg', 'image/png', 'image/webp'])
 on conflict (id) do nothing;
