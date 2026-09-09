@@ -1,18 +1,10 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, createContext, useContext } from "react";
 import { usePathname } from "next/navigation";
 import { Confetti } from "@/components/Confetti";
 import { fetchWithTimeout } from "@/lib/fetch";
 import type { AdePrompt } from "@/lib/ade/types";
 
-// components/ade/AdeProvider.tsx
-//
-// ROUTE GATE (test feedback): Ade lives ONLY on the app routes below,
-// matched by exact path or prefix. /login, /signup, /reset-password and
-// every public marketing route (landing, /s/[id], /legal, /about) are
-// deliberately absent, so the mascot bubble can never sit on top of a
-// sign-in form or a marketing page. This is an allow-list, not a
-// deny-list: a new route gets no Ade until it is added here on purpose.
 const ADE_ROUTES = [
   "/dashboard",
   "/applications",
@@ -35,7 +27,7 @@ type AchievementPrompt = {
 };
 type Prompt = CheckinPrompt | AchievementPrompt;
 
-const TIER_CONFETTI: Record<string, string[]> = {
+const TIER_CONFETTI* Record<string, string[]> = {
   bronze: ["#0B1E3D", "#966216", "#14315C"],
   silver: ["#0B1E3D", "#15705A", "#14315C"],
   gold: ["#966216", "#15705A", "#0B1E3D"],
@@ -44,9 +36,23 @@ const TIER_CONFETTI: Record<string, string[]> = {
 const STATUS_OPTIONS: { value: "submitted" | "accepted" | "rejected" | "in_progress"; label: string }[] = [
   { value: "submitted", label: "I submitted it" },
   { value: "accepted", label: "I got it" },
-  { value: "rejected", label: "It didn't work out" },
+  { value: "rejected", label: "It did not work out" },
   { value: "in_progress", label: "Still working on it" },
 ];
+
+type AdeContextValue = {
+  poll: () => Promise<void>;
+};
+
+const AdeContext = createContext<AdeContextValue | null>(null);
+
+export function useAde(): AdeContextValue {
+  const ctx = useContext(AdeContext);
+  if (!ctx) {
+    return { poll: async () => {} };
+  }
+  return ctx;
+}
 
 export function AdeProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -61,6 +67,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
   const confettiShownRef = useRef<Set<string>>(new Set());
 
   const poll = useCallback(async () => {
+    if (!isActive) return;
     try {
       const res = await fetchWithTimeout("/api/mascot/next-prompt", { timeoutMs: 8000 });
       if (!res.ok) {
@@ -81,10 +88,9 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
         window.setTimeout(() => setAttention(false), 2000);
       }
     } catch {
-      // Ade is best-effort by design: a failed poll never surfaces an
-      // error to the student, it just means no prompt this time.
+      // silent
     }
-  }, []);
+  }, [isActive]);
 
   useEffect(() => {
     if (!isActive) {
@@ -108,9 +114,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-    } catch {
-      // silent: the check-in will resurface on a later poll
-    }
+    } catch {}
     setBusy(false);
     setOpen(false);
     lastKeyRef.current = null;
@@ -124,9 +128,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ achievement_id: achievementId }),
       });
-    } catch {
-      // silent
-    }
+    } catch {}
     setOpen(false);
     lastKeyRef.current = null;
     poll();
@@ -140,8 +142,10 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const contextValue: AdeContextValue = { poll };
+
   return (
-    <>
+    <AdeContext.Provider value={contextValue}>
       {children}
       {confettiColors && <Confetti colors={confettiColors} />}
       {isActive && prompt && (
@@ -153,7 +157,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                   <p className="font-display text-base font-semibold text-navy mb-1">Ade says hi</p>
                   <p className="text-sm text-ink leading-relaxed mb-4">
                     How did it go with{" "}
-                    <span className="font-medium">{prompt.scholarshipTitle}</span>?
+                    <span className="font-medium">{prompt.scholarshipTitle}</span?>
                     {prompt.reason === "clicked"
                       ? " You opened the application link last time."
                       : " The deadline has passed."}
@@ -221,6 +225,6 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
           </button>
         </div>
       )}
-    </>
+    </AdeContext.Provider>
   );
 }
