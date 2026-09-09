@@ -24,15 +24,12 @@ export default async function OpportunitiesPage() {
   if (!user) {
     return null;
   }
-
   const supabase = createClient();
   const savedResult = await supabase
     .from("saved_opportunities")
     .select(`id, saved_at, opportunity:opportunities!inner ( ${OPPORTUNITY_COLUMNS} )`)
     .eq("profile_id", user.id)
     .order("saved_at", { ascending: false });
-
   const saved = (savedResult.data ?? []) as unknown as SavedApiItem[];
-
-  return <OpportunitiesClient initialSaved={saved} />;
+  return <OpportunitiesClient initialSaved={saved} userId={user.id} />;
 }
