@@ -42,6 +42,13 @@ const STATUS_OPTIONS: { value: "submitted" | "accepted" | "rejected" | "in_progr
 
 type AdeContextValue = {
   poll: () => Promise<void>;
+  confirmApply: (params: {
+    scholarshipTitle: string;
+    applicationUrl: string | null;
+    alreadyTracked: boolean;
+    applicationId: string;
+    onTrack: () => Promise<{ id: string }>;
+  }) => Promise<void>;
 };
 
 const AdeContext = createContext<AdeContextValue | null>(null);
@@ -49,7 +56,10 @@ const AdeContext = createContext<AdeContextValue | null>(null);
 export function useAde(): AdeContextValue {
   const ctx = useContext(AdeContext);
   if (!ctx) {
-    return { poll: async () => {} };
+    return {
+      poll: async () => {},
+      confirmApply: async () => {},
+    };
   }
   return ctx;
 }
@@ -91,6 +101,48 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
       // silent
     }
   }, [isActive]);
+
+  // confirmApply: handles the "apply on provider site" flow. When a student
+  // clicks to apply, this records the click (so Ade can follow up later),
+  // opens the provider URL in a new tab, and triggers a poll so any new
+  // check-in prompts surface immediately. The onTrack callback is called
+  // when the application is already being tracked (alreadyTracked=true) or
+  // after tracking succeeds.
+  const confirmApply = useCallback(async (params: {
+    scholarshipTitle: string;
+    applicationUrl: string | null;
+    alreadyTracked: boolean;
+    applicationId: string;
+    onTrack: () => Promise<{ id: string }>;
+  }) => {
+    const { applicationUrl, alreadyTracked, applicationId, onTrack } = params;
+    
+    // If not already tracked, the caller should have handled tracking first.
+    // This function assumes the application exists.
+    if (alreadyTracked && applicationUrl) {
+      // Record the click so Ade can follow up later
+      try {
+        await fetchWithTimeout(`/api/applications/${applicationId}/click`, {
+          method: "POST",
+        });
+      } catch {
+        // silent: click tracking is best-effort
+      }
+      
+      // Open the provider site
+      window.open(applicationUrl, "_blank", "noopener,noreferrer");
+    }
+    
+    // Call the onTrack callback
+    try {
+      await onTrack();
+    } catch {
+      // silent: caller handles errors
+    }
+    
+    // Trigger a poll to surface any new prompts
+    await poll();
+  }, [poll]);
 
   useEffect(() => {
     if (!isActive) {
@@ -142,7 +194,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const contextValue: AdeContextValue = { poll };
+  const contextValue: AdeContextValue = { poll, confirmApply };
 
   return (
     <AdeContext.Provider value={contextValue}>
