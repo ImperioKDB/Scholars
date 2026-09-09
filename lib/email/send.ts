@@ -1,11 +1,11 @@
 // lib/email/send.ts
-// Shared Brevo transactional send wrapper, extracted from the cron route
-// so the deadline-reminder phase and the new-listing digest (whether fired
-// by the cron or by the admin manual trigger) use one implementation.
+// Shared Brevo transactional send wrapper so the cron and the admin
+// manual trigger use one implementation.
 //
-// Dry-run safe, same posture as before: missing BREVO_API_KEY or
-// REMINDER_FROM_EMAIL logs and returns dry:true instead of throwing, so a
-// misconfigured environment never breaks the caller's flow.
+// Dry-run safe: missing BREVO_API_KEY or REMINDER_FROM_EMAIL logs and
+// returns dry:true instead of throwing, so a misconfigured environment
+// never breaks the caller. The digest summary surfaces dry_run so the
+// admin UI can say honestly that nothing was sent.
 import { logWarn } from '@/lib/logging'
 
 export type SendResult = { sent: number; failed: number; dry: boolean }
