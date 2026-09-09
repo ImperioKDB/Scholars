@@ -6,13 +6,12 @@ import { fetchWithTimeout } from "@/lib/fetch";
 
 // components/admin/SendDigestButton.tsx
 //
-// Manual trigger for the new-listing digest (POST /api/admin/digest).
-// Confirms first because sending email is irreversible, then reports the
-// server's summary honestly: how many students were emailed, how many
-// listings were announced, or why nothing went out (dry run, or every
-// student already up to date).
+// The manual digest trigger on the admin overview. Confirms first because
+// sending email is irreversible, then reports the server summary honestly:
+// how many students were emailed and how many listings were announced, or
+// why nothing went out (dry run, or everyone already up to date).
 //
-// Long timeout (120s) because a digest loops every student sequentially;
+// Long timeout (120s) because the digest loops every student sequentially;
 // the route itself allows up to 300s.
 export function SendDigestButton({ lastDigestAt }: { lastDigestAt: string | null }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -37,7 +36,7 @@ export function SendDigestButton({ lastDigestAt }: { lastDigestAt: string | null
       const { summary } = await res.json();
       if (summary.dry_run) {
         setNotice(
-          `Dry run: email isn't configured on the server, so ${summary.students_emailed} digest(s) were evaluated but nothing was sent.`
+          `Dry run: email is not configured on the server, so ${summary.students_emailed} digest(s) were prepared but nothing was sent.`
         );
       } else if (summary.students_emailed === 0) {
         setNotice("Nothing new to announce. Every student is already up to date on the last 7 days of listings.");
@@ -71,8 +70,6 @@ export function SendDigestButton({ lastDigestAt }: { lastDigestAt: string | null
           onConfirm={send}
           onClose={() => !busy && setConfirmOpen(false)}
           confirmLabel="Send digest"
-          cancelLabel="Cancel"
-          tone="navy"
         />
       )}
       <div className="flex flex-wrap items-center gap-3">
@@ -80,7 +77,7 @@ export function SendDigestButton({ lastDigestAt }: { lastDigestAt: string | null
           type="button"
           onClick={() => setConfirmOpen(true)}
           disabled={busy}
-          className="rounded-seal bg-navy text-white text-sm font-medium px-5 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60"
+          className="rounded-seal bg-navy text-white text-sm font-medium px-5 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60 whitespace-nowrap"
         >
           {busy ? "Sending\u2026" : "Send new-listing digest now"}
         </button>
