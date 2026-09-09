@@ -9,21 +9,18 @@ import { PasswordField } from "@/components/PasswordField";
 import { validatePasswordStrength } from "@/lib/auth/password";
 import { normalizeEmail } from "@/lib/auth/email";
 
-// Shown after a successful signUp() call when Supabase did NOT return a
-// live session -- i.e. email confirmation is required. Sending someone to
-// /onboarding at this point is a dead end: it's a protected route, there's
-// no session yet, and middleware.ts just bounces them to /login, a page
-// that can't do anything for an account that isn't confirmed yet.
-//
-// Confirmation is link-only (product decision): the email carries a magic
-// link that lands on /auth/callback and establishes the session there. An
-// OTP code entry was prototyped during the auth audit and removed -- with
-// the project configured for links, the code form could only ever error,
-// so it added friction without a working path.
+// REDIRECT FIX (test feedback): same canonical-origin rule as the login
+// page, applied to both the Google OAuth redirectTo and the email
+// confirmation emailRedirectTo, so neither flow can be bounced to the
+// Supabase Site URL (homepage) by allowlist drift.
+function appBase(): string {
+  if (typeof window === "undefined") return process.env.NEXT_PUBLIC_APP_URL || "";
+  return process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+}
+
 function CheckEmailScreen({ email, onResend }: { email: string; onResend: () => Promise<void> }) {
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
-
   async function handleResend() {
     setResending(true);
     setResent(false);
@@ -31,7 +28,6 @@ function CheckEmailScreen({ email, onResend }: { email: string; onResend: () => 
     setResending(false);
     setResent(true);
   }
-
   return (
     <AuthShell heading="Check your email" sub="One more step before you can sign in.">
       <div className="rounded-xl border border-hairline bg-navy-50 p-5 mb-6">
@@ -46,7 +42,7 @@ function CheckEmailScreen({ email, onResend }: { email: string; onResend: () => 
         disabled={resending}
         className="w-full rounded-lg border border-hairline bg-white py-2.5 text-sm font-medium text-ink hover:bg-navy-50 transition-colors disabled:opacity-60"
       >
-        {resending ? "Sending\u2026" : resent ? "Sent again \u2713" : "Resend confirmation email"}
+        {resending ? "Sending…" : resent ? "Sent again ✓" : "Resend confirmation email"}
       </button>
       <p className="text-sm text-navy-light mt-8 text-center">
         Already confirmed?{" "}
@@ -68,27 +64,17 @@ export default function SignupPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
-
-  // Normalize once per render so signUp, resend, and the confirm screen all
-  // see the same cleaned address (no stray spaces / invisible chars).
   const cleanEmail = normalizeEmail(email);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-
-    // AUTH SECURITY AUDIT (password strength): client-side enforcement of
-    // the shared policy; Supabase's own policy is the server backstop.
     const issues = validatePasswordStrength(password);
     if (issues.length > 0) {
       setError("Password needs " + issues.join(", ") + ".");
       return;
     }
-
     setLoading(true);
-
-    // AUTH SECURITY AUDIT (breach check): fail-open -- a HIBP outage must
-    // never block signup, and the strength rules still apply either way.
     let breached = false;
     try {
       const leakRes = await fetch("/api/auth/password-check", {
@@ -107,25 +93,19 @@ export default function SignupPage() {
       setError("This password appears in known breach data. Pick something less common.");
       return;
     }
-
     const { data, error: signUpError } = await supabase.auth.signUp({
       email: cleanEmail,
       password,
       options: {
         data: { full_name: fullName },
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding`,
+        emailRedirectTo: `${appBase()}/auth/callback?next=/onboarding`,
       },
     });
     setLoading(false);
-
     if (signUpError) {
       setError(signUpError.message);
       return;
     }
-
-    // A session on the response means email confirmation is off for this
-    // project -- the account is immediately usable, so go straight in.
-    // No session means a confirmation link was sent instead.
     if (data.session) {
       router.push("/onboarding");
       return;
@@ -138,7 +118,7 @@ export default function SignupPage() {
     setGoogleLoading(true);
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=/onboarding` },
+      options: { redirectTo: `${appBase()}/auth/callback?next=/onboarding` },
     });
   }
 
@@ -201,7 +181,7 @@ export default function SignupPage() {
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
           )}
-          {loading ? "Creating account\u2026" : "Create account"}
+          {loading ? "Creating account…" : "Create account"}
         </button>
       </form>
       <div className="flex items-center gap-3 my-6">
@@ -220,7 +200,7 @@ export default function SignupPage() {
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
         )}
-        {googleLoading ? "Redirecting\u2026" : "Continue with Google"}
+        {googleLoading ? "Redirecting…" : "Continue with Google"}
       </button>
       <p className="text-sm text-navy-light mt-8 text-center">
         Already have an account?{" "}
