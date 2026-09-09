@@ -1,5 +1,7 @@
 "use client";
+
 import { ProviderMonogram } from "@/components/ProviderMonogram";
+import { ShareButton } from "@/components/ShareButton";
 import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
 
 export type CardOpportunity = {
@@ -89,17 +91,19 @@ export function OpportunityCard({
   saved,
   onToggleSave,
   pending,
+  sharerId,
 }: {
   opportunity: CardOpportunity;
   saved: boolean;
   onToggleSave: () => void;
   pending?: boolean;
+  sharerId?: string;
 }) {
   const applyHref = opportunity.application_url;
   return (
     <div className="relative bg-white rounded-xl border border-hairline p-5 flex flex-col gap-4 sm:flex-row shadow-card">
       <ProviderMonogram name={opportunity.provider_name} size={52} />
-      <div className="min-w-0 flex-1 sm:pr-10">
+      <div className="min-w-0 flex-1 sm:pr-24">
         <span className={`inline-block text-xs font-medium px-2 py-1 rounded-full mb-2 ${TYPE_TONE[opportunity.type]}`}>
           {TYPE_LABELS[opportunity.type]}
         </span>
@@ -134,7 +138,18 @@ export function OpportunityCard({
           ) : null}
         </div>
       </div>
-      <div className="absolute top-5 right-5">
+      {/* Same corner arrangement as ScholarshipCard: share + save sit at
+          z-10 over the card, with the ShareButton's ::after hit area
+          (44px tap target) kept clear of the save button by gap-3.5. */}
+      <div className="absolute top-5 right-5 z-10 flex items-center gap-3.5">
+        {sharerId && (
+          <ShareButton
+            variant="icon"
+            opportunityId={opportunity.id}
+            title={opportunity.title}
+            sharerId={sharerId}
+          />
+        )}
         <SaveButton saved={saved} pending={pending} onToggle={onToggleSave} />
       </div>
     </div>
