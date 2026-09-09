@@ -1,10 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MatchSeal } from "@/components/MatchSeal";
 import { BackLink } from "@/components/BackLink";
 import { ShareButton } from "@/components/ShareButton";
 import { DeadlineBadge } from "@/components/DeadlineBadge";
+import { ProviderMonogram } from "@/components/ProviderMonogram";
 import { CompetitivenessBadge, type CompetitivenessTier } from "@/components/CompetitivenessBadge";
 import { RequirementsList, type Requirement } from "@/components/RequirementsList";
 import { fetchWithTimeout } from "@/lib/fetch";
@@ -30,6 +32,16 @@ type ScholarshipDetail = {
   requirements: Requirement[];
 };
 
+export type SimilarScholarship = {
+  id: string;
+  title: string;
+  provider_name: string;
+  amount: string | null;
+  deadline: string | null;
+  level: "undergrad" | "postgrad" | "both";
+  discipline: string | null;
+};
+
 type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected";
 
 const TIER_LABELS: Record<ScholarshipDetail["tier"], string> = {
@@ -51,11 +63,13 @@ export function ScholarshipDetailClient({
   initialSaved,
   initialApplication,
   sharerId,
+  similar,
 }: {
   scholarship: ScholarshipDetail;
   initialSaved: boolean;
   initialApplication: { id: string; status: ApplicationStatus } | null;
   sharerId: string;
+  similar: SimilarScholarship[];
 }) {
   const router = useRouter();
   const [saved, setSaved] = useState(initialSaved);
@@ -204,6 +218,30 @@ export function ScholarshipDetailClient({
           <RequirementsList requirements={scholarship.requirements} />
         </div>
       </div>
+      {similar.length > 0 && (
+        <div className="mt-8">
+          <h2 className="font-display text-lg font-semibold text-navy mb-4">Similar scholarships</h2>
+          <div className="grid gap-3">
+            {similar.map((s) => (
+              <Link
+                key={s.id}
+                href={`/scholarships/${s.id}`}
+                className="bg-white rounded-xl border border-hairline p-4 flex items-center gap-4 shadow-card hover:border-navy/30 transition-colors"
+              >
+                <ProviderMonogram name={s.provider_name} size={44} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-ink text-sm leading-snug">{s.title}</p>
+                  <p className="text-xs text-navy-light mt-0.5">{s.provider_name}</p>
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  {s.amount && <span className="text-xs font-mono text-emerald">{s.amount}</span>}
+                  <DeadlineBadge deadline={s.deadline} />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
