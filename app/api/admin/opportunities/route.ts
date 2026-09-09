@@ -8,7 +8,7 @@
 // is_admin(auth.uid()), but profile.is_admin is also checked server-side so
 // a non-admin gets a clean 403 instead of a Postgres RLS error.
 import { NextResponse } from 'next/server'
-import { revalidatePath } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
