@@ -5,6 +5,7 @@
 //
 // Mirrors /api/admin/scholarships/[id].
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/navigation'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
@@ -58,7 +59,6 @@ async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>) 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const limited = await checkRateLimit(request, { route: 'admin-opportunities-id', limit: 60 })
   if (limited) return limited
-
   const { id } = await params
   const supabase = await createClient()
   const check = await requireAdmin(supabase)
@@ -83,13 +83,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+  // SHARE PAGES: this PATCH flips `verified` (unverify hides the /o/[id]
+  // page), so drop the ISR cache for this path too.
+  revalidatePath('/o/[id]')
   return NextResponse.json({ opportunity })
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const limited = await checkRateLimit(request, { route: 'admin-opportunities-id', limit: 60 })
   if (limited) return limited
-
   const { id } = await params
   const supabase = await createClient()
   const check = await requireAdmin(supabase)
@@ -98,5 +100,6 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+  revalidatePath('/o/[id]')
   return NextResponse.json({ message: 'Opportunity deleted' })
 }
