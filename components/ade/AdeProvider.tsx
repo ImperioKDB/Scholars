@@ -102,12 +102,6 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isActive]);
 
-  // confirmApply: handles the "apply on provider site" flow. When a student
-  // clicks to apply, this records the click (so Ade can follow up later),
-  // opens the provider URL in a new tab, and triggers a poll so any new
-  // check-in prompts surface immediately. The onTrack callback is called
-  // when the application is already being tracked (alreadyTracked=true) or
-  // after tracking succeeds.
   const confirmApply = useCallback(async (params: {
     scholarshipTitle: string;
     applicationUrl: string | null;
@@ -117,30 +111,24 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
   }) => {
     const { applicationUrl, alreadyTracked, applicationId, onTrack } = params;
     
-    // If not already tracked, the caller should have handled tracking first.
-    // This function assumes the application exists.
     if (alreadyTracked && applicationUrl) {
-      // Record the click so Ade can follow up later
       try {
         await fetchWithTimeout(`/api/applications/${applicationId}/click`, {
           method: "POST",
         });
       } catch {
-        // silent: click tracking is best-effort
+        // silent
       }
       
-      // Open the provider site
       window.open(applicationUrl, "_blank", "noopener,noreferrer");
     }
     
-    // Call the onTrack callback
     try {
       await onTrack();
     } catch {
-      // silent: caller handles errors
+      // silent
     }
     
-    // Trigger a poll to surface any new prompts
     await poll();
   }, [poll]);
 
@@ -190,7 +178,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
     setOpen((o) => !o);
     if (prompt?.type === "achievement" && !confettiShownRef.current.has(prompt.achievementId)) {
       confettiShownRef.current.add(prompt.achievementId);
-      setConfettiColors(TIER_CONFETTI[prompt.tier] ?? undefined ?? null);
+      setConfettiColors(TIER_CONFETTI[prompt.tier] ?? null);
     }
   }
 
