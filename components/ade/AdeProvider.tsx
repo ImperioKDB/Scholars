@@ -27,7 +27,7 @@ type AchievementPrompt = {
 };
 type Prompt = CheckinPrompt | AchievementPrompt;
 
-const TIER_CONFETTI* Record<string, string[]> = {
+const TIER_CONFETTI: Record<string, string[]> = {
   bronze: ["#0B1E3D", "#966216", "#14315C"],
   silver: ["#0B1E3D", "#15705A", "#14315C"],
   gold: ["#966216", "#15705A", "#0B1E3D"],
@@ -157,7 +157,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                   <p className="font-display text-base font-semibold text-navy mb-1">Ade says hi</p>
                   <p className="text-sm text-ink leading-relaxed mb-4">
                     How did it go with{" "}
-                    <span className="font-medium">{prompt.scholarshipTitle}</span?>
+                    <span className="font-medium">{prompt.scholarshipTitle}</span>?
                     {prompt.reason === "clicked"
                       ? " You opened the application link last time."
                       : " The deadline has passed."}
