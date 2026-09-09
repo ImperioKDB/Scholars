@@ -1,27 +1,32 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 
-// components/TestimonialsRotator.tsx
-// Horizontal scroll-snap carousel of approved student testimonials.
-// Each card is a full-card Link to its public detail page
-// (/testimonials/<id>) so the clamped 3-line quote is a teaser, not the
-// whole story; a small "Read full story" line makes the tap target
-// discoverable rather than relying on users guessing the card is tappable.
-// Progress is a filled segment track (dots have small tap targets and
-// don't communicate position as clearly). User-driven only: no autoplay.
 export type TestimonialItem = {
   id: string;
+  quote: string;
   full_name: string;
   role: string;
-  quote: string;
   photo_url: string | null;
 };
 
+// components/TestimonialsRotator.tsx
+//
+// In-place expand replaced per-testimonial detail pages (product decision
+// reversed): the quote is clamped to three lines by default per the taste
+// doc, and "Read more" expands the full text inside the card while
+// "Show less" collapses it again. No navigation, no dead-end pages, no
+// extra route to maintain.
+//
+// Mobile stays a horizontal scroll-snap carousel with a filled segment
+// track (same convention as HowItWorksRotator); desktop renders a static
+// three-column grid. Expanding one card grows that card only; the track
+// height follows the tallest card, which is acceptable and keeps every
+// quote reachable without leaving the section.
 export function TestimonialsRotator({ items }: { items: TestimonialItem[] }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [active, setActive] = useState(0);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     const track = trackRef.current;
@@ -45,65 +50,77 @@ export function TestimonialsRotator({ items }: { items: TestimonialItem[] }) {
     cardRefs.current[index]?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
   }
 
+  function initialsFor(name: string): string {
+    const words = name.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return "?";
+    if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+
   return (
     <div>
       <div
         ref={trackRef}
-        className="flex overflow-x-auto snap-x snap-mandatory scroll-px-6 -mx-6 px-6 gap-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex md:grid md:grid-cols-3 gap-6 md:gap-8 overflow-x-auto md:overflow-visible snap-x snap-mandatory scroll-px-6 -mx-6 px-6 md:mx-0 md:px-0 pb-2 md:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {items.map((t, i) => (
-          <div
-            key={t.id}
-            ref={(el) => {
-              cardRefs.current[i] = el;
-            }}
-            className="relative shrink-0 w-[85%] sm:w-[60%] md:w-[31%] snap-start"
-          >
-            <Link
-              href={`/testimonials/${t.id}`}
-              className="flex flex-col h-full bg-white rounded-2xl border border-hairline shadow-card p-5 hover:border-navy/30 transition-colors focus-visible:ring-2 focus-visible:ring-emerald focus-visible:outline-none"
+        {items.map((t, i) => {
+          const expanded = expandedId === t.id;
+          return (
+            <div
+              key={t.id}
+              ref={(el) => {
+                cardRefs.current[i] = el;
+              }}
+              className="relative shrink-0 w-[85%] sm:w-[60%] md:w-auto snap-start bg-white rounded-2xl border border-hairline shadow-card p-5 flex flex-col gap-4"
             >
-              <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center gap-3">
                 {t.photo_url ? (
                   <img
                     src={t.photo_url}
                     alt={t.full_name}
                     loading="lazy"
-                    className="w-14 h-14 rounded-xl object-cover shrink-0"
+                    className="w-12 h-12 rounded-xl object-cover shrink-0"
                   />
                 ) : (
                   <span
-                    className="w-14 h-14 rounded-xl bg-navy-50 text-navy flex items-center justify-center font-display font-semibold shrink-0"
+                    className="w-12 h-12 rounded-xl bg-navy-50 text-navy flex items-center justify-center font-display font-semibold shrink-0"
                     aria-hidden="true"
                   >
-                    {t.full_name.slice(0, 1)}
+                    {initialsFor(t.full_name)}
                   </span>
                 )}
                 <div className="min-w-0">
-                  <p className="font-medium text-ink leading-snug">{t.full_name}</p>
-                  <p className="text-sm text-navy-light">{t.role}</p>
+                  <p className="font-medium text-ink text-sm leading-snug">{t.full_name}</p>
+                  <p className="text-xs text-navy-light mt-0.5">{t.role}</p>
                 </div>
               </div>
-              <blockquote className="text-sm text-ink leading-relaxed line-clamp-3">
+              <blockquote
+                className={"text-sm text-ink leading-relaxed " + (expanded ? "" : "line-clamp-3")}
+              >
                 {"“"}
                 {t.quote}
                 {"”"}
               </blockquote>
-              <span className="mt-auto pt-3 text-xs font-medium text-navy">
-                Read full story &rarr;
-              </span>
-            </Link>
-          </div>
-        ))}
+              <button
+                type="button"
+                onClick={() => setExpandedId(expanded ? null : t.id)}
+                aria-expanded={expanded}
+                className="mt-auto self-start text-xs font-medium text-navy hover:underline"
+              >
+                {expanded ? "Show less" : "Read more"}
+              </button>
+            </div>
+          );
+        })}
       </div>
-      <div className="flex items-center gap-1.5 mt-6 px-1" role="tablist" aria-label="Testimonials">
+      <div className="flex md:hidden items-center gap-1.5 mt-6 px-1" role="tablist" aria-label="Testimonials">
         {items.map((t, i) => (
           <button
             key={t.id}
             type="button"
             onClick={() => goTo(i)}
             role="tab"
-            aria-label={`Go to testimonial ${i + 1}: ${t.full_name}`}
+            aria-label={`Go to testimonial ${i + 1}`}
             aria-selected={active === i}
             className={["h-1.5 flex-1 rounded-full", i <= active ? "bg-navy" : "bg-hairline"].join(" ")}
           />
