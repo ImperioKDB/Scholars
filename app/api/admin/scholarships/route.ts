@@ -20,6 +20,17 @@ import { assertAdmin } from '@/lib/admin/guard'
 // when it eventually does, add real pagination to the admin list UI.
 const ADMIN_LIST_CAP = 1000;
 
+// Decodes literal \uXXXX escape sequences pasted into free-text fields.
+// A row arrived with amount stored as the six ASCII chars "\u20a6150,000"
+// instead of the real naira sign; transforming on write means the catalog
+// can never re-accumulate literal escapes from a bad paste or seed.
+function decodeUnicodeEscapes(value: string): string {
+  return value.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex: string) =>
+    String.fromCharCode(parseInt(hex, 16))
+  );
+}
+
+
 const ruleSchema = z.object({
   field: z.enum(['gpa', 'nationality', 'gender', 'financial_need', 'academic_level', 'discipline', 'career_goals']),
   operator: z.enum(['eq', 'gte', 'lte', 'in', 'exists']),
@@ -27,10 +38,10 @@ const ruleSchema = z.object({
 })
 
 const scholarshipSchema = z.object({
-  title: z.string().trim().min(1).max(300),
-  provider_name: z.string().trim().min(1).max(300),
-  description: z.string().trim().max(5000).nullable().optional(),
-  amount: z.string().trim().max(200).nullable().optional(),
+  title: z.string().trim().min(1).max(300).transform(decodeUnicodeEscapes),
+  provider_name: z.string().trim().min(1).max(300).transform(decodeUnicodeEscapes),
+  description: z.string().trim().max(5000).transform(decodeUnicodeEscapes).nullable().optional(),
+  amount: z.string().trim().max(200).transform(decodeUnicodeEscapes).nullable().optional(),
   deadline: z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'Invalid date'),
   opens_at: z
     .string()
@@ -38,7 +49,7 @@ const scholarshipSchema = z.object({
     .optional()
     .refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Invalid date'),
   application_url: z.string().url().nullable().optional(),
-  how_to_apply: z.string().trim().max(2000).nullable().optional(),
+  how_to_apply: z.string().trim().max(2000).transform(decodeUnicodeEscapes).nullable().optional(),
   level: z.enum(['undergrad', 'postgrad', 'both']).default('both'),
   discipline: z.string().trim().max(200).nullable().optional(),
   verified: z.boolean().default(false),
