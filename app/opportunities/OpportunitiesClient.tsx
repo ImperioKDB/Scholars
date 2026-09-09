@@ -25,7 +25,7 @@ type SavedApiItem = {
   opportunity: CardOpportunity;
 };
 
-export function OpportunitiesClient({ initialSaved }: { initialSaved: SavedApiItem[] }) {
+export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: SavedApiItem[]; userId: string }) {
   const [keyword, setKeyword] = useState("");
   const [type, setType] = useState("");
   const [discipline, setDiscipline] = useState("");
@@ -197,7 +197,7 @@ export function OpportunitiesClient({ initialSaved }: { initialSaved: SavedApiIt
         <>
           <div className="grid md:grid-cols-2 gap-4 mb-12">
             {items.map((o) => (
-              <OpportunityCard
+              <OpportunityCard sharerId={userId}
                 key={o.id}
                 opportunity={o}
                 saved={savedIds.has(o.id)}
@@ -237,7 +237,7 @@ export function OpportunitiesClient({ initialSaved }: { initialSaved: SavedApiIt
       ) : (
         <div className="grid md:grid-cols-2 gap-4">
           {saved.map((s) => (
-            <OpportunityCard
+            <OpportunityCard sharerId={userId}
               key={s.opportunity.id}
               opportunity={s.opportunity}
               saved
