@@ -1,0 +1,32 @@
+name: digest-cron
+
+# Free secondary scheduler so the digest is not hostage to Vercel Hobby's
+# once-per-day cron cap. Vercel still runs its own daily 08:00 UTC (09:00 WAT)
+# job as a backstop; this adds intra-day runs.
+#
+# OPT-IN: the job is skipped unless the repo secret SCHOLARS_CRON_SECRET is
+# set (GitHub > repo > Settings > Secrets and variables > Actions). Until
+# then every scheduled run is a clean skip, not a red X.
+#
+# Cost: ~12 runs/day x ~1 min = ~360 min/month, well inside the 2,000
+# free minutes GitHub grants private repos.
+#
+# Safety: the digest route already dedupes per student per listing
+# (announcement_log) and throttles per student to one digest per 2 hours,
+# so overlapping schedulers can never double-send.
+on:
+  schedule:
+    - cron: "0 */2 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  trigger-digest:
+    if: ${{ secrets.SCHOLARS_CRON_SECRET != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger Scholars deadline-check digest
+        run: |
+          curl -sS --max-time 240 \
+            -H "Authorization: Bearer ${{ secrets.SCHOLARS_CRON_SECRET }}" \
+            https://scholars.com.ng/api/cron/deadline-check
