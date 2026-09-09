@@ -5,7 +5,7 @@
 //
 // Mirrors /api/admin/scholarships/[id].
 import { NextResponse } from 'next/server'
-import { revalidatePath } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
