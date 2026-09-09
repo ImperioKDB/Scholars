@@ -5,6 +5,7 @@ const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/discover", "/opportun
 const AUTH_PREFIXES = ["/login", "/signup"];
 const REF_COOKIE_NAME = "ref_id";
 const REF_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
+
 // Mirror of the client-side consent choice written by
 // components/CookieConsent.tsx. Middleware runs server-side and cannot read
 // localStorage, so the modal also sets this cookie so referral credit can
@@ -28,20 +29,21 @@ function hardened(options: CookieOptions): CookieOptions {
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
-  // PERF (batch 1): /s/** is the public growth surface. Capturing the
-  // referral cookie needs no session, so return BEFORE the Supabase auth
-  // round trip. Every share-page visit previously paid a full getUser()
-  // network call (~50-150ms) for nothing.
+  // PERF (batch 1): /s/** (scholarships) and /o/** (opportunities) are the
+  // public growth surfaces. Capturing the referral cookie needs no session,
+  // so return BEFORE the Supabase auth round trip. Every share-page visit
+  // previously paid a full getUser() network call (~50-150ms) for nothing.
   //
   // This early return also sidesteps the cookies.set() reassignment trap
   // documented further down: we build our own response object here and
   // set the ref cookie on it directly, so no Supabase callback can swap
   // it out from under us.
-  if (path.startsWith("/s/")) {
+  if (path.startsWith("/s/") || path.startsWith("/o/")) {
     const shareResponse = NextResponse.next();
     const ref = request.nextUrl.searchParams.get("ref");
     const alreadyHasRef = request.cookies.get(REF_COOKIE_NAME)?.value;
     const consentChoice = request.cookies.get(CONSENT_COOKIE_NAME)?.value;
+
     // Honor a rejected consent choice: no referral credit cookie for
     // browsers that declined. Accept (or no recorded choice yet) keeps
     // the previous behavior.
@@ -57,6 +59,7 @@ export async function middleware(request: NextRequest) {
   }
 
   let response = NextResponse.next({ request: { headers: request.headers } });
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -78,6 +81,7 @@ export async function middleware(request: NextRequest) {
       },
     }
   );
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -110,9 +114,11 @@ export async function middleware(request: NextRequest) {
     redirectUrl.searchParams.set("next", path);
     return NextResponse.redirect(redirectUrl);
   }
+
   if (isAuthPage && user) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
+
   return response;
 }
 
@@ -129,6 +135,7 @@ export const config = {
     "/scholarships/:path*",
     "/settings/:path*",
     "/s/:path*",
+    "/o/:path*",
     "/login",
     "/signup",
   ],
