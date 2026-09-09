@@ -78,8 +78,6 @@ export function ScholarshipDetailClient({
   const [trackPending, setTrackPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  // SCROLL FIX: always land at the top of the page when arriving from a
-  // card click, regardless of where the previous page was scrolled.
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
