@@ -9,7 +9,6 @@
 // Palette mirrors the app tokens: navy #0B1E3D, parchment #F7F5EF,
 // card white, emerald CTA #15705A, muted #5B6472, hairline #E4E1D8.
 // No em-dashes anywhere in visible copy.
-
 export type EmailListing = {
   id: string;
   title: string;
@@ -145,6 +144,50 @@ ${ctaHtml(baseUrl + "/dashboard", "See all your matches")}`;
       "",
     ]),
     moreCount > 0 ? `and ${moreCount} more on your dashboard: ${baseUrl}/dashboard` : "",
+    "",
+    "- Ade, from Scholars",
+  ]
+    .filter((l) => l !== undefined)
+    .join("\n");
+  return { subject, html: shell(baseUrl, subject, body), text };
+}
+
+// Broadcast digest: admin hand-picks listings and sends to EVERY registered
+// email. Honest framing: these are team picks, not profile matches, so the
+// intro never claims personalization the send doesn't do.
+export function renderBroadcastDigest(args: {
+  firstName: string;
+  items: EmailListing[];
+  baseUrl: string;
+}): { subject: string; html: string; text: string } {
+  const { firstName, items, baseUrl } = args;
+  const total = items.length;
+  const subject =
+    total === 1
+      ? `Worth a look: ${items[0].title}`
+      : `${total} scholarships worth a look this week`;
+  const intro =
+    total === 1
+      ? "Our team verified this scholarship and didn't want you to miss it:"
+      : "Our team verified these scholarships and didn't want you to miss them:";
+  const tiles = items.map(tileHtml).join("\n");
+  const body = `<h1 style="margin:0 0 6px 0;font-family:${DISPLAY};font-size:22px;line-height:28px;color:${NAVY};">Hi ${esc(firstName)},</h1>
+<p style="margin:0 0 16px 0;font-family:${SANS};font-size:14px;line-height:22px;color:${INK};">${intro}</p>
+${tiles}
+${ctaHtml(baseUrl + "/dashboard", "See all your matches")}`;
+  const text = [
+    `Hi ${firstName},`,
+    "",
+    intro,
+    "",
+    ...items.flatMap((i) => [
+      `${i.kind_label}: ${i.title}`,
+      `${i.provider_name}`,
+      i.amount ? `Amount: ${i.amount}` : "",
+      i.deadline ? `Closes: ${formatDate(i.deadline)}` : "Rolling, no fixed deadline",
+      i.url,
+      "",
+    ]),
     "",
     "- Ade, from Scholars",
   ]
