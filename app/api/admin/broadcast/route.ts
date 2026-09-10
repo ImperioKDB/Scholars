@@ -95,7 +95,7 @@ export async function GET() {
     return NextResponse.json({ recipientCount: recipients.length })
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Couldn't count recipients' },
+      { error: err instanceof Error ? err.message : "Couldn't count recipients" },
       { status: 500 }
     )
   }
@@ -150,7 +150,7 @@ export async function POST(request: Request) {
     recipients = await listRecipients(service)
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Couldn't load recipients' },
+      { error: err instanceof Error ? err.message : "Couldn't load recipients" },
       { status: 500 }
     )
   }
