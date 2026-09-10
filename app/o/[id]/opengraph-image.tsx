@@ -32,6 +32,11 @@ export default async function Image({ params }: { params: Promise<{ id: string }
     .eq("verified", true)
     .maybeSingle();
 
+  const title = opportunity?.title ?? "Find opportunities on Scholars";
+  const provider = opportunity?.provider_name ?? "Opportunity";
+  const compensation = opportunity?.compensation;
+  const deadline = opportunity?.deadline;
+
   return new ImageResponse(
     (
       <div
@@ -52,7 +57,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
         </div>
         <div style={{ display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", fontSize: 24, color: "#8B93A3", marginBottom: 14 }}>
-            {opportunity?.provider_name ?? "Opportunity"}
+            {provider}
           </div>
           <div
             style={{
@@ -63,7 +68,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
               maxWidth: 1000,
             }}
           >
-            {opportunity?.title ?? "Find opportunities on Scholars"}
+            {title}
           </div>
         </div>
         <div style={{ display: "flex", gap: 18, fontSize: 26, alignItems: "center" }}>
@@ -79,11 +84,11 @@ export default async function Image({ params }: { params: Promise<{ id: string }
           >
             Opportunity
           </div>
-          {opportunity?.compensation && (
-            <div style={{ display: "flex", color: "#C9CDD6" }}>{opportunity.compensation}</div>
+          {compensation && (
+            <div style={{ display: "flex", color: "#C9CDD6" }}>{compensation}</div>
           )}
-          {opportunity?.deadline ? (
-            <div style={{ display: "flex", color: "#C9CDD6" }}>Deadline {opportunity.deadline}</div>
+          {deadline ? (
+            <div style={{ display: "flex", color: "#C9CDD6" }}>Deadline {deadline}</div>
           ) : (
             <div style={{ display: "flex", color: "#C9CDD6" }}>Rolling</div>
           )}
