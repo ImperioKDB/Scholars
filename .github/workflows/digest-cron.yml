@@ -1,32 +1,44 @@
 name: digest-cron
 
-# Free secondary scheduler so the digest is not hostage to Vercel Hobby's
-# once-per-day cron cap. Vercel still runs its own daily 08:00 UTC (09:00 WAT)
-# job as a backstop; this adds intra-day runs.
+# Free cron replacement for Vercel Hobby (which caps crons at once/day).
+# Every 2 hours UTC it calls the Scholars cron endpoint with the repo
+# secret. workflow_dispatch also gives a manual "Run workflow" button in
+# the Actions tab, so the owner can fire the digest from a phone anytime.
 #
-# OPT-IN: the job is skipped unless the repo secret SCHOLARS_CRON_SECRET is
-# set (GitHub > repo > Settings > Secrets and variables > Actions). Until
-# then every scheduled run is a clean skip, not a red X.
-#
-# Cost: ~12 runs/day x ~1 min = ~360 min/month, well inside the 2,000
-# free minutes GitHub grants private repos.
-#
-# Safety: the digest route already dedupes per student per listing
-# (announcement_log) and throttles per student to one digest per 2 hours,
-# so overlapping schedulers can never double-send.
+# SETUP (one time): add a repository secret named CRON_SECRET whose value
+# matches the CRON_SECRET env var on Vercel. GitHub -> repo -> Settings ->
+# Secrets and variables -> Actions -> New repository secret.
 on:
   schedule:
     - cron: "0 */2 * * *"
   workflow_dispatch: {}
 
+concurrency:
+  group: digest-cron
+  cancel-in-progress: false
+
 jobs:
   trigger-digest:
-    if: ${{ secrets.SCHOLARS_CRON_SECRET != '' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Trigger Scholars deadline-check digest
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ vars.APP_URL || 'https://scholars.com.ng' }}
         run: |
-          curl -sS --max-time 240 \
-            -H "Authorization: Bearer ${{ secrets.SCHOLARS_CRON_SECRET }}" \
-            https://scholars.com.ng/api/cron/deadline-check
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::CRON_SECRET repo secret is not set. Add it in Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          code=$(curl -s -o /tmp/digest.json -w "%{http_code}" \
+            --max-time 300 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/cron/deadline-check")
+          echo "HTTP status: $code"
+          cat /tmp/digest.json
+          echo
+          if [ "$code" != "200" ]; then
+            echo "::error::Digest endpoint returned HTTP $code"
+            exit 1
+          fi
