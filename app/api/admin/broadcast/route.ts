@@ -1,10 +1,11 @@
 // app/api/admin/broadcast/route.ts
 // GET  /api/admin/broadcast -- { recipientCount } so the admin page can say
 //      exactly how many emails a broadcast will send before you commit.
-// POST /api/admin/broadcast { scholarship_ids } -- send ONE personalized
-//      email per registered user containing every selected scholarship as
-//      tiles. Admin-only (middleware /api/admin gate + assertAdmin here),
-//      rate limited 3/min so a stuck button can't fan out sends.
+// POST /api/admin/broadcast { scholarship_ids?, opportunity_ids? } -- send
+//      ONE personalized email per registered user containing every selected
+//      listing as tiles. Admin-only (middleware /api/admin gate +
+//      assertAdmin here), rate limited 3/min so a stuck button can't fan
+//      out sends.
 //
 // Recipients = EVERY registered auth email (service-role listUsers), not
 // just profiles: a student who signed up but never finished onboarding is
@@ -14,7 +15,7 @@
 // recipients who have a profile row (FK constraint), so the automatic
 // digest won't re-send the same listings later.
 //
-// Only verified scholarships can be broadcast: an unverified listing has no
+// Only verified listings can be broadcast: an unverified listing has no
 // public page for the email to link to.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -29,11 +30,25 @@ export const maxDuration = 300
 
 const ROUTE = '/api/admin/broadcast'
 const bodySchema = z.object({
-  scholarship_ids: z.array(z.string().uuid()).min(1).max(10),
-})
+  scholarship_ids: z.array(z.string().uuid()).optional().default([]),
+  opportunity_ids: z.array(z.string().uuid()).optional().default([]),
+}).refine(
+  (obj) => obj.scholarship_ids.length > 0 || obj.opportunity_ids.length > 0,
+  'Pick at least one scholarship or opportunity (max 10 total per broadcast).'
+).refine(
+  (obj) => obj.scholarship_ids.length + obj.opportunity_ids.length <= 10,
+  'Max 10 listings per broadcast.'
+)
 
 function baseUrlOf(): string {
   return process.env.NEXT_PUBLIC_APP_URL || 'https://scholars-eight.vercel.app'
+}
+
+const KIND_LABELS: Record<string, string> = {
+  fellowship: 'Fellowship',
+  internship: 'Internship',
+  competition: 'Competition',
+  mentorship: 'Mentorship',
 }
 
 async function sendEmail(params: {
@@ -112,38 +127,67 @@ export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(raw)
   if (!parsed.success) {
     return NextResponse.json(
-      { error: 'Pick at least one scholarship (max 10 per broadcast).', issues: parsed.error.issues },
+      { error: 'Pick at least one scholarship or opportunity (max 10 total per broadcast).', issues: parsed.error.issues },
       { status: 400 }
     )
   }
 
   const service = createServiceClient()
-  const { data: scholarships, error: schError } = await service
-    .from('scholarships')
-    .select('id, title, provider_name, amount, deadline')
-    .eq('verified', true)
-    .in('id', parsed.data.scholarship_ids)
-  if (schError) {
-    return NextResponse.json({ error: schError.message }, { status: 500 })
+  const baseUrl = baseUrlOf()
+  const items: EmailListing[] = []
+
+  // Fetch verified scholarships
+  if (parsed.data.scholarship_ids.length > 0) {
+    const { data: scholarships, error: schError } = await service
+      .from('scholarships')
+      .select('id, title, provider_name, amount, deadline')
+      .eq('verified', true)
+      .in('id', parsed.data.scholarship_ids)
+    if (schError) {
+      return NextResponse.json({ error: schError.message }, { status: 500 })
+    }
+    for (const r of scholarships ?? []) {
+      items.push({
+        id: r.id,
+        title: r.title,
+        provider_name: r.provider_name,
+        amount: r.amount,
+        deadline: r.deadline,
+        kind_label: 'Scholarship',
+        url: `${baseUrl}/scholarships/${r.id}`,
+      })
+    }
   }
-  const rows = scholarships ?? []
-  if (rows.length === 0) {
+
+  // Fetch verified opportunities
+  if (parsed.data.opportunity_ids.length > 0) {
+    const { data: opportunities, error: oppError } = await service
+      .from('opportunities')
+      .select('id, type, title, provider_name, compensation, deadline')
+      .eq('verified', true)
+      .in('id', parsed.data.opportunity_ids)
+    if (oppError) {
+      return NextResponse.json({ error: oppError.message }, { status: 500 })
+    }
+    for (const r of opportunities ?? []) {
+      items.push({
+        id: r.id,
+        title: r.title,
+        provider_name: r.provider_name,
+        amount: r.compensation,
+        deadline: r.deadline,
+        kind_label: KIND_LABELS[r.type] ?? 'Opportunity',
+        url: `${baseUrl}/opportunities/${r.id}`,
+      })
+    }
+  }
+
+  if (items.length === 0) {
     return NextResponse.json(
-      { error: 'None of the selected scholarships are verified, so there is nothing to link to.' },
+      { error: 'None of the selected listings are verified, so there is nothing to link to.' },
       { status: 400 }
     )
   }
-
-  const baseUrl = baseUrlOf()
-  const items: EmailListing[] = rows.map((r) => ({
-    id: r.id,
-    title: r.title,
-    provider_name: r.provider_name,
-    amount: r.amount,
-    deadline: r.deadline,
-    kind_label: 'Scholarship',
-    url: `${baseUrl}/scholarships/${r.id}`,
-  }))
 
   let recipients: { id: string; email: string; fullName: string | null }[]
   try {
@@ -171,16 +215,21 @@ export async function POST(request: Request) {
       await sendEmail({ to: r.email, subject, html, text })
       sent++
       if (profileIds.has(r.id)) {
+        const logInsert = [
+          ...parsed.data.scholarship_ids.map((id) => ({
+            profile_id: r.id,
+            listing_kind: 'scholarship',
+            listing_id: id,
+          })),
+          ...parsed.data.opportunity_ids.map((id) => ({
+            profile_id: r.id,
+            listing_kind: 'opportunity',
+            listing_id: id,
+          })),
+        ]
         await service
           .from('announcement_log')
-          .upsert(
-            items.map((i) => ({
-              profile_id: r.id,
-              listing_kind: 'scholarship',
-              listing_id: i.id,
-            })),
-            { onConflict: 'profile_id,listing_kind,listing_id', ignoreDuplicates: true }
-          )
+          .upsert(logInsert, { onConflict: 'profile_id,listing_kind,listing_id', ignoreDuplicates: true })
       }
     } catch (err) {
       failed++
@@ -191,12 +240,12 @@ export async function POST(request: Request) {
     sent,
     failed,
     recipients: recipients.length,
-    scholarships: items.length,
+    listings: items.length,
   })
   return NextResponse.json({
     sent,
     failed,
     recipients: recipients.length,
-    scholarships: items.length,
+    listings: items.length,
   })
 }
