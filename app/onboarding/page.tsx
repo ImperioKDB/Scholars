@@ -23,7 +23,6 @@ import { INSTITUTION_OPTIONS, institutionTypeFor } from "@/lib/data/institutions
 
 const STEPS = ["Personal", "Academic", "Eligibility", "Documents"];
 const DISCIPLINE_COMBO_OPTIONS = DISCIPLINE_OPTIONS.map((d) => ({ value: d, label: d }));
-
 const ONBOARDING_DRAFT_KEY = "scholars.onboarding.draft.v1";
 
 type OnboardingDraft = {
@@ -69,6 +68,34 @@ function clearDraft() {
   }
 }
 
+// Single payload builder so "Finish" and "Skip for now" send the exact same
+// shape. Empty strings become null so a partial profile never stores blanks.
+function profilePayload(form: ProfileForm) {
+  return {
+    full_name: form.full_name.trim(),
+    nationality: form.nationality.trim() || null,
+    gender: form.gender || null,
+    discipline: form.discipline.trim() || null,
+    gpa: form.gpa ? Number(form.gpa) : null,
+    financial_need: form.financial_need,
+    career_goals: form.career_goals.trim() || null,
+    date_of_birth: form.date_of_birth || null,
+    state_of_origin: form.state_of_origin || null,
+    lga_of_origin: form.lga_of_origin.trim() || null,
+    year_of_study: form.year_of_study ? Number(form.year_of_study) : null,
+    institution_name: form.institution_name.trim() || null,
+    institution_type: form.institution_type || null,
+    jamb_score: form.jamb_score ? Number(form.jamb_score) : null,
+    waec_credit_count: form.waec_credit_count ? Number(form.waec_credit_count) : null,
+    disability_status: form.disability_status,
+    has_valid_id: form.has_valid_id,
+    has_transcript: form.has_transcript,
+    has_recommendation_letter: form.has_recommendation_letter,
+    has_personal_statement: form.has_personal_statement,
+    has_lga_certificate: form.has_lga_certificate,
+  };
+}
+
 function OnboardingForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -80,12 +107,10 @@ function OnboardingForm() {
   const [manualDiscipline, setManualDiscipline] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [skipPending, setSkipPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
 
-  // LGA options derive from the selected state ONLY. No state -> empty
-  // list -> the combobox renders disabled with a hint, never a 774-item
-  // dump. Picking a state swaps in just that state's LGAs, alphabetical.
   const lgaOptions = useMemo(
     () => getLGAsForState(form.state_of_origin).map((l) => ({ value: l, label: l })),
     [form.state_of_origin]
@@ -196,9 +221,6 @@ function OnboardingForm() {
     setDirty(true);
   }
 
-  // Changing state of origin must never leave a stale LGA behind: if the
-  // current LGA doesn't belong to the new state, clear it so the combobox
-  // starts clean instead of showing a value from the wrong state.
   function updateStateOfOrigin(value: string) {
     setForm((f) => {
       const lgas = getLGAsForState(value);
@@ -270,29 +292,7 @@ function OnboardingForm() {
     const res = await fetch("/api/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        full_name: form.full_name.trim(),
-        nationality: form.nationality.trim() || null,
-        gender: form.gender || null,
-        discipline: form.discipline.trim() || null,
-        gpa: form.gpa ? Number(form.gpa) : null,
-        financial_need: form.financial_need,
-        career_goals: form.career_goals.trim() || null,
-        date_of_birth: form.date_of_birth || null,
-        state_of_origin: form.state_of_origin || null,
-        lga_of_origin: form.lga_of_origin.trim() || null,
-        year_of_study: form.year_of_study ? Number(form.year_of_study) : null,
-        institution_name: form.institution_name.trim() || null,
-        institution_type: form.institution_type || null,
-        jamb_score: form.jamb_score ? Number(form.jamb_score) : null,
-        waec_credit_count: form.waec_credit_count ? Number(form.waec_credit_count) : null,
-        disability_status: form.disability_status,
-        has_valid_id: form.has_valid_id,
-        has_transcript: form.has_transcript,
-        has_recommendation_letter: form.has_recommendation_letter,
-        has_personal_statement: form.has_personal_statement,
-        has_lga_certificate: form.has_lga_certificate,
-      }),
+      body: JSON.stringify(profilePayload(form)),
     });
     if (res.status === 401) {
       setSaving(false);
@@ -321,8 +321,25 @@ function OnboardingForm() {
     router.refresh();
   }
 
+  // MOMENTUM FIX (user feedback): skipping is no longer lossy. We save
+  // whatever the student has filled so far, then send them straight to the
+  // dashboard so they still see first matches and can finish later from
+  // Edit profile. A skip that discards everything is what made onboarding
+  // feel like a toll booth.
   async function handleSkip() {
+    setSkipPending(true);
+    try {
+      await fetch("/api/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(profilePayload(form)),
+      });
+      clearDraft();
+    } catch {
+      // Skip must always work even if the save fails -- navigate anyway.
+    }
     router.push("/dashboard");
+    router.refresh();
   }
 
   if (loading) {
@@ -365,9 +382,6 @@ function OnboardingForm() {
       <header className="border-b border-hairline bg-white">
         <div className="mx-auto max-w-2xl px-6 py-5 flex items-center justify-between">
           <Logo className="text-navy" />
-          <button onClick={handleSkip} className="text-sm text-navy-light hover:text-navy">
-            Skip for now
-          </button>
         </div>
       </header>
       <main className="mx-auto max-w-2xl px-6 py-12">
@@ -379,11 +393,15 @@ function OnboardingForm() {
             {step === 2 && "Eligibility details"}
             {step === 3 && "Documents & goals"}
           </h1>
-          <p className="text-sm text-navy-light mb-8">
+          <p className="text-sm text-navy-light mb-2">
             {step === 0 && "Tell us who you are so we can personalize your matches."}
             {step === 1 && "Your institution and field of study drive most of your matches."}
             {step === 2 && "JAMB and WAEC results -- most Nigerian scholarships gate on these directly."}
             {step === 3 && "Tell us which documents you already have ready to submit."}
+          </p>
+          <p className="text-xs text-navy-light mb-8">
+            Only your name is required. Everything else sharpens your matches, and your answers
+            save automatically on this device.
           </p>
 
           {step === 0 && (
@@ -526,27 +544,34 @@ function OnboardingForm() {
           )}
 
           {error && <p className="text-sm text-rose mb-4">{error}</p>}
-          <div className="flex items-center justify-between mt-6 pt-6 border-t border-hairline">
-            <button type="button" onClick={goBack} disabled={step === 0 || saving}
+          <div className="flex items-center justify-between mt-6 pt-6 border-t border-hairline gap-3">
+            <button type="button" onClick={goBack} disabled={step === 0 || saving || skipPending}
               className="text-sm font-medium text-navy-light hover:text-navy disabled:opacity-0 disabled:pointer-events-none">
               Back
             </button>
-            {step < STEPS.length - 1 ? (
-              <button type="button" onClick={goNext} className="rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors">
-                Continue
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={handleSkip} disabled={saving || skipPending}
+                className="text-sm font-medium text-navy-light hover:text-navy px-3 py-2 disabled:opacity-60">
+                {skipPending ? "Saving\u2026" : "Skip for now"}
               </button>
-            ) : (
-              <button type="button" onClick={handleFinish} disabled={saving}
-                className="inline-flex items-center gap-2 rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60">
-                {saving && (
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                )}
-                {saving ? "Saving..." : "Finish & see matches"}
-              </button>
-            )}
+              {step < STEPS.length - 1 ? (
+                <button type="button" onClick={goNext} disabled={saving || skipPending}
+                  className="rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60">
+                  Continue
+                </button>
+              ) : (
+                <button type="button" onClick={handleFinish} disabled={saving || skipPending}
+                  className="inline-flex items-center gap-2 rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60">
+                  {saving && (
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  )}
+                  {saving ? "Saving..." : "Finish & see matches"}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </main>
