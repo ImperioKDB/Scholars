@@ -173,13 +173,14 @@ export async function POST(request: Request) {
       if (profileIds.has(r.id)) {
         await service
           .from('announcement_log')
-          .insert(
+          .upsert(
             items.map((i) => ({
               profile_id: r.id,
               listing_kind: 'scholarship',
               listing_id: i.id,
-            }))
-          , { ignoreDuplicates: true })
+            })),
+            { onConflict: 'profile_id,listing_kind,listing_id', ignoreDuplicates: true }
+          )
       }
     } catch (err) {
       failed++
