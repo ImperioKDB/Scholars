@@ -77,13 +77,27 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   if (!opportunity) {
     return { title: "Opportunity not found -- Scholars" };
   }
+  const base = process.env.NEXT_PUBLIC_APP_URL || "https://scholars-eight.vercel.app";
+  const description =
+    opportunity.provider_name +
+    (opportunity.compensation ? " \u00b7 " + opportunity.compensation : "") +
+    (opportunity.deadline ? " \u00b7 Deadline " + opportunity.deadline : " \u00b7 Rolling") +
+    ". Find it on Scholars.";
   return {
     title: opportunity.title + " -- Scholars",
-    description:
-      opportunity.provider_name +
-      (opportunity.compensation ? " \u00b7 " + opportunity.compensation : "") +
-      (opportunity.deadline ? " \u00b7 Deadline " + opportunity.deadline : " \u00b7 Rolling") +
-      ". Find it on Scholars.",
+    description,
+    openGraph: {
+      title: opportunity.title + " -- Scholars",
+      description,
+      images: [`${base}/o/${id}/opengraph-image`],
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: opportunity.title + " -- Scholars",
+      description,
+      images: [`${base}/o/${id}/opengraph-image`],
+    },
   };
 }
 
@@ -133,7 +147,7 @@ export default async function PublicOpportunityPage({ params }: { params: Promis
               </span>
             )}
             {opportunity.location && <span className="text-xs text-navy-light">{opportunity.location}</span>}
-            {opportunity.discipline && <span className="text-xs text-navy-light">\u00b7 {opportunity.discipline}</span>}
+            {opportunity.discipline && <span className="text-xs text-navy-light">&middot; {opportunity.discipline}</span>}
           </div>
           {opportunity.description && (
             <p className="text-sm text-ink leading-relaxed mb-5">{opportunity.description}</p>
