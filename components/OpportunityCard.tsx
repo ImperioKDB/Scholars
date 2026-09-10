@@ -1,8 +1,9 @@
 "use client";
-
+import Link from "next/link";
 import { ProviderMonogram } from "@/components/ProviderMonogram";
 import { ShareButton } from "@/components/ShareButton";
 import { daysUntil, deadlineTone, formatDeadlineLabel } from "@/lib/dates";
+import { saveReturnScroll } from "@/lib/scrollRestore";
 
 export type CardOpportunity = {
   id: string;
@@ -69,7 +70,11 @@ function SaveButton({
   return (
     <button
       type="button"
-      onClick={onToggle}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onToggle();
+      }}
       disabled={pending}
       aria-label={saved ? "Remove from saved opportunities" : "Save opportunity"}
       aria-pressed={saved}
@@ -99,9 +104,18 @@ export function OpportunityCard({
   pending?: boolean;
   sharerId?: string;
 }) {
-  const applyHref = opportunity.application_url;
   return (
-    <div className="relative bg-white rounded-xl border border-hairline p-5 flex flex-col gap-4 sm:flex-row shadow-card">
+    // WHOLE-CARD TAP: the link is a stretched overlay (absolute inset-0)
+    // so every part of the card navigates to the detail page, not just the
+    // inner content. Save/Share sit at z-10 above the overlay so they stay
+    // independently clickable. Press feedback scales the whole card.
+    <div className="relative bg-white rounded-xl border border-hairline p-5 flex flex-col gap-4 sm:flex-row shadow-card focus-within:ring-2 focus-within:ring-emerald focus-within:ring-offset-2 focus-within:ring-offset-parchment transition-transform duration-150 motion-reduce:transition-none has-[a:active]:scale-[0.99] motion-reduce:has-[a:active]:scale-100">
+      <Link
+        href={`/opportunities/${opportunity.id}`}
+        onClick={saveReturnScroll}
+        className="absolute inset-0 z-0 rounded-xl"
+        aria-label={`View ${opportunity.title}`}
+      />
       <ProviderMonogram name={opportunity.provider_name} size={52} />
       <div className="min-w-0 flex-1 sm:pr-24">
         <span className={`inline-block text-xs font-medium px-2 py-1 rounded-full mb-2 ${TYPE_TONE[opportunity.type]}`}>
@@ -120,23 +134,6 @@ export function OpportunityCard({
         {opportunity.description && (
           <p className="text-sm text-navy-light mt-2 line-clamp-2">{opportunity.description}</p>
         )}
-        <div className="flex items-center gap-3 mt-3">
-          {applyHref ? (
-            <a
-              href={applyHref}
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs font-medium text-white bg-navy rounded-full px-3 py-1.5 hover:bg-navy-light transition-colors"
-            >
-              Apply &rarr;
-            </a>
-          ) : opportunity.how_to_apply ? (
-            <p className="text-xs text-navy-light leading-relaxed">
-              <span className="font-medium text-ink">How to apply: </span>
-              {opportunity.how_to_apply}
-            </p>
-          ) : null}
-        </div>
       </div>
       {/* Same corner arrangement as ScholarshipCard: share + save sit at
           z-10 over the card, with the ShareButton's ::after hit area
