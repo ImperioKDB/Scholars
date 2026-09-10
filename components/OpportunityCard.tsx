@@ -11,6 +11,7 @@ export type CardOpportunity = {
   title: string;
   provider_name: string;
   description: string | null;
+  eligibility_notes: string | null;
   duration: string | null;
   location: string | null;
   compensation: string | null;
