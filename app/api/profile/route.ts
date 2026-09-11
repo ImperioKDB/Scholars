@@ -10,8 +10,14 @@
 // avatar_url IS accepted but only as a URL string: the actual bytes go to
 // Supabase Storage straight from the browser (storage RLS scopes writes to
 // the owner's folder, see migration 0010), and this route only records the
-// resulting public URL. A client can therefore only point its own avatar at
-// a URL, never write to someone else's row (RLS) or store arbitrary data.
+// resulting public URL.
+//
+// INPUT HARDENING: avatar_url used to be z.string().url(), which accepts
+// javascript:/data: schemes and any external host. It is now pinned to an
+// https object inside THIS project's own avatars bucket (isOwnStorageUrl),
+// the only place AvatarUploader ever writes. A client can therefore only
+// point its own avatar at its own stored photo -- never at an attacker
+// host, never at a script URL.
 //
 // Undergrad-only pivot: academic_level is gone. Added the eligibility fields
 // most Nigerian scholarships actually gate on (state/LGA of origin, DOB,
@@ -21,6 +27,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { invalidateMatchesCache } from '@/lib/matching/matchCache'
+import { isOwnStorageUrl } from '@/lib/validate'
 
 const profileSchema = z.object({
   full_name: z.string().trim().min(1).max(200).nullable().optional(),
@@ -52,7 +59,14 @@ const profileSchema = z.object({
   has_recommendation_letter: z.boolean().optional(),
   has_personal_statement: z.boolean().optional(),
   has_lga_certificate: z.boolean().optional(),
-  avatar_url: z.string().url().nullable().optional(),
+  avatar_url: z
+    .string()
+    .refine(
+      (v) => isOwnStorageUrl(v, 'avatars'),
+      'avatar_url must be an https URL in this project\'s avatars storage bucket'
+    )
+    .nullable()
+    .optional(),
 })
 
 export async function GET() {
@@ -64,17 +78,20 @@ export async function GET() {
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
+
   const { data: profile, error } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', user.id)
     .single()
+
   if (error) {
     if (error.code === 'PGRST116') {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
   return NextResponse.json({ profile })
 }
 
@@ -87,6 +104,7 @@ export async function POST(request: Request) {
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
+
   const raw = await request.json().catch(() => null)
   const parsed = profileSchema.safeParse(raw)
   if (!parsed.success) {
@@ -95,18 +113,22 @@ export async function POST(request: Request) {
       { status: 400 }
     )
   }
+
   const { data: profile, error } = await supabase
     .from('profiles')
     .upsert({ id: user.id, ...parsed.data }, { onConflict: 'id' })
     .select('*')
     .single()
+
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
   // PERF (batch 1): profile fields drive match evaluation, so the cached
   // matches payload must be dropped the moment they change. Fail-open:
   // a cache error never blocks the profile save (TTL bounds staleness).
   await invalidateMatchesCache(user.id)
+
   return NextResponse.json({ profile })
 }
 
@@ -137,20 +159,25 @@ export async function DELETE() {
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
+
   const { error, count } = await supabase
     .from('profiles')
     .delete({ count: 'exact' })
     .eq('id', user.id)
+
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
   // PERF (batch 1): drop any cached matches for this user as well.
   await invalidateMatchesCache(user.id)
+
   if (!count) {
     // No profile row existed yet -- nothing to delete, but the intent
     // is satisfied. Return success rather than 404 so the client can
     // still sign out and redirect cleanly.
     return NextResponse.json({ deleted: false })
   }
+
   return NextResponse.json({ deleted: true })
 }
