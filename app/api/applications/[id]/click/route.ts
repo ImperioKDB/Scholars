@@ -7,19 +7,23 @@
 // next time they're back in the app. It does NOT mean they applied; it
 // only means they opened the link, which is why the follow-up question is
 // always phrased as a genuine ask, never an assumption.
-
+//
+// INPUT HARDENING: the id path param is UUID-validated.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { isUuid } from '@/lib/validate'
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
+  if (!isUuid(id)) {
+    return NextResponse.json({ error: 'Application not found' }, { status: 404 })
+  }
 
+  const supabase = await createClient()
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
-
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
