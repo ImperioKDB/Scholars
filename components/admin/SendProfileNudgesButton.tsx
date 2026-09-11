@@ -15,13 +15,15 @@ import { fetchWithTimeout } from "@/lib/fetch";
 //     now. Rose outline + its own confirm dialog that states exactly what
 //     it overrides, so it can never be tapped by accident.
 //
-// Confirms first because sending email is irreversible, then reports the
-// server summary honestly: how many students were emailed, or why nothing
-// went out (dry run, nobody due, or nobody incomplete at all).
+// HONEST FAILURE REPORTING (bug fix): zero sends used to render the same
+// green "nobody to email" line whether the pass genuinely had no
+// recipients or every Brevo call was rejected (unverified sender, bad
+// key) or the recipient query threw. Now zero sends plus failures > 0
+// renders as a red error quoting summary.first_error inline, so the real
+// reason is visible on this page instead of only in Vercel Logs.
 //
-// Long timeouts because the pass loops students sequentially; the route
-// itself allows up to 300s. The override gets 240s client-side since it
-// can cover the whole base in one press.
+// Long timeout (240s on override) because the pass loops students
+// sequentially; the route itself allows up to 300s.
 export function SendProfileNudgesButton({ lastNudgeAt }: { lastNudgeAt: string | null }) {
 const [confirmOpen, setConfirmOpen] = useState(false);
 const [forceConfirmOpen, setForceConfirmOpen] = useState(false);
@@ -45,9 +47,19 @@ setError(body.error ?? "Couldn't send the reminders. Try again.");
 return;
 }
 const { summary } = await res.json();
+const firstError = typeof summary.first_error === "string" ? summary.first_error : null;
 if (summary.skipped_missing_columns) {
 setError(
 "The reminder tracking columns don't exist yet. Run migration 0018_add_profile_reminder_tracking.sql in the Supabase SQL editor, then try again."
+);
+} else if (summary.students_emailed === 0 && summary.failed > 0) {
+// The pass ran and nothing landed. This is the branch the old UI
+// was missing: it used to fall through to "nobody to email".
+setError(
+`Nothing went out: ${summary.failed} failure${summary.failed === 1 ? "" : "s"} before or during sending.` +
+(firstError
+? ` First error: ${firstError}`
+: " Check Vercel Logs under email/profile-nudges.")
 );
 } else if (summary.dry_run) {
 setNotice(
@@ -64,7 +76,9 @@ setNotice(
 (force ? "Override send finished: sent " : "Sent ") +
 `${summary.students_emailed} profile reminder email${summary.students_emailed === 1 ? "" : "s"}` +
 (force ? ", ignoring wait time and cap." : ".") +
-(summary.failed > 0 ? ` ${summary.failed} failed, check Vercel logs.` : "")
+(summary.failed > 0
+? ` ${summary.failed} failed${firstError ? `, first error: ${firstError}` : ", check Vercel Logs"}.`
+: "")
 );
 }
 } catch {
