@@ -1,24 +1,33 @@
 // lib/email/profileNudges.ts
 // Profile completion nudges, shared by the scheduled cron
 // (app/api/cron/deadline-check/route.ts, Phase 1b) and the admin manual
-// trigger (app/api/admin/profile-nudges/route.ts) so both run identical
-// logic -- same pattern as the new-listing digest in lib/email/digest.ts.
+// triggers (app/api/admin/profile-nudges/route.ts) so all of them run
+// identical logic -- same pattern as the new-listing digest in
+// lib/email/digest.ts.
 //
 // Semantics:
 //   - Targets profiles with profile_completeness < 100, under the
 //     PROFILE_NUDGE_MAX_SENDS cap (default 5 total emails per student),
 //     whose last nudge is null or older than minIntervalMs (default 2
-//     days). Batch-capped at PROFILE_NUDGE_BATCH per run; leftovers are
-//     picked up by the next tick (oldest/never-emailed first).
+//     days). Batch-capped per run (PROFILE_NUDGE_BATCH, or
+//     PROFILE_NUDGE_FORCE_BATCH for override sends); leftovers are picked
+//     up by the next tick or the next override press, oldest/never-emailed
+//     first.
 //   - Every successful send updates profile_reminder_last_sent_at and
-//     increments profile_reminder_count (migration 0018). Cron and manual
-//     button share that ledger, so a student can never be nagged past the
-//     cap no matter which path sent what, and pressing the button twice
-//     the same day sends nothing new the second time.
+//     increments profile_reminder_count (migration 0018). Cron, routine
+//     button, and override button all share that one ledger, so a send
+//     from any path pushes the next scheduled send 2 days out: an
+//     override press today keeps the GitHub Actions cron quiet until the
+//     interval expires, and a recent cron pass is exactly what the
+//     routine button skips (and what the override ignores).
+//   - ignoreCap (override sends only) drops the 5-email cap filter so a
+//     one-off campaign reaches every incomplete profile, including
+//     students who already received the maximum routine reminders.
 //   - The Lagos daytime window (07:00-19:59 WAT) is enforced for the cron
-//     only (enforceSendWindow). The admin button is a deliberate human
-//     action, so it owns its timing -- but keeps interval + cap.
-//   - Column probe: if migration 0018 hasn't been applied yet, both
+//     only (enforceSendWindow). Both manual paths are deliberate human
+//     actions, so they own their timing; the routine one still keeps
+//     interval + cap.
+//   - Column probe: if migration 0018 hasn't been applied yet, all
 //     callers skip gracefully with skipped_missing_columns instead of
 //     failing.
 //
@@ -32,6 +41,11 @@ export const PROFILE_NUDGE_INTERVAL_MS =
 Number(process.env.PROFILE_REMINDER_INTERVAL_DAYS ?? 2) * 86400000
 export const PROFILE_NUDGE_MAX_SENDS = Number(process.env.PROFILE_REMINDER_MAX_SENDS ?? 5)
 export const PROFILE_NUDGE_BATCH = 200
+// Override sends page through the whole incomplete base at this size per
+// press. Brevo calls are sequential (~0.2-0.5s each), so 1000 is roughly
+// the ceiling the route's 300s maxDuration absorbs; anything beyond it is
+// picked up by the next press, because just-sent rows sort last.
+export const PROFILE_NUDGE_FORCE_BATCH = 1000
 export type ProfileNudgeSummary = {
 students_emailed: number
 emails_sent: number
@@ -69,10 +83,11 @@ const checks: [string, boolean][] = [
 return checks.filter(([, filled]) => !filled).map(([label]) => label)
 }
 export async function runProfileNudges(
-opts: { minIntervalMs?: number; enforceSendWindow?: boolean } = {}
+opts: { minIntervalMs?: number; enforceSendWindow?: boolean; ignoreCap?: boolean } = {}
 ): Promise<ProfileNudgeSummary> {
 const minIntervalMs = opts.minIntervalMs ?? PROFILE_NUDGE_INTERVAL_MS
 const enforceSendWindow = opts.enforceSendWindow ?? false
+const ignoreCap = opts.ignoreCap ?? false
 const supabase = createServiceClient()
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://scholars-eight.vercel.app'
 const summary: ProfileNudgeSummary = {
@@ -99,16 +114,19 @@ summary.skipped_missing_columns = true
 return summary
 }
 const cutoff = new Date(Date.now() - minIntervalMs).toISOString()
-const { data: targets, error: targetsError } = await supabase
+let query = supabase
 .from('profiles')
 .select(
 'id, email, full_name, profile_completeness, profile_reminder_count, discipline, gpa, nationality, career_goals, date_of_birth, state_of_origin, lga_of_origin, year_of_study, institution_type, jamb_score, waec_credit_count'
 )
 .lt('profile_completeness', 100)
-.lt('profile_reminder_count', PROFILE_NUDGE_MAX_SENDS)
+if (!ignoreCap) {
+query = query.lt('profile_reminder_count', PROFILE_NUDGE_MAX_SENDS)
+}
+const { data: targets, error: targetsError } = await query
 .or(`profile_reminder_last_sent_at.is.null,profile_reminder_last_sent_at.lt.${cutoff}`)
 .order('profile_reminder_last_sent_at', { ascending: true, nullsFirst: true })
-.limit(PROFILE_NUDGE_BATCH)
+.limit(ignoreCap ? PROFILE_NUDGE_FORCE_BATCH : PROFILE_NUDGE_BATCH)
 if (targetsError) throw targetsError
 for (const p of (targets ?? []) as (Record<string, unknown> & {
 id: string
