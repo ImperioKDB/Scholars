@@ -18,7 +18,6 @@ deadline: string | null;
 kind_label: string; // Scholarship, Fellowship, Mentorship, Competition, Internship
 url: string;
 };
-
 const NAVY = "#0B1E3D";
 const PARCHMENT = "#F7F5EF";
 const EMERALD = "#15705A";
@@ -28,7 +27,6 @@ const HAIR = "#E4E1D8";
 const SANS =
 "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 const DISPLAY = "Georgia,'Times New Roman',serif";
-
 function esc(s: string): string {
 return s
 .replace(/&/g, "&amp;")
@@ -36,13 +34,11 @@ return s
 .replace(/>/g, "&gt;")
 .replace(/"/g, "&quot;");
 }
-
 export function formatDate(iso: string): string {
 const d = new Date(iso);
 if (Number.isNaN(d.getTime())) return iso;
 return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
-
 function metaLine(item: EmailListing): string {
 const parts: string[] = [];
 if (item.amount) parts.push(esc(item.amount));
@@ -50,7 +46,6 @@ if (item.deadline) parts.push("Closes " + esc(formatDate(item.deadline)));
 else parts.push("Rolling, no fixed deadline");
 return parts.join(" &nbsp;|&nbsp; ");
 }
-
 function shell(baseUrl: string, preheader: string, bodyHtml: string): string {
 return `<!doctype html>
 <html>
@@ -86,7 +81,6 @@ Questions? <a href="mailto:support.scholarsteam@gmail.com" style="color:${EMERAL
 </body>
 </html>`;
 }
-
 function tileHtml(item: EmailListing): string {
 return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 12px 0;">
 <tr><td style="background:${PARCHMENT};border-radius:12px;padding:14px 14px;">
@@ -98,13 +92,11 @@ return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" 
 </td></tr>
 </table>`;
 }
-
 function ctaHtml(href: string, label: string): string {
 return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 0 0;"><tr><td style="background:${EMERALD};border-radius:9999px;">
 <a href="${esc(href)}" style="display:inline-block;padding:12px 22px;font-family:${SANS};font-size:14px;font-weight:700;color:#FFFFFF;text-decoration:none;">${esc(label)}</a>
 </td></tr></table>`;
 }
-
 export function renderNewListingsDigest(args: {
 firstName: string;
 items: EmailListing[];
@@ -151,7 +143,6 @@ moreCount > 0 ? `and ${moreCount} more on your dashboard: ${baseUrl}/dashboard` 
 .join("\n");
 return { subject, html: shell(baseUrl, subject, body), text };
 }
-
 // Broadcast digest: admin hand-picks listings and sends to EVERY registered
 // email. Honest framing: these are team picks, not profile matches, so the
 // intro never claims personalization the send doesn't do.
@@ -195,7 +186,6 @@ i.url,
 .join("\n");
 return { subject, html: shell(baseUrl, subject, body), text };
 }
-
 export function renderDeadlineReminder(args: {
 firstName: string;
 item: EmailListing;
@@ -229,12 +219,12 @@ item.url,
 .join("\n");
 return { subject, html: shell(baseUrl, subject, body), text };
 }
-
-// Profile completion nudge (cron Phase 1b): sent at most every
-// PROFILE_REMINDER_INTERVAL_DAYS (default 2) to students whose profile is
-// under 100%, capped at PROFILE_REMINDER_MAX_SENDS total sends. Honest
-// framing: states the exact completeness, names up to three fields that
-// are still missing, and says plainly that these stop at 100%.
+// Profile completion nudge: sent at most every PROFILE_REMINDER_INTERVAL_DAYS
+// (default 2) to students whose profile is under 100%, capped at
+// PROFILE_REMINDER_MAX_SENDS total sends per student. Shared by the cron
+// (Phase 1b) and the admin manual button -- one template, two callers.
+// Honest framing: states the exact completeness, names up to three fields
+// that are still missing, and says plainly that these stop at 100%.
 export function renderProfileNudge(args: {
 firstName: string;
 completeness: number;
