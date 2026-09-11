@@ -14,10 +14,12 @@
 //     the provider. Modeled as a longer snooze (14 days) instead, so it
 //     doesn't corrupt StatusDonut counts or the cron's overdue-checkin
 //     query, both of which key off `status`.
-
+//
+// INPUT HARDENING: the id path param is UUID-validated.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { isUuid } from '@/lib/validate'
 
 const STATUS_VALUES = ['in_progress', 'submitted', 'accepted', 'rejected'] as const
 const SNOOZE_DAYS = 3
@@ -31,13 +33,15 @@ const bodySchema = z.discriminatedUnion('action', [
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
+  if (!isUuid(id)) {
+    return NextResponse.json({ error: 'Application not found' }, { status: 404 })
+  }
 
+  const supabase = await createClient()
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
-
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
@@ -50,7 +54,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const now = new Date()
   const update: Record<string, unknown> = { checkin_prompted_at: now.toISOString() }
-
   if (parsed.data.action === 'answer') {
     update.status = parsed.data.status
   } else if (parsed.data.action === 'not_open_yet') {
