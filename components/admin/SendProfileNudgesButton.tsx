@@ -5,28 +5,39 @@ import { StatusMessage } from "@/components/StatusMessage";
 import { fetchWithTimeout } from "@/lib/fetch";
 // components/admin/SendProfileNudgesButton.tsx
 //
-// The manual profile-reminder trigger on the admin overview. Mirrors
-// SendDigestButton exactly: confirm first because sending email is
-// irreversible, then report the server summary honestly -- how many
-// students were emailed, or why nothing went out (dry run, everyone
-// already reminded recently / at the cap, or the migration 0018 columns
-// don't exist yet).
+// The manual profile-reminder triggers on the admin overview. Two buttons,
+// two intents:
+//   - "Send profile reminders now": the routine pass. Same 2-day interval
+//     and 5-email cap as the scheduled cron, so it only emails students
+//     who are actually due.
+//   - "Override and send to all": the one-off campaign pass. Ignores the
+//     2-day wait AND the cap, emailing every profile under 100% right
+//     now. Rose outline + its own confirm dialog that states exactly what
+//     it overrides, so it can never be tapped by accident.
 //
-// Long timeout (120s) because the pass loops every eligible student
-// sequentially; the route itself allows up to 300s.
+// Confirms first because sending email is irreversible, then reports the
+// server summary honestly: how many students were emailed, or why nothing
+// went out (dry run, nobody due, or nobody incomplete at all).
+//
+// Long timeouts because the pass loops students sequentially; the route
+// itself allows up to 300s. The override gets 240s client-side since it
+// can cover the whole base in one press.
 export function SendProfileNudgesButton({ lastNudgeAt }: { lastNudgeAt: string | null }) {
 const [confirmOpen, setConfirmOpen] = useState(false);
+const [forceConfirmOpen, setForceConfirmOpen] = useState(false);
 const [busy, setBusy] = useState(false);
 const [notice, setNotice] = useState<string | null>(null);
 const [error, setError] = useState<string | null>(null);
-async function send() {
+async function send(force: boolean) {
 setBusy(true);
 setError(null);
 setNotice(null);
 try {
 const res = await fetchWithTimeout("/api/admin/profile-nudges", {
 method: "POST",
-timeoutMs: 120_000,
+headers: { "Content-Type": "application/json" },
+body: JSON.stringify({ force }),
+timeoutMs: force ? 240_000 : 120_000,
 });
 if (!res.ok) {
 const body = await res.json().catch(() => ({}));
@@ -44,11 +55,15 @@ setNotice(
 );
 } else if (summary.students_emailed === 0) {
 setNotice(
-"Nothing to send right now. Every student under 100% was either reminded within the last 2 days or has already reached the 5-email cap."
+force
+? "No profile is under 100% right now, so there was nobody to email."
+: "Nothing to send right now. Every student under 100% was either reminded within the last 2 days or has already reached the 5-email cap."
 );
 } else {
 setNotice(
-`Sent ${summary.students_emailed} profile reminder email${summary.students_emailed === 1 ? "" : "s"}.` +
+(force ? "Override send finished: sent " : "Sent ") +
+`${summary.students_emailed} profile reminder email${summary.students_emailed === 1 ? "" : "s"}` +
+(force ? ", ignoring wait time and cap." : ".") +
 (summary.failed > 0 ? ` ${summary.failed} failed, check Vercel logs.` : "")
 );
 }
@@ -71,9 +86,18 @@ return (
 {confirmOpen && (
 <ConfirmDialog
 message="Send profile completion reminders now? Every student whose profile is under 100% -- and who hasn't been reminded in the last 2 days and is under the 5-email cap -- gets ONE email naming the exact fields they're missing."
-onConfirm={send}
+onConfirm={() => send(false)}
 onClose={() => !busy && setConfirmOpen(false)}
 confirmLabel="Send reminders"
+/>
+)}
+{forceConfirmOpen && (
+<ConfirmDialog
+message="Override the guards and email EVERY student under 100% right now? This ignores the 2-day wait and the 5-email cap, so students reminded recently (including by the scheduled job) get another email immediately. Use for one-off campaigns, not routine sends."
+onConfirm={() => send(true)}
+onClose={() => !busy && setForceConfirmOpen(false)}
+confirmLabel="Send to everyone"
+tone="rose"
 />
 )}
 <div className="flex flex-wrap items-center gap-3">
@@ -84,6 +108,14 @@ disabled={busy}
 className="rounded-seal bg-navy text-white text-sm font-medium px-5 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60 whitespace-nowrap"
 >
 {busy ? "Sending\u2026" : "Send profile reminders now"}
+</button>
+<button
+type="button"
+onClick={() => setForceConfirmOpen(true)}
+disabled={busy}
+className="rounded-seal border border-rose/40 text-rose text-sm font-medium px-5 py-2.5 hover:bg-rose-light transition-colors disabled:opacity-60 whitespace-nowrap"
+>
+{busy ? "Sending\u2026" : "Override and send to all"}
 </button>
 {lastLabel && (
 <span className="text-xs text-navy-light">Last reminder activity: {lastLabel}</span>
