@@ -25,15 +25,23 @@
 // !inner, the unjoinable row makes the whole select return zero rows,
 // .single() fails with PGRST116, and that already maps to the existing
 // { error: 'not_found' } -> 404 branch below. No new branch needed.
+//
+// INPUT HARDENING: the id path param is UUID-validated in both methods.
+// (Also noted: profile free-text like career_goals flows into the Gemini
+// prompt -- classic prompt-injection surface. Output is stored as plain
+// text and rendered through React's escaping, so the blast radius is a
+// bad draft the student reviews, never script execution.)
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { buildDraftSummary, buildStatementPrompt, generateStatement } from '@/lib/applications/draft'
 import { evaluateScholarship } from '@/lib/matching/engine'
 import { toMatchableProfile, type MatchableProfileSource } from '@/lib/matching/profileMapper'
+import { isUuid } from '@/lib/validate'
 
 const PROFILE_COLUMNS =
   'full_name, discipline, gpa, nationality, gender, financial_need, career_goals, date_of_birth, state_of_origin, lga_of_origin, year_of_study, institution_name, institution_type, jamb_score, waec_credit_count, has_english_maths_credit, disability_status, has_valid_id, has_transcript, has_recommendation_letter, has_personal_statement, has_lga_certificate, profile_completeness'
+
 const DRAFT_COLUMNS = 'id, draft_statement, draft_summary, draft_generated_at, draft_confirmed_at'
 
 type LoadedScholarship = {
@@ -65,8 +73,11 @@ async function loadContext(
     .eq('id', applicationId)
     .eq('profile_id', userId)
     .single()
+
   if (appError || !application) return { error: 'not_found' }
+
   const scholarship = application.scholarship as unknown as LoadedScholarship
+
   const [{ data: profile, error: profileError }, { data: waecResults }, { data: rules }] = await Promise.all([
     supabase.from('profiles').select(PROFILE_COLUMNS).eq('id', userId).single(),
     supabase.from('waec_results').select('subject, grade').eq('profile_id', userId).order('subject', { ascending: true }),
@@ -75,7 +86,9 @@ async function loadContext(
       .select('id, scholarship_id, field, operator, value')
       .eq('scholarship_id', scholarship.id),
   ])
+
   if (profileError || !profile) return { error: 'profile_not_found' }
+
   return {
     error: null,
     scholarship,
@@ -93,6 +106,10 @@ async function loadContext(
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  if (!isUuid(id)) {
+    return NextResponse.json({ error: 'Application not found' }, { status: 404 })
+  }
+
   const supabase = await createClient()
   const {
     data: { user },
@@ -101,6 +118,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
+
   const context = await loadContext(supabase, id, user.id)
   if (context.error) {
     if (context.error === 'not_found') {
@@ -108,12 +126,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     }
     return NextResponse.json({ error: 'Complete your profile before generating a draft' }, { status: 400 })
   }
+
   const { scholarship, profile, waecResults, rules } = context
   const p = profile as unknown as Record<string, never>
+
   // DEDUP: reuse the shared profiles-row -> MatchableProfile projection
   // (lib/matching/profileMapper.ts) instead of an inline 16-field literal,
   // so this route and getMatches.ts can never drift apart.
   const matchableProfile = toMatchableProfile(profile as unknown as MatchableProfileSource)
+
   const evaluated = evaluateScholarship(
     matchableProfile,
     {
@@ -142,15 +163,18 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     },
     rules
   )
+
   const metLabels = evaluated.requirements.filter((r) => r.status === 'met').map((r) => r.requirement)
   const summary = buildDraftSummary(p as never, waecResults)
   const prompt = buildStatementPrompt(p as never, scholarship, metLabels)
+
   let statement: string
   try {
     statement = await generateStatement(prompt)
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to generate draft' }, { status: 502 })
   }
+
   const { data: updated, error: updateError } = await supabase
     .from('applications')
     .update({
@@ -163,9 +187,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     .eq('profile_id', user.id)
     .select(DRAFT_COLUMNS)
     .single()
+
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 })
   }
+
   return NextResponse.json({ draft: updated })
 }
 
@@ -179,6 +205,10 @@ const patchSchema = z
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  if (!isUuid(id)) {
+    return NextResponse.json({ error: 'Application not found' }, { status: 404 })
+  }
+
   const supabase = await createClient()
   const {
     data: { user },
@@ -187,11 +217,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
+
   const raw = await request.json().catch(() => null)
   const parsed = patchSchema.safeParse(raw)
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid request body', issues: parsed.error.issues }, { status: 400 })
   }
+
   const update: { draft_statement?: string; draft_confirmed_at?: string | null } = {}
   if (parsed.data.draft_statement !== undefined) {
     update.draft_statement = parsed.data.draft_statement
@@ -203,6 +235,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     // earlier confirmation -- confirmed and edited content must not diverge.
     update.draft_confirmed_at = null
   }
+
   const { data, error } = await supabase
     .from('applications')
     .update(update)
@@ -210,11 +243,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     .eq('profile_id', user.id)
     .select(DRAFT_COLUMNS)
     .single()
+
   if (error) {
     if (error.code === 'PGRST116') {
       return NextResponse.json({ error: 'Application not found' }, { status: 404 })
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
   return NextResponse.json({ draft: data })
 }
