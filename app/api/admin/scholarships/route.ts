@@ -8,16 +8,23 @@
 // before attempting the mutation, so a non-admin gets a clear 403 instead
 // of a confusing RLS failure buried in a Postgres error. The middleware
 // /api/admin gate is a third, independent enforcement point.
+//
+// INPUT HARDENING: application_url was z.string().url(), which accepts
+// javascript:/data:/file: URLs -- and this URL is opened via window.open
+// in the student UI, i.e. a stored-XSS primitive. It now uses
+// httpUrlSchema (http/https only) from lib/validate.ts.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { assertAdmin } from '@/lib/admin/guard'
+import { httpUrlSchema } from '@/lib/validate'
 
-// PERF (batch 1): same reliability cap the health page uses (ROW_CAP
-// there). A 10k-row catalog with embedded rules must not serialize into
-// one serverless response. At current catalog size the cap never bites;
-// when it eventually does, add real pagination to the admin list UI.
+// PERF (batch 1): reliability cap, same rationale as the scholarships
+// admin list and the health page's ROW_CAP. A 10k-row catalog with
+// embedded rules must not serialize into one serverless response. At
+// current catalog size the cap never bites; when it eventually does, add
+// real pagination to the admin list UI.
 const ADMIN_LIST_CAP = 1000;
 
 // Decodes literal \uXXXX escape sequences pasted into free-text fields.
@@ -29,7 +36,6 @@ function decodeUnicodeEscapes(value: string): string {
     String.fromCharCode(parseInt(hex, 16))
   );
 }
-
 
 const ruleSchema = z.object({
   field: z.enum(['gpa', 'nationality', 'gender', 'financial_need', 'academic_level', 'discipline', 'career_goals']),
@@ -48,7 +54,7 @@ const scholarshipSchema = z.object({
     .nullable()
     .optional()
     .refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Invalid date'),
-  application_url: z.string().url().nullable().optional(),
+  application_url: httpUrlSchema.nullable().optional(),
   how_to_apply: z.string().trim().max(2000).transform(decodeUnicodeEscapes).nullable().optional(),
   level: z.enum(['undergrad', 'postgrad', 'both']).default('both'),
   discipline: z.string().trim().max(200).nullable().optional(),
@@ -100,7 +106,6 @@ export async function POST(request: Request) {
   }
 
   const { rules, ...scholarshipFields } = parsed.data
-
   const { data: scholarship, error: insertError } = await supabase
     .from('scholarships')
     .insert({ ...scholarshipFields, created_by: guard.userId })
