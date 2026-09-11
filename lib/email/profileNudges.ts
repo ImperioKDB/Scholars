@@ -30,12 +30,19 @@
 //     callers skip gracefully with skipped_missing_columns instead of
 //     failing.
 //
-// HONEST FAILURE REPORTING (bug fix): the summary now carries first_error,
-// the message of the first failure in the pass (recipient query throw or
-// per-student send rejection). The admin button renders zero-send-with-
-// failures as an error quoting it, because "zero sends" previously looked
-// identical to "nobody was due" even when every Brevo call was rejected
-// (unverified sender, bad key), which silently swallowed whole campaigns.
+// ROBUSTNESS (bug fix, round 2): the recipient query used to compose a
+// long explicit column list (including an assumed profiles.email), an
+// .or() timestamp filter and a server-side order(). One unknown column or
+// filter-parse complaint in that composition aborted the entire pass with
+// a single failure, and because PostgREST errors are plain objects the
+// admin UI rendered them as "[object Object]". Now:
+//   - the only DB filter is select('*') + lt('profile_completeness', 100),
+//     the exact shape the admin stats tile already runs successfully;
+//   - interval, cap, nulls-first sorting and batching happen in JS;
+//   - emails come from auth.admin.listUsers (service role, paginated),
+//     the authoritative source, instead of a denormalized column;
+//   - errorText() extracts .message from anything error-shaped so the
+//     admin UI always shows the real reason a pass sent nothing.
 //
 // Dry-run safe: missing BREVO_API_KEY / REMINDER_FROM_EMAIL prepares
 // everything, updates the ledger, sends nothing (same as the digest).
@@ -89,6 +96,37 @@ const checks: [string, boolean][] = [
 ]
 return checks.filter(([, filled]) => !filled).map(([label]) => label)
 }
+// PostgREST errors are plain objects ({ message, details, hint, code }),
+// NOT Error instances, so `err instanceof Error ? err.message :
+// String(err)` rendered them as "[object Object]" in the admin UI. Pull
+// .message off anything error-shaped; JSON-stringify the rest.
+function errorText(err: unknown): string {
+if (err instanceof Error) return err.message
+if (err && typeof err === 'object') {
+const m = (err as { message?: unknown }).message
+if (typeof m === 'string' && m) return m
+try {
+return JSON.stringify(err)
+} catch {
+return String(err)
+}
+}
+return String(err)
+}
+type ProfileRow = Record<string, unknown> & {
+id: string
+profile_completeness: number
+profile_reminder_count: number | null
+profile_reminder_last_sent_at: string | null
+full_name?: string | null
+}
+function lastSentMs(p: ProfileRow): number {
+// -1 sorts never-reminded students first; unparseable stamps are treated
+// as never-reminded rather than silently dropping the student.
+if (p.profile_reminder_last_sent_at == null) return -1
+const t = Date.parse(p.profile_reminder_last_sent_at)
+return Number.isNaN(t) ? -1 : t
+}
 export async function runProfileNudges(
 opts: { minIntervalMs?: number; enforceSendWindow?: boolean; ignoreCap?: boolean } = {}
 ): Promise<ProfileNudgeSummary> {
@@ -110,7 +148,7 @@ first_error: null,
 // sent nothing, not just that it did. Later failures stay in the logs.
 function noteError(err: unknown) {
 if (summary.first_error === null) {
-summary.first_error = err instanceof Error ? err.message : String(err)
+summary.first_error = errorText(err)
 }
 }
 if (enforceSendWindow && !inLagosSendWindow(new Date())) {
@@ -118,8 +156,8 @@ summary.outside_send_window = true
 return summary
 }
 try {
-// Probe first: if migration 0018 isn't applied yet the columns don't
-// exist, so skip gracefully instead of failing every run.
+// Probe first: if migration 0018 isn't applied yet the ledger columns
+// don't exist, so skip gracefully instead of failing every run.
 const probe = await supabase
 .from('profiles')
 .select('id, profile_reminder_last_sent_at, profile_reminder_count')
@@ -128,28 +166,45 @@ if (probe.error) {
 summary.skipped_missing_columns = true
 return summary
 }
-const cutoff = new Date(Date.now() - minIntervalMs).toISOString()
-let query = supabase
+// Recipients: the minimal proven query shape (select star plus the same
+// single lt filter the admin stats tile runs). Interval, cap, ordering
+// and batching are applied in JS below so no filter composition can
+// abort the pass server-side.
+const { data: rows, error: rowsError } = await supabase
 .from('profiles')
-.select(
-'id, email, full_name, profile_completeness, profile_reminder_count, discipline, gpa, nationality, career_goals, date_of_birth, state_of_origin, lga_of_origin, year_of_study, institution_type, jamb_score, waec_credit_count'
-)
+.select('*')
 .lt('profile_completeness', 100)
-if (!ignoreCap) {
-query = query.lt('profile_reminder_count', PROFILE_NUDGE_MAX_SENDS)
+if (rowsError) throw rowsError
+const cutoffMs = Date.now() - minIntervalMs
+const eligible = ((rows ?? []) as unknown as ProfileRow[])
+.filter((r) => (ignoreCap ? true : (r.profile_reminder_count ?? 0) < PROFILE_NUDGE_MAX_SENDS))
+.filter((r) => lastSentMs(r) < cutoffMs)
+.sort((a, b) => lastSentMs(a) - lastSentMs(b))
+.slice(0, ignoreCap ? PROFILE_NUDGE_FORCE_BATCH : PROFILE_NUDGE_BATCH)
+// Emails come from auth (the authoritative source) via the service role,
+// paginated, so the pass never depends on a denormalized email column
+// existing on profiles or staying in sync with sign-in changes.
+const emailById = new Map<string, string>()
+for (let page = 1; page <= 100; page++) {
+const { data, error: usersError } = await supabase.auth.admin.listUsers({
+page,
+perPage: 100,
+})
+if (usersError) throw usersError
+const users = data?.users ?? []
+for (const u of users) {
+if (u.id && u.email) emailById.set(u.id, u.email)
 }
-const { data: targets, error: targetsError } = await query
-.or(`profile_reminder_last_sent_at.is.null,profile_reminder_last_sent_at.lt.${cutoff}`)
-.order('profile_reminder_last_sent_at', { ascending: true, nullsFirst: true })
-.limit(ignoreCap ? PROFILE_NUDGE_FORCE_BATCH : PROFILE_NUDGE_BATCH)
-if (targetsError) throw targetsError
-for (const p of (targets ?? []) as (Record<string, unknown> & {
-id: string
-email: string
-full_name: string | null
-profile_completeness: number
-profile_reminder_count: number | null
-})[]) {
+if (users.length < 100) break
+}
+for (const p of eligible) {
+const email = emailById.get(p.id)
+if (!email) {
+// Profile row without a matching auth user (deleted account edge):
+// nothing to email, and not a send failure either.
+logError('email/profile-nudges', 'no_email_for_profile', { profile: p.id })
+continue
+}
 const { subject, html, text } = renderProfileNudge({
 firstName: p.full_name?.trim().split(/\s+/)[0] || 'there',
 completeness: p.profile_completeness,
@@ -157,7 +212,7 @@ missingLabels: missingProfileLabels(p),
 baseUrl,
 })
 try {
-const res = await sendEmail({ to: p.email, subject, html, text })
+const res = await sendEmail({ to: email, subject, html, text })
 summary.emails_sent += res.sent
 if (res.dry) summary.dry_run = true
 const { error: stateError } = await supabase
@@ -175,7 +230,7 @@ summary.students_emailed += 1
 } catch (err) {
 summary.failed += 1
 noteError(err)
-logError('email/profile-nudges', 'send_failed', { profile: p.id }, err)
+logError('email/profile-nudges', 'send_failed', { profile: p.id, email }, err)
 }
 }
 } catch (err) {
