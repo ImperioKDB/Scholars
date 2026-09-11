@@ -1,9 +1,8 @@
 // lib/email/profileNudges.ts
 // Profile completion nudges, shared by the scheduled cron
 // (app/api/cron/deadline-check/route.ts, Phase 1b) and the admin manual
-// triggers (app/api/admin/profile-nudges/route.ts) so all of them run
-// identical logic -- same pattern as the new-listing digest in
-// lib/email/digest.ts.
+// triggers (app/api/admin/profile-nudges/route.ts) so both run identical
+// logic -- same pattern as the new-listing digest in lib/email/digest.ts.
 //
 // Semantics:
 //   - Targets profiles with profile_completeness < 100, under the
@@ -31,6 +30,13 @@
 //     callers skip gracefully with skipped_missing_columns instead of
 //     failing.
 //
+// HONEST FAILURE REPORTING (bug fix): the summary now carries first_error,
+// the message of the first failure in the pass (recipient query throw or
+// per-student send rejection). The admin button renders zero-send-with-
+// failures as an error quoting it, because "zero sends" previously looked
+// identical to "nobody was due" even when every Brevo call was rejected
+// (unverified sender, bad key), which silently swallowed whole campaigns.
+//
 // Dry-run safe: missing BREVO_API_KEY / REMINDER_FROM_EMAIL prepares
 // everything, updates the ledger, sends nothing (same as the digest).
 import { createServiceClient } from '@/lib/supabase/service'
@@ -53,6 +59,7 @@ failed: number
 skipped_missing_columns: boolean
 outside_send_window: boolean
 dry_run: boolean
+first_error: string | null
 }
 // Daytime-only sends, Africa/Lagos (UTC+1, no DST): 07:00 to 19:59 local.
 // A 2am nudge would just burn goodwill; if a cron tick lands outside the
@@ -97,6 +104,14 @@ failed: 0,
 skipped_missing_columns: false,
 outside_send_window: false,
 dry_run: !process.env.BREVO_API_KEY || !process.env.REMINDER_FROM_EMAIL,
+first_error: null,
+}
+// Record the first failure message so the admin UI can show WHY a pass
+// sent nothing, not just that it did. Later failures stay in the logs.
+function noteError(err: unknown) {
+if (summary.first_error === null) {
+summary.first_error = err instanceof Error ? err.message : String(err)
+}
 }
 if (enforceSendWindow && !inLagosSendWindow(new Date())) {
 summary.outside_send_window = true
@@ -159,11 +174,13 @@ logError('email/profile-nudges', 'state_update_failed', { profile: p.id }, state
 summary.students_emailed += 1
 } catch (err) {
 summary.failed += 1
+noteError(err)
 logError('email/profile-nudges', 'send_failed', { profile: p.id }, err)
 }
 }
 } catch (err) {
 summary.failed += 1
+noteError(err)
 logError('email/profile-nudges', 'run_failed', undefined, err)
 }
 return summary
