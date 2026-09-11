@@ -8,15 +8,22 @@
 // /api/scholarships (dumb browse/search list) and POST
 // /api/scholarships/match (ranked list) -- neither returns per-item
 // save/tracking state.
-
+//
+// INPUT HARDENING: the id path param is user input. A malformed (non-
+// UUID) id is rejected with a clean 404 here instead of reaching
+// Postgres as a cast error and surfacing as a 500.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getMatchForScholarship } from '@/lib/matching/getMatches'
+import { isUuid } from '@/lib/validate'
 
 type ApplicationStatus = 'in_progress' | 'submitted' | 'accepted' | 'rejected'
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  if (!isUuid(id)) {
+    return NextResponse.json({ error: 'Scholarship not found' }, { status: 404 })
+  }
 
   const { match, profileCompleteness, error } = await getMatchForScholarship(id)
 
@@ -43,7 +50,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   let saved = false
   let application: { id: string; status: ApplicationStatus } | null = null
-
   if (user) {
     const [savedResult, applicationResult] = await Promise.all([
       supabase
