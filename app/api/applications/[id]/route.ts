@@ -20,10 +20,13 @@
 // return no rows, which the branch below reports as 'Application not
 // found' (404). That's a slightly misleading message in that rare case --
 // not fixed here, flagged as a known edge case.
-
+//
+// INPUT HARDENING: the id path param is UUID-validated -- a malformed id
+// becomes a clean 404 instead of a Postgres cast error surfaced as 500.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { isUuid } from '@/lib/validate'
 
 const STATUS_VALUES = ['in_progress', 'submitted', 'accepted', 'rejected'] as const
 
@@ -40,20 +43,21 @@ const SCHOLARSHIP_COLUMNS =
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
+  if (!isUuid(id)) {
+    return NextResponse.json({ error: 'Application not found' }, { status: 404 })
+  }
 
+  const supabase = await createClient()
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
-
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
 
   const raw = await request.json().catch(() => null)
   const parsed = updateSchema.safeParse(raw)
-
   if (!parsed.success) {
     return NextResponse.json(
       { error: 'Invalid update data', issues: parsed.error.issues },
@@ -81,13 +85,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
+  if (!isUuid(id)) {
+    return NextResponse.json({ error: 'Application not found' }, { status: 404 })
+  }
 
+  const supabase = await createClient()
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
-
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
@@ -101,7 +107,6 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
   if (!count) {
     return NextResponse.json({ error: 'Application not found' }, { status: 404 })
   }
