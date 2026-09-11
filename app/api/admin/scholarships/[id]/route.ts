@@ -6,11 +6,15 @@
 // PATCH rather than PUT: PUT implies replacing the whole resource, but
 // admin edits here are typically "toggle verified" or "fix a deadline" —
 // partial updates are the actual usage pattern.
+//
+// INPUT HARDENING: application_url is http(s)-only (httpUrlSchema), and
+// the id path param is UUID-validated before any DB work.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { assertAdmin } from '@/lib/admin/guard'
+import { httpUrlSchema, isUuid } from '@/lib/validate'
 
 // Decodes literal \uXXXX escape sequences pasted into free-text fields.
 // A row arrived with amount stored as the six ASCII chars "\u20a6150,000"
@@ -33,7 +37,7 @@ const updateSchema = z
       .string()
       .nullable()
       .refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Invalid date'),
-    application_url: z.string().url().nullable(),
+    application_url: httpUrlSchema.nullable(),
     how_to_apply: z.string().trim().max(2000).transform(decodeUnicodeEscapes).nullable(),
     level: z.enum(['undergrad', 'postgrad', 'both']),
     discipline: z.string().trim().max(200).nullable(),
@@ -50,10 +54,16 @@ const updateSchema = z
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const limited = await checkRateLimit(request, { route: 'admin-scholarships-id', limit: 60 })
   if (limited) return limited
+
   const { id } = await params
+  if (!isUuid(id)) {
+    return NextResponse.json({ error: 'Scholarship not found' }, { status: 404 })
+  }
+
   const supabase = await createClient()
   const guard = await assertAdmin(supabase)
   if (!guard.ok) return guard.response
+
   const raw = await request.json().catch(() => null)
   const parsed = updateSchema.safeParse(raw)
   if (!parsed.success) {
@@ -62,31 +72,41 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       { status: 400 }
     )
   }
+
   const { data: scholarship, error } = await supabase
     .from('scholarships')
     .update(parsed.data)
     .eq('id', id)
     .select('*, scholarship_rules ( id, field, operator, value )')
     .single()
+
   if (error) {
     if (error.code === 'PGRST116') {
       return NextResponse.json({ error: 'Scholarship not found' }, { status: 404 })
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
   return NextResponse.json({ scholarship })
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const limited = await checkRateLimit(request, { route: 'admin-scholarships-id', limit: 60 })
   if (limited) return limited
+
   const { id } = await params
+  if (!isUuid(id)) {
+    return NextResponse.json({ error: 'Scholarship not found' }, { status: 404 })
+  }
+
   const supabase = await createClient()
   const guard = await assertAdmin(supabase)
   if (!guard.ok) return guard.response
+
   const { error } = await supabase.from('scholarships').delete().eq('id', id)
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
   return NextResponse.json({ message: 'Scholarship deleted' })
 }
