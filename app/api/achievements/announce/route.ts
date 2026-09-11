@@ -8,21 +8,22 @@
 // rows -- this route cannot unlock a NEW achievement or touch anyone
 // else's, it can only flip announced_at on a row that already exists for
 // auth.uid().
-
+//
+// INPUT HARDENING: achievement_id is now UUID-format validated instead
+// of an arbitrary min-1 string.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { uuidSchema } from '@/lib/validate'
 
-const bodySchema = z.object({ achievement_id: z.string().min(1) })
+const bodySchema = z.object({ achievement_id: uuidSchema })
 
 export async function POST(request: Request) {
   const supabase = await createClient()
-
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
-
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
