@@ -11,14 +11,24 @@
 // Rate limited 5/hour per user on top of the IP bucket -- feedback is a
 // low-volume, high-intent action, so the cap is generous for humans and
 // still a brake on scripts.
+//
+// INPUT HARDENING: page_url comes straight from the Referer header and
+// was previously interpolated RAW into the support email HTML while only
+// `message` was escaped -- an HTML-injection path into the support inbox
+// via a crafted Referer. All three interpolated values (message,
+// page_url, contact_email) are now escaped with the shared escapeHtml.
+// The stored page_url is also truncated so an absurd header can't bloat
+// the row.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { logError, logWarn } from '@/lib/logging'
+import { escapeHtml } from '@/lib/validate'
 
 const ROUTE = '/api/feedback'
 const SUPPORT_INBOX = 'support.scholarsteam@gmail.com'
+const PAGE_URL_MAX = 2000
 
 const bodySchema = z.object({
   category: z.enum(['bug', 'feature', 'scholarship', 'other']),
@@ -45,10 +55,13 @@ async function sendFeedbackEmail(params: {
     logWarn(ROUTE, 'email_skipped_dry_run', { category: params.category })
     return
   }
-  const escaped = params.message
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
+
+  // INPUT HARDENING: every interpolated value is escaped -- message was
+  // already, pageUrl (raw Referer header) and contactEmail are now too.
+  const escapedMessage = escapeHtml(params.message)
+  const escapedPageUrl = params.pageUrl ? escapeHtml(params.pageUrl) : null
+  const escapedContact = params.contactEmail ? escapeHtml(params.contactEmail) : null
+
   const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -58,12 +71,12 @@ async function sendFeedbackEmail(params: {
       replyTo: params.contactEmail ? { email: params.contactEmail } : undefined,
       subject: `[Scholars feedback] ${CATEGORY_LABELS[params.category] ?? params.category}`,
       htmlContent: `
-<p><strong>Category:</strong> ${CATEGORY_LABELS[params.category] ?? params.category}</p>
-${params.contactEmail ? `<p><strong>Reply to:</strong> ${params.contactEmail}</p>` : ''}
-${params.pageUrl ? `<p><strong>From page:</strong> ${params.pageUrl}</p>` : ''}
-<p><strong>Message:</strong></p>
-<p style="white-space:pre-wrap">${escaped}</p>
-`,
+        <p><strong>Category:</strong> ${CATEGORY_LABELS[params.category] ?? params.category}</p>
+        ${escapedContact ? `<p><strong>Reply to:</strong> ${escapedContact}</p>` : ''}
+        ${escapedPageUrl ? `<p><strong>From page:</strong> ${escapedPageUrl}</p>` : ''}
+        <p><strong>Message:</strong></p>
+        <p style="white-space:pre-wrap">${escapedMessage}</p>
+      `,
     }),
   })
   if (!resp.ok) {
@@ -81,6 +94,7 @@ export async function POST(request: Request) {
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
+
   const limited = await checkRateLimit(request, {
     route: 'feedback',
     limit: 5,
@@ -98,13 +112,15 @@ export async function POST(request: Request) {
   }
 
   const pageUrl = request.headers.get('referer')
+
   const { error: insertError } = await supabase.from('feedback').insert({
     profile_id: user.id,
     category: parsed.data.category,
     message: parsed.data.message,
     contact_email: parsed.data.contact_email ?? null,
-    page_url: pageUrl,
+    page_url: pageUrl ? pageUrl.slice(0, PAGE_URL_MAX) : null,
   })
+
   if (insertError) {
     logError(ROUTE, 'insert_failed', undefined, insertError)
     // 42501 = RLS denied the insert. In practice this means the feedback
