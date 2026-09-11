@@ -11,6 +11,12 @@
 // `next` defaults to /dashboard so any redirect that forgets to pass it
 // still lands somewhere sensible rather than erroring.
 //
+// INPUT HARDENING: `next` is user-controlled input that decides a
+// redirect target. safeNextPath (lib/validate.ts) whitelists same-origin
+// relative paths only -- blocking //evil.com, absolute URLs, backslash
+// normalization tricks and control characters -- so this route can never
+// be turned into an open redirect.
+//
 // REFERRAL ATTRIBUTION: if a ref_id cookie is present (set by
 // middleware.ts the moment someone visits a /s/[id] share link before
 // signing up), stamp it onto the new user's profiles.referred_by the
@@ -21,26 +27,30 @@
 // Guarded with .is('referred_by', null) so it can only ever be set once
 // per profile, and the cookie is cleared right after so a returning user
 // who logs out and back in on the same device doesn't get re-attributed.
+// The cookie value is user-controlled input, so it is UUID-validated
+// here (second gate after middleware) before it reaches the database.
 // A failure here is logged but never blocks sign-in -- attribution is a
 // growth metric, not something worth failing auth over.
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/logging";
+import { safeNextPath, isUuid } from "@/lib/validate";
 
 const REF_COOKIE_NAME = "ref_id";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/dashboard";
+  const next = safeNextPath(searchParams.get("next"), "/dashboard");
+
   if (code) {
     const supabase = createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error && data.user) {
       const cookieStore = cookies();
       const refId = cookieStore.get(REF_COOKIE_NAME)?.value;
-      if (refId && refId !== data.user.id) {
+      if (refId && isUuid(refId) && refId !== data.user.id) {
         const { error: attributionError } = await supabase
           .from("profiles")
           .update({ referred_by: refId })
@@ -54,6 +64,7 @@ export async function GET(request: Request) {
       return NextResponse.redirect(origin + next);
     }
   }
+
   return NextResponse.redirect(
     origin +
       "/login?error=" +
