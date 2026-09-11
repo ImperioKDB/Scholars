@@ -97,9 +97,9 @@ was verified since the first press.
 <p className="text-sm text-navy-light mb-4">
 Emails students whose profile is under 100%, naming the exact fields they&apos;re missing so
 they know what to add. The scheduled job runs daily at 9:00am Nigeria time, at most once
-every 2 days per student, and stops after 5 emails. Press this to run the same pass
-immediately -- anyone reminded in the last 2 days is skipped, so pressing twice the same
-day sends nothing new the second time.
+every 2 days per student, and stops after 5 emails. The navy button runs the same pass
+immediately, skipping anyone reminded in the last 2 days. The outlined button overrides
+both guards and emails every incomplete profile right now, for one-off campaigns only.
 </p>
 <SendProfileNudgesButton lastNudgeAt={stats.lastNudgeAt} />
 </div>
