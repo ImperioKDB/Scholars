@@ -15,9 +15,14 @@
 // last, so time-sensitive items surface first and rolling/no-deadline
 // items (mentorships, ongoing internships) settle to the bottom rather
 // than dominating the top of the list.
+//
+// INPUT HARDENING: same treatment as GET /api/scholarships -- ILIKE
+// wildcards escaped for `discipline`, PostgREST structural characters
+// stripped and wildcards escaped for `q`.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { escapeLikePattern, sanitizeSearchText } from '@/lib/validate'
 
 const querySchema = z.object({
   type: z.enum(['fellowship', 'internship', 'competition', 'mentorship']).optional(),
@@ -54,7 +59,6 @@ export async function GET(request: Request) {
       { status: 400 }
     )
   }
-
   const { type, discipline, q, limit, offset } = parsed.data
 
   let query = supabase
@@ -65,9 +69,9 @@ export async function GET(request: Request) {
     .range(offset, offset + limit - 1)
 
   if (type) query = query.eq('type', type)
-  if (discipline) query = query.ilike('discipline', `%${discipline}%`)
+  if (discipline) query = query.ilike('discipline', `%${escapeLikePattern(discipline)}%`)
   if (q) {
-    const safe = q.replace(/[%,()]/g, ' ').trim()
+    const safe = sanitizeSearchText(q)
     if (safe) {
       query = query.or(`title.ilike.%${safe}%,provider_name.ilike.%${safe}%`)
     }
