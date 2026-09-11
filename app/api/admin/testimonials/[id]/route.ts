@@ -7,18 +7,30 @@
 // stored or set true in this same patch). The public RLS policy is the
 // backstop, but refusing here keeps the admin UI from showing a publish
 // toggle that silently does nothing.
+//
+// INPUT HARDENING: photo_url is pinned to the project's own `site`
+// storage bucket (see the sibling route.ts for the reasoning), and the
+// id path param is UUID-validated.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { assertAdmin } from '@/lib/admin/guard'
+import { isOwnStorageUrl, isUuid } from '@/lib/validate'
 
 const updateSchema = z
   .object({
     quote: z.string().trim().min(10).max(300).optional(),
     full_name: z.string().trim().min(2).max(80).optional(),
     role: z.string().trim().min(2).max(120).optional(),
-    photo_url: z.string().url().nullable().optional(),
+    photo_url: z
+      .string()
+      .refine(
+        (v) => isOwnStorageUrl(v, 'site'),
+        'photo_url must be an https URL in this project\'s site storage bucket'
+      )
+      .nullable()
+      .optional(),
     consent: z.boolean().optional(),
     approved: z.boolean().optional(),
     sort_order: z.number().int().optional(),
@@ -28,10 +40,16 @@ const updateSchema = z
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const limited = await checkRateLimit(request, { route: 'admin-testimonials-id', limit: 60 })
   if (limited) return limited
+
   const { id } = await params
+  if (!isUuid(id)) {
+    return NextResponse.json({ error: 'Testimonial not found' }, { status: 404 })
+  }
+
   const supabase = await createClient()
   const guard = await assertAdmin(supabase)
   if (!guard.ok) return guard.response
+
   const raw = await request.json().catch(() => null)
   const parsed = updateSchema.safeParse(raw)
   if (!parsed.success) {
@@ -40,6 +58,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       { status: 400 }
     )
   }
+
   if (parsed.data.approved === true) {
     const { data: row } = await supabase
       .from('testimonials')
@@ -54,30 +73,40 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       )
     }
   }
+
   const { data, error } = await supabase
     .from('testimonials')
     .update(parsed.data)
     .eq('id', id)
     .select('*')
     .single()
+
   if (error) {
     if (error.code === 'PGRST116') {
       return NextResponse.json({ error: 'Testimonial not found' }, { status: 404 })
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
   return NextResponse.json({ testimonial: data })
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const limited = await checkRateLimit(request, { route: 'admin-testimonials-id', limit: 60 })
   if (limited) return limited
+
   const { id } = await params
+  if (!isUuid(id)) {
+    return NextResponse.json({ error: 'Testimonial not found' }, { status: 404 })
+  }
+
   const supabase = await createClient()
   const guard = await assertAdmin(supabase)
   if (!guard.ok) return guard.response
+
   const { error, count } = await supabase.from('testimonials').delete({ count: 'exact' }).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!count) return NextResponse.json({ error: 'Testimonial not found' }, { status: 404 })
+
   return NextResponse.json({ message: 'Testimonial deleted' })
 }
