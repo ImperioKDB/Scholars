@@ -47,6 +47,9 @@ export type ScholarshipRow = {
   level: "undergrad" | "postgrad" | "both";
   discipline: string | null;
   verified: boolean;
+  // Push C trust surface: when an admin last confirmed this listing as
+  // live/accurate. Null = verified before migration 0021, or never verified.
+  last_verified_at: string | null;
   awards_available: number | null;
   estimated_applicant_pool: number | null;
   competitiveness_tier: CompetitivenessTier | null;
