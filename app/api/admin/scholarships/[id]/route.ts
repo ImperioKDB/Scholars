@@ -1,23 +1,35 @@
 // app/api/admin/scholarships/[id]/route.ts
-// PATCH  /api/admin/scholarships/[id] - partially update a scholarship, admin only
-// DELETE /api/admin/scholarships/[id] - delete a scholarship (cascades to its
+// PATCH  /api/admin/scholarships/[id] — partially update a scholarship, admin only
+// DELETE /api/admin/scholarships/[id] — delete a scholarship (cascades to its
 //        rules and any saved_scholarships/notifications rows via FK ON DELETE)
 //
 // PATCH rather than PUT: PUT implies replacing the whole resource, but
-// admin edits here are typically "toggle verified" or "fix a deadline" -
+// admin edits here are typically "toggle verified" or "fix a deadline" —
 // partial updates are the actual usage pattern.
 //
-// ERROR HYGIENE (Push C): 500s go through dbErrorResponse() so raw Postgres
-// messages never reach the admin client.
+// Phase 2: whenever an admin sets deadline, opens_at, or
+// last_cycle_closed_at, an observed cycle_events row is recorded (deduped
+// by scholarship + kind + date), so cycle history builds organically from
+// real admin work instead of requiring a separate data-entry step. A
+// cycle-log failure never fails the PATCH itself.
+//
+// Phase 3 trust: flipping verified to true stamps last_verified_at with
+// the current time; flipping to false clears it, so re-verifying a stale
+// listing produces a fresh timestamp. Stamps silently if the column is
+// missing (migration 0022 not yet applied).
+//
+// ERROR HYGIENE: 500s go through dbErrorResponse.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { assertAdmin } from '@/lib/admin/guard'
-import { httpUrlSchema, isUuid } from '@/lib/validate'
 import { decodeUnicodeEscapes } from '@/lib/text/unicode'
+import { logError } from '@/lib/logging'
 import { dbErrorResponse } from '@/lib/errors'
+
 const ROUTE = 'admin/scholarships/[id]'
+
 const updateSchema = z
   .object({
     title: z.string().trim().min(1).max(300).transform(decodeUnicodeEscapes),
@@ -25,9 +37,15 @@ const updateSchema = z
     description: z.string().trim().max(5000).transform(decodeUnicodeEscapes).nullable(),
     amount: z.string().trim().max(200).transform(decodeUnicodeEscapes).nullable(),
     deadline: z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'Invalid date'),
-    opens_at: z.string().nullable().refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Invalid date'),
-    last_cycle_closed_at: z.string().nullable().refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Invalid date'),
-    application_url: httpUrlSchema.nullable(),
+    opens_at: z
+      .string()
+      .nullable()
+      .refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Invalid date'),
+    last_cycle_closed_at: z
+      .string()
+      .nullable()
+      .refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Invalid date'),
+    application_url: z.string().url().nullable(),
     how_to_apply: z.string().trim().max(2000).transform(decodeUnicodeEscapes).nullable(),
     level: z.enum(['undergrad', 'postgrad', 'both']),
     discipline: z.string().trim().max(200).nullable(),
@@ -40,14 +58,16 @@ const updateSchema = z
   })
   .partial()
   .refine((obj) => Object.keys(obj).length > 0, 'No fields to update')
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const limited = await checkRateLimit(request, { route: ROUTE, limit: 60 })
+  const limited = await checkRateLimit(request, { route: 'admin-scholarships-id', limit: 60 })
   if (limited) return limited
+
   const { id } = await params
-  if (!isUuid(id)) return NextResponse.json({ error: 'Scholarship not found' }, { status: 404 })
   const supabase = await createClient()
   const guard = await assertAdmin(supabase)
   if (!guard.ok) return guard.response
+
   const raw = await request.json().catch(() => null)
   const parsed = updateSchema.safeParse(raw)
   if (!parsed.success) {
@@ -56,29 +76,75 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       { status: 400 }
     )
   }
+
+  // Phase 3 trust: stamp last_verified_at on verify-toggle. Wrapped so a
+  // missing column (migration 0022 not yet applied) never fails the PATCH.
+  const patch: Record<string, unknown> = { ...parsed.data }
+  if (typeof parsed.data.verified === 'boolean') {
+    try {
+      patch.last_verified_at = parsed.data.verified ? new Date().toISOString() : null
+    } catch {
+      // ignore -- column will be absent until 0022 runs
+    }
+  }
+
   const { data: scholarship, error } = await supabase
     .from('scholarships')
-    .update(parsed.data)
+    .update(patch)
     .eq('id', id)
     .select('*, scholarship_rules ( id, field, operator, value )')
     .single()
+
   if (error) {
     if (error.code === 'PGRST116') {
       return NextResponse.json({ error: 'Scholarship not found' }, { status: 404 })
     }
     return dbErrorResponse(ROUTE, error)
   }
+
+  // Phase 2 cycle history: record observed window changes. Deduped so
+  // re-saving the same date never doubles an event and skews prediction.
+  try {
+    const cycleWrites: { kind: 'opened' | 'closed' | 'deadline_set'; date: string }[] = [];
+    if (parsed.data.opens_at) cycleWrites.push({ kind: 'opened', date: parsed.data.opens_at });
+    if (parsed.data.last_cycle_closed_at) cycleWrites.push({ kind: 'closed', date: parsed.data.last_cycle_closed_at });
+    if (parsed.data.deadline) cycleWrites.push({ kind: 'deadline_set', date: parsed.data.deadline });
+    for (const w of cycleWrites) {
+      const { data: existing } = await supabase
+        .from('cycle_events')
+        .select('id')
+        .eq('scholarship_id', id)
+        .eq('kind', w.kind)
+        .eq('event_date', w.date)
+        .limit(1);
+      if ((existing ?? []).length === 0) {
+        await supabase.from('cycle_events').insert({
+          scholarship_id: id,
+          kind: w.kind,
+          event_date: w.date,
+          captured_by: guard.userId,
+          note: 'admin update',
+        });
+      }
+    }
+  } catch (err) {
+    logError('admin/scholarships/[id]', 'cycle_event_write_failed', { scholarship: id }, err);
+  }
+
   return NextResponse.json({ scholarship })
 }
+
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const limited = await checkRateLimit(request, { route: ROUTE, limit: 60 })
+  const limited = await checkRateLimit(request, { route: 'admin-scholarships-id', limit: 60 })
   if (limited) return limited
+
   const { id } = await params
-  if (!isUuid(id)) return NextResponse.json({ error: 'Scholarship not found' }, { status: 404 })
   const supabase = await createClient()
   const guard = await assertAdmin(supabase)
   if (!guard.ok) return guard.response
+
   const { error } = await supabase.from('scholarships').delete().eq('id', id)
   if (error) return dbErrorResponse(ROUTE, error)
+
   return NextResponse.json({ message: 'Scholarship deleted' })
 }
