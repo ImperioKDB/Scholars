@@ -1,9 +1,7 @@
 'use client';
 
 import { useState, useEffect } from "react";
-import { formatDistanceToNow } from "date-fns";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Avatar } from "../Avatar";
+import { Avatar } from "@/components/Avatar";
 
 interface ActiveUser {
   id: string;
@@ -14,6 +12,28 @@ interface ActiveUser {
   profile_completeness: number;
   isActive: boolean;
 }
+
+// Simple implementation to replace date-fns dependency
+const formatDistanceToNow = (timestamp: string | null) => {
+  if (!timestamp) return "Never";
+  try {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    
+    if (diffInSeconds < 60) return "Just now";
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    return `${diffInDays}d ago`;
+  } catch {
+    return "Invalid date";
+  }
+};
 
 export function ActiveUsersTable() {
   const [users, setUsers] = useState<ActiveUser[]>([]);
@@ -49,15 +69,6 @@ export function ActiveUsersTable() {
     
     return () => clearInterval(interval);
   }, []);
-
-  const formatLastSeen = (timestamp: string | null) => {
-    if (!timestamp) return "Never";
-    try {
-      return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
-    } catch {
-      return "Invalid date";
-    }
-  };
 
   const formatEmail = (email: string | null) => {
     if (!email) return "No email";
@@ -100,21 +111,21 @@ export function ActiveUsersTable() {
                 <tr key={i} className="border-b border-hairline last:border-0">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-3">
-                      <Skeleton className="w-10 h-10 rounded-full" />
+                      <div className="w-10 h-10 rounded-full bg-gray-200" />
                       <div>
-                        <Skeleton className="h-4 w-24 rounded mb-1" />
-                        <Skeleton className="h-3 w-32 rounded" />
+                        <div className="h-4 w-24 bg-gray-200 rounded mb-1" />
+                        <div className="h-3 w-32 bg-gray-200 rounded" />
                       </div>
                     </div>
                   </td>
                   <td className="py-3 px-4">
-                    <Skeleton className="h-4 w-16 rounded" />
+                    <div className="h-4 w-16 bg-gray-200 rounded" />
                   </td>
                   <td className="py-3 px-4">
-                    <Skeleton className="h-4 w-20 rounded" />
+                    <div className="h-4 w-20 bg-gray-200 rounded" />
                   </td>
                   <td className="py-3 px-4">
-                    <Skeleton className="h-2 w-24 rounded" />
+                    <div className="h-2 w-24 bg-gray-200 rounded" />
                   </td>
                 </tr>
               ))}
@@ -191,7 +202,7 @@ export function ActiveUsersTable() {
                   </span>
                 </td>
                 <td className="py-3 px-4 text-navy-light">
-                  {formatLastSeen(user.last_seen)}
+                  {formatDistanceToNow(user.last_seen)}
                 </td>
                 <td className="py-3 px-4">
                   <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
