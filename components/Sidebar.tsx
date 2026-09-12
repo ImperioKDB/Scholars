@@ -1,6 +1,6 @@
 // components/Sidebar.tsx
 // App shell navigation: desktop aside, mobile drawer, and the transient
-// mobile tab bar. Initials now come from the shared lib/text/initials.ts
+// mobile tab bar. Initials come from the shared lib/text/initials.ts
 // (this file used to carry its own copy, the one that accepted null).
 "use client";
 import { useEffect, useRef, useState } from "react";
