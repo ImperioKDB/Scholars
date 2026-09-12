@@ -1,5 +1,4 @@
 "use client";
-
 import { FormField, inputClass, selectClass, textareaClass } from "@/components/FormField";
 import { Combobox } from "@/components/Combobox";
 import {
@@ -7,9 +6,7 @@ import {
   DISCIPLINE_OPTIONS,
   type ScholarshipFormValues,
 } from "@/lib/admin/scholarship";
-
 const DISCIPLINE_COMBO_OPTIONS = DISCIPLINE_OPTIONS.map((d) => ({ value: d, label: d }));
-
 export function ScholarshipFields({
   values,
   errors,
@@ -20,7 +17,18 @@ export function ScholarshipFields({
   onChange: <K extends keyof ScholarshipFormValues>(key: K, value: ScholarshipFormValues[K]) => void;
 }) {
   const missingApplyPath = values.verified && !values.application_url?.trim() && !values.how_to_apply?.trim();
-
+  // Phase 2 honesty guard: a verified listing whose deadline has already
+  // passed but has neither a last-cycle close date nor an open date reads
+  // to students as a bare "Closed" with no cycle story and no prediction.
+  // Warn the admin rather than silently publishing that state. Soft guard
+  // on purpose: there are legitimate one-off awards with past deadlines.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const closedCyclical =
+    values.verified &&
+    Boolean(values.deadline) &&
+    values.deadline < todayIso &&
+    !values.last_cycle_closed_at?.trim() &&
+    !values.opens_at?.trim();
   return (
     <div className="grid md:grid-cols-2 gap-x-6">
       <div className="md:col-span-2">
@@ -33,7 +41,6 @@ export function ScholarshipFields({
           />
         </FormField>
       </div>
-
       <FormField label="Provider name" error={errors.provider_name}>
         <input
           className={inputClass}
@@ -42,7 +49,6 @@ export function ScholarshipFields({
           placeholder="e.g. MTN Foundation"
         />
       </FormField>
-
       <FormField label="Award amount" hint="Free text -- amounts vary too much for a fixed format.">
         <input
           className={inputClass}
@@ -51,7 +57,6 @@ export function ScholarshipFields({
           placeholder="e.g. \u20a6300,000 + Mentorship"
         />
       </FormField>
-
       <FormField label="Deadline" error={errors.deadline}>
         <input
           className={inputClass}
@@ -60,7 +65,6 @@ export function ScholarshipFields({
           onChange={(e) => onChange("deadline", e.target.value)}
         />
       </FormField>
-
       <FormField
         label="Opens on"
         error={errors.opens_at}
@@ -73,7 +77,17 @@ export function ScholarshipFields({
           onChange={(e) => onChange("opens_at", e.target.value)}
         />
       </FormField>
-
+      <FormField
+        label="Last cycle closed"
+        hint="For cyclical awards: the date the PREVIOUS window closed. Powers the 'next cycle likely around' label students see."
+      >
+        <input
+          className={inputClass}
+          type="date"
+          value={values.last_cycle_closed_at ?? ""}
+          onChange={(e) => onChange("last_cycle_closed_at", e.target.value)}
+        />
+      </FormField>
       <FormField
         label="Application URL"
         error={errors.application_url}
@@ -87,7 +101,6 @@ export function ScholarshipFields({
           placeholder="https://..."
         />
       </FormField>
-
       <div className="md:col-span-2">
         <FormField
           label="How to apply (fallback)"
@@ -102,7 +115,6 @@ export function ScholarshipFields({
           />
         </FormField>
       </div>
-
       {missingApplyPath && (
         <div className="md:col-span-2 -mt-2 mb-4">
           <p className="text-xs text-amber bg-amber-light rounded-lg px-3.5 py-2.5">
@@ -111,7 +123,16 @@ export function ScholarshipFields({
           </p>
         </div>
       )}
-
+      {closedCyclical && (
+        <div className="md:col-span-2 -mt-2 mb-4">
+          <p className="text-xs text-amber bg-amber-light rounded-lg px-3.5 py-2.5">
+            The deadline is in the past and this is marked Verified, but there is no last-cycle
+            close date and no open date. Students will see a bare &quot;Closed&quot; with no cycle
+            story. Record when the last window closed (or unverify until the next window) so the
+            cycle label stays honest.
+          </p>
+        </div>
+      )}
       <FormField label="Academic level" hint="Platform is undergrad-only -- postgrad listings won't be matched or shown.">
         <select
           className={selectClass}
@@ -122,16 +143,14 @@ export function ScholarshipFields({
           <option value="undergrad">Undergraduate only</option>
         </select>
       </FormField>
-
       <FormField label="Field of study" hint="Leave blank if open to any discipline. Search and select -- typing alone won't set it.">
         <Combobox
           options={DISCIPLINE_COMBO_OPTIONS}
           value={values.discipline ?? ""}
           onChange={(value) => onChange("discipline", value)}
-          placeholder="Search a course, or leave blank for any"
+          placeholder="Search a course"
         />
       </FormField>
-
       <div className="md:col-span-2">
         <FormField label="Description">
           <textarea
@@ -142,7 +161,6 @@ export function ScholarshipFields({
           />
         </FormField>
       </div>
-
       {/* Competitiveness -- separate from eligibility rules above. These
           feed lib/matching/engine.ts's computeCompetitivenessFactor, which
           discounts (never boosts) the eligibility score students see based
@@ -157,7 +175,6 @@ export function ScholarshipFields({
           haven&apos;t researched this yet; unresearched scholarships are not penalized.
         </p>
       </div>
-
       <FormField
         label="Awards available"
         error={errors.awards_available}
@@ -172,7 +189,6 @@ export function ScholarshipFields({
           placeholder="e.g. 50"
         />
       </FormField>
-
       <FormField
         label="Estimated applicant pool"
         error={errors.estimated_applicant_pool}
@@ -187,7 +203,6 @@ export function ScholarshipFields({
           placeholder="e.g. 3000"
         />
       </FormField>
-
       <FormField
         label="Competitiveness tier"
         hint="Fallback used when you don't have precise awards/pool numbers."
@@ -205,7 +220,6 @@ export function ScholarshipFields({
           ))}
         </select>
       </FormField>
-
       <FormField
         label="Historical acceptance rate"
         error={errors.historical_acceptance_rate}
@@ -222,7 +236,6 @@ export function ScholarshipFields({
           placeholder="e.g. 0.08"
         />
       </FormField>
-
       <div className="md:col-span-2">
         <FormField
           label="Competitiveness notes (admin-only)"
@@ -236,7 +249,6 @@ export function ScholarshipFields({
           />
         </FormField>
       </div>
-
       <div className="md:col-span-2">
         <label className="flex items-center gap-2 text-sm font-medium text-ink mb-4 mt-2">
           <input
