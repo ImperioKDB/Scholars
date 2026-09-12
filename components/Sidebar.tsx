@@ -74,6 +74,34 @@ export function Sidebar({
       if (barHideTimer.current) clearTimeout(barHideTimer.current);
     };
   }, []);
+
+  // PRESENCE HEARTBEAT: update profiles.last_seen_at on mount and every
+// 60 seconds while the app is open. Powers the Active/Idle/Offline
+// buckets on /admin/users. Fire-and-forget with keepalive so it survives
+// tab navigation and never blocks the UI. A missed tick is harmless --
+// the next one still lands.
+useEffect(() => {
+  let cancelled = false;
+  async function beat() {
+    if (cancelled) return;
+    try {
+      await fetch("/api/heartbeat", { method: "POST", keepalive: true });
+    } catch {
+      // presence must never break the shell -- swallow silently
+    }
+  }
+  beat();
+  const id = window.setInterval(beat, 60_000);
+  function onVisible() {
+    if (document.visibilityState === "visible") beat();
+  }
+  document.addEventListener("visibilitychange", onVisible);
+  return () => {
+    cancelled = true;
+    window.clearInterval(id);
+    document.removeEventListener("visibilitychange", onVisible);
+  };
+}, []);
   const { level } = levelForXp(xpTotal);
   const navItems = [
     { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
