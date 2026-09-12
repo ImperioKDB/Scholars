@@ -18,6 +18,7 @@ async function getStats() {
     lastLog,
     lastNudge,
     { data: eventRows },
+    { data: appRows },
   ] = await Promise.all([
     supabase.from("scholarships").select("*", { count: "exact", head: true }),
     supabase.from("scholarships").select("*", { count: "exact", head: true }).eq("verified", true),
@@ -38,6 +39,11 @@ async function getStats() {
     // Activation funnel (Phase 1, migration 0019). Degrades to zeroes
     // pre-migration: the select errors and eventRows stays null.
     supabase.from("events").select("event").gte("created_at", sinceIso),
+    // Push C outcome funnel: what tracked applications turn into. Admin
+    // can read all applications via applications_select_admin; students
+    // never see this (RLS), and student-facing outcome stats stay gated
+    // behind a future k-anonymity aggregate.
+    supabase.from("applications").select("status"),
   ]);
   const activation: Record<string, number> = {
     profile_created: 0,
@@ -49,6 +55,17 @@ async function getStats() {
   for (const row of eventRows ?? []) {
     if (typeof row.event === "string" && row.event in activation) {
       activation[row.event] += 1;
+    }
+  }
+  const outcome: Record<string, number> = {
+    in_progress: 0,
+    submitted: 0,
+    accepted: 0,
+    rejected: 0,
+  };
+  for (const row of appRows ?? []) {
+    if (typeof row.status === "string" && row.status in outcome) {
+      outcome[row.status] += 1;
     }
   }
   const { data: recent } = await supabase
@@ -66,6 +83,7 @@ async function getStats() {
     lastNudgeAt:
       (lastNudge?.data?.[0]?.profile_reminder_last_sent_at as string | undefined) ?? null,
     activation,
+    outcome,
     recent: recent ?? [],
   };
 }
@@ -84,6 +102,12 @@ export default async function AdminOverviewPage() {
     { label: "Nudge clicks", value: stats.activation.gap_nudge_clicked },
     { label: "Completed profile", value: stats.activation.profile_completed },
     { label: "WhatsApp opt-ins", value: stats.activation.whatsapp_opt_in },
+  ];
+  const outcomeCards = [
+    { label: "In progress", value: stats.outcome.in_progress },
+    { label: "Submitted", value: stats.outcome.submitted },
+    { label: "Accepted", value: stats.outcome.accepted },
+    { label: "Rejected", value: stats.outcome.rejected },
   ];
   return (
     <div>
@@ -118,6 +142,22 @@ export default async function AdminOverviewPage() {
         </p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {activationCards.map((c) => (
+            <div key={c.label} className="bg-parchment rounded-xl border border-hairline p-4">
+              <p className="font-mono text-2xl font-semibold text-navy">{c.value}</p>
+              <p className="text-xs text-navy-light mt-1">{c.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="bg-white rounded-xl border border-hairline p-5 mb-10">
+        <h2 className="font-display text-lg font-semibold text-navy mb-1">Outcome funnel (all time)</h2>
+        <p className="text-sm text-navy-light mb-4">
+          What tracked applications turn into. Accepted and rejected counts are the raw
+          material for future &quot;students like you&quot; benchmarks, once volume clears the
+          k-anonymity gate. Students never see this page.
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {outcomeCards.map((c) => (
             <div key={c.label} className="bg-parchment rounded-xl border border-hairline p-4">
               <p className="font-mono text-2xl font-semibold text-navy">{c.value}</p>
               <p className="text-xs text-navy-light mt-1">{c.label}</p>
