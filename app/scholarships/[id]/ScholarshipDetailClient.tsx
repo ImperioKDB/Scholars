@@ -11,7 +11,7 @@ import { CompetitivenessBadge, type CompetitivenessTier } from "@/components/Com
 import { RequirementsList, type Requirement } from "@/components/RequirementsList";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { useAde } from "@/components/ade/AdeProvider";
-
+import type { CyclePrediction } from "@/lib/cycles";
 type ScholarshipDetail = {
   id: string;
   title: string;
@@ -31,8 +31,8 @@ type ScholarshipDetail = {
   historical_acceptance_rate: number | null;
   tier: "excellent" | "good" | "possible" | "unlikely";
   requirements: Requirement[];
+  cycle?: CyclePrediction | null;
 };
-
 export type SimilarScholarship = {
   id: string;
   title: string;
@@ -42,23 +42,19 @@ export type SimilarScholarship = {
   level: "undergrad" | "postgrad" | "both";
   discipline: string | null;
 };
-
 type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected";
-
 const TIER_LABELS: Record<ScholarshipDetail["tier"], string> = {
   excellent: "Excellent fit",
   good: "Worth a look",
   possible: "Possible",
   unlikely: "Long shot",
 };
-
 const STATUS_LABELS: Record<ApplicationStatus, string> = {
   in_progress: "In progress",
   submitted: "Submitted",
   accepted: "Accepted",
   rejected: "Rejected",
 };
-
 export function ScholarshipDetailClient({
   scholarship,
   initialSaved,
@@ -79,7 +75,6 @@ export function ScholarshipDetailClient({
   const [savePending, setSavePending] = useState(false);
   const [trackPending, setTrackPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-
   // APPLY CLICK TRACKING: the detail page apply link used to be a
   // plain anchor, so Ade never learned the student left for the
   // provider's portal unless they happened to use Open application
@@ -91,11 +86,9 @@ export function ScholarshipDetailClient({
       method: "POST",
     }).catch(() => {});
   }
-
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
-
   async function toggleSave() {
     setActionError(null);
     const wasSaved = saved;
@@ -119,7 +112,6 @@ export function ScholarshipDetailClient({
     }
     setSavePending(false);
   }
-
   async function startTracking() {
     setActionError(null);
     setTrackPending(true);
@@ -141,7 +133,6 @@ export function ScholarshipDetailClient({
     }
     setTrackPending(false);
   }
-
   return (
     <div>
       <BackLink href="/dashboard" label="Back to matches" />
@@ -170,6 +161,15 @@ export function ScholarshipDetailClient({
             <span className="text-xs text-navy-light px-2 py-1">&middot; {scholarship.discipline}</span>
           )}
         </div>
+        {scholarship.cycle && (
+          <p className="text-xs text-navy-light mb-4">
+            This award runs in cycles. {scholarship.cycle.label}
+            {scholarship.cycle.confidence === "observed"
+              ? ", based on its past open windows"
+              : ", estimated from its last close date"}
+            . Save it and we will tell you when applications open.
+          </p>
+        )}
         <CompetitivenessBadge
           awardsAvailable={scholarship.awards_available}
           estimatedApplicantPool={scholarship.estimated_applicant_pool}
