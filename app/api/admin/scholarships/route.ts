@@ -12,6 +12,10 @@
 // INPUT HARDENING: application_url uses httpUrlSchema (http/https only),
 // because z.string().url() accepts javascript:/data: URLs and this value
 // is opened via window.open in the student UI.
+//
+// Push C: when a listing is created already verified, stamp
+// last_verified_at so the public "last checked" trust line has a real date
+// from day one.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -79,9 +83,12 @@ export async function POST(request: Request) {
     )
   }
   const { rules, ...scholarshipFields } = parsed.data
+  // Push C trust surface: a listing born verified gets its first
+  // last_verified_at stamp immediately.
+  const stamp = parsed.data.verified ? new Date().toISOString() : null
   const { data: scholarship, error: insertError } = await supabase
     .from('scholarships')
-    .insert({ ...scholarshipFields, created_by: guard.userId })
+    .insert({ ...scholarshipFields, last_verified_at: stamp, created_by: guard.userId })
     .select('*')
     .single()
   if (insertError) {
