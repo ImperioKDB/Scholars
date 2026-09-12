@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/admin/access";
 import { createClient } from "@/lib/supabase/server";
 import { daysUntil } from "@/lib/dates";
-
+import { ADMIN_HEALTH_ROW_CAP } from "@/lib/config";
 // app/admin/health/page.tsx
 // GET /admin/health
 //
@@ -28,10 +28,10 @@ import { daysUntil } from "@/lib/dates";
 // AUDIT FIX (batch 3): RELIABILITY CAP. The original query had no limit,
 // so a 10,000-row catalog would serialize every row into one serverless
 // response and risk blowing the function's memory/time budget. Health
-// triage only ever acts on the soonest deadlines, so we cap at ROW_CAP
-// ordered by deadline and say so loudly when the cap bites.
-const ROW_CAP = 2000;
-
+// triage only ever acts on the soonest deadlines, so we cap at
+// ADMIN_HEALTH_ROW_CAP ordered by deadline and say so loudly when the
+// cap bites.
+const ROW_CAP = ADMIN_HEALTH_ROW_CAP;
 type Row = {
   id: string;
   title: string;
@@ -42,12 +42,10 @@ type Row = {
   how_to_apply: string | null;
   updated_at: string;
 };
-
 function isPast(deadline: string): boolean {
   const d = daysUntil(deadline);
   return d !== null && d < 0;
 }
-
 function DeadlineChip({ deadline }: { deadline: string }) {
   const d = daysUntil(deadline);
   if (d === null) return <span className="text-xs text-navy-light">{deadline}</span>;
@@ -65,7 +63,6 @@ function DeadlineChip({ deadline }: { deadline: string }) {
     );
   return <span className="text-xs font-mono text-navy-light">{d}d left</span>;
 }
-
 function VerifiedBadge({ verified }: { verified: boolean }) {
   return (
     <span
@@ -78,7 +75,6 @@ function VerifiedBadge({ verified }: { verified: boolean }) {
     </span>
   );
 }
-
 function Tile({
   value,
   label,
@@ -99,7 +95,6 @@ function Tile({
     </div>
   );
 }
-
 function Section({ title, sub, children }: { title: string; sub: string; children: React.ReactNode }) {
   return (
     <div className="bg-white rounded-xl border border-hairline p-5 mb-6">
@@ -109,7 +104,6 @@ function Section({ title, sub, children }: { title: string; sub: string; childre
     </div>
   );
 }
-
 function HealthRow({ row, right }: { row: Row; right?: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3 py-2.5 border-b border-hairline last:border-0">
@@ -126,11 +120,9 @@ function HealthRow({ row, right }: { row: Row; right?: React.ReactNode }) {
     </div>
   );
 }
-
 function AllClear() {
   return <p className="text-sm text-emerald">Nothing here -- all clear.</p>;
 }
-
 export default async function AdminHealthPage() {
   await requireAdmin();
   const supabase = createClient();
