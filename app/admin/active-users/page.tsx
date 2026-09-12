@@ -1,1 +1,18 @@
-λήοNοnψΫNΫΫN5λ~ψλήϊλyο~Ήοnχηµλnλ΄νέ΄λ®φιώΫM¶γMλ~ιήτιώλοχΩώµλλήΩώ5λ~ψλήϊλyο~Ήοnχηµλnλ¶έ½Ρ®ΉοΞτιώφο΄λΉλ®µοο΄λ®ωιξ·ο½ιώΫN5λ~ψλήϊλyο~ΉοnχηNµλΎΉΫΝ½ΫNΫΡ­΄ΫNφλψοφιν΄ΫΝΫM΄ΫM΄έΞΈλήϊΫN·ιΞµο~χαξµιήΉέέ¶ιή½ινλΝο~·οnΉλΫN¶λ½οNµοn·λΞλο¶ένΫM΄ΫM΄ΫM΄έΞλ^½ιν΄λήΈέέ¶ιήµλήΫm΄λ~λ^χο~λ^λέΫnλΪοNΩέϊίM¶ένΫM΄ΫM΄ΫM΄ΫM΄έΞΈλήϊΫN·ιΞµο~χαξµιήΉέέ¶ιήόΩήµοψιύ΄ιήµοΝο½ίΎόιΝ΄οNόΩέϊΫNτοίmτΫNτλmίmψΫNλΪοNψΩέυίM΄ιήΈέ®τλmί]τΫmήΡ­΄ΫM΄ΫM΄ΫM΄ΫM΄ΫMάλ½ο­΄λ~λ^χο~λ^λέΫnλmίΝ¶ένΫM΄ΫM΄ΫM΄ΫM΄ΫM΄ΫM΄έΞΌί]΄λ~λ^χο~λ^λέΫnψλόοίnόιΝ΄λ®ιξψΩήΈλήχοNλ^ύΫNΊιώολnιΞΈΫNψλόοιξµο®ύΫNλmίm¶έξ5λ~ψλήϊλ΄ηχλφο}άΩώΌί]ήΡ­΄ΫM΄ΫM΄ΫM΄ΫM΄ΫM΄ΫMάοM΄λ~λ^χο~λ^λέΫnψλόοο~ΫNψλόοιξµο®ύΩήλή»λΞψΫmήαήιξ½οοm΄οnΉλ^Ωήψλήλ΄λ^·ο½ο®½ούΫNλ­΄οnΉλΎ½ο~ψλφλΈΫNωο~ΉοnχέΝοMήΡ­΄ΫM΄ΫM΄ΫM΄ΫM΄ΫMάΩώΈλήϊένΫM΄ΫM΄ΫM΄ΫM΄ΫM΄Ρ­΄ΫM΄ΫM΄ΫM΄ΫM΄ΫMάγ^·ο½ο®Ήηχλφο~xλ^¶ιΞΉΫMένΫM΄ΫM΄ΫM΄ΫM΄έΝλ½ο­ήΡ­΄ΫM΄ΫM΄ΫMάΩώλ^½ινήΡ­΄ΫM΄ΫMάΩώΈλήϊένΫM΄ΫέΫΡ®έ
+import { ActiveUsersTable } from "@/components/admin/ActiveUsersTable";
+
+export default function ActiveUsersPage() {
+  return (
+    <div className="min-h-screen bg-parchment">
+      <main id="main" className="md:pl-60">
+        <div className="mx-auto max-w-7xl px-6 pt-20 pb-24 md:pt-10 md:pb-10">
+          <div className="mb-8">
+            <h1 className="text-2xl font-display font-bold text-navy mb-2">Active Users</h1>
+            <p className="text-sm text-navy-light">Monitor real-time activity of registered users</p>
+          </div>
+          
+          <ActiveUsersTable />
+        </div>
+      </main>
+    </div>
+  );
+}
