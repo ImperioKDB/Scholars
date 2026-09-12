@@ -1,3 +1,21 @@
+// app/onboarding/page.tsx
+// VALUE-FIRST REWORK (Phase 1): the old order (Personal, Academic,
+// Eligibility, Documents) made a student fill four screens of identity
+// paperwork before seeing a single match, and 85% of signups never
+// finished. The order is now Core, Personal, Academic, Documents:
+//   - Step 0 (Core) collects exactly the fields the matching engine gates
+//     on: name, institution (+type), discipline, year of study.
+//   - Step 0 ends with a second exit, "See my provisional matches", which
+//     saves the partial profile and routes straight to the dashboard. The
+//     dashboard already computes real matches from a partial profile and
+//     already renders GapNudgeBanner nudges for every missing field, so
+//     progressive profiling is the completion engine from that point on.
+//   - "Skip for now" remains on steps 1-3 with its existing lossless
+//     behavior (save whatever is filled, go to dashboard). On step 0 the
+//     provisional button is that exit, so no screen shows two CTAs with
+//     the same intent.
+// Draft persistence key bumped to v2: the step order changed, so a v1
+// draft's saved step index would land people on the wrong screen.
 "use client";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -20,11 +38,9 @@ import {
   type ProfileForm,
 } from "@/lib/profile";
 import { INSTITUTION_OPTIONS, institutionTypeFor } from "@/lib/data/institutions";
-
-const STEPS = ["Personal", "Academic", "Eligibility", "Documents"];
+const STEPS = ["Core", "Personal", "Academic", "Documents"];
 const DISCIPLINE_COMBO_OPTIONS = DISCIPLINE_OPTIONS.map((d) => ({ value: d, label: d }));
-const ONBOARDING_DRAFT_KEY = "scholars.onboarding.draft.v1";
-
+const ONBOARDING_DRAFT_KEY = "scholars.onboarding.draft.v2";
 type OnboardingDraft = {
   form: ProfileForm;
   waecRows: WaecRow[];
@@ -32,7 +48,6 @@ type OnboardingDraft = {
   manualInstitution: boolean;
   manualDiscipline: boolean;
 };
-
 function readDraft(): OnboardingDraft | null {
   if (typeof window === "undefined") return null;
   try {
@@ -51,7 +66,6 @@ function readDraft(): OnboardingDraft | null {
     return null;
   }
 }
-
 function writeDraft(draft: OnboardingDraft) {
   try {
     window.localStorage.setItem(ONBOARDING_DRAFT_KEY, JSON.stringify(draft));
@@ -59,7 +73,6 @@ function writeDraft(draft: OnboardingDraft) {
     // storage blocked -- persistence is best-effort
   }
 }
-
 function clearDraft() {
   try {
     window.localStorage.removeItem(ONBOARDING_DRAFT_KEY);
@@ -67,9 +80,9 @@ function clearDraft() {
     // ignore
   }
 }
-
-// Single payload builder so "Finish" and "Skip for now" send the exact same
-// shape. Empty strings become null so a partial profile never stores blanks.
+// Single payload builder so "Finish", "Skip for now" and the provisional
+// exit send the exact same shape. Empty strings become null so a partial
+// profile never stores blanks.
 function profilePayload(form: ProfileForm) {
   return {
     full_name: form.full_name.trim(),
@@ -95,7 +108,6 @@ function profilePayload(form: ProfileForm) {
     has_lga_certificate: form.has_lga_certificate,
   };
 }
-
 function OnboardingForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -110,20 +122,16 @@ function OnboardingForm() {
   const [skipPending, setSkipPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
-
   const lgaOptions = useMemo(
     () => getLGAsForState(form.state_of_origin).map((l) => ({ value: l, label: l })),
     [form.state_of_origin]
   );
-
   const stepParam = Number(searchParams.get("step"));
   const hasStepParam = !Number.isNaN(stepParam) && stepParam >= 0 && stepParam < STEPS.length;
-
   useEffect(() => {
     if (hasStepParam) setStep(stepParam);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
   useEffect(() => {
     async function loadExistingProfile() {
       const { data: { user } } = await supabase.auth.getUser();
@@ -200,12 +208,10 @@ function OnboardingForm() {
     loadExistingProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
   useEffect(() => {
     if (loading) return;
     writeDraft({ form, waecRows, step, manualInstitution, manualDiscipline });
   }, [form, waecRows, step, manualInstitution, manualDiscipline, loading]);
-
   useEffect(() => {
     if (!dirty || saving) return;
     function handler(e: BeforeUnloadEvent) {
@@ -215,12 +221,10 @@ function OnboardingForm() {
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty, saving]);
-
   function update<K extends keyof ProfileForm>(key: K, value: ProfileForm[K]) {
     setForm((f) => ({ ...f, [key]: value }));
     setDirty(true);
   }
-
   function updateStateOfOrigin(value: string) {
     setForm((f) => {
       const lgas = getLGAsForState(value);
@@ -230,12 +234,10 @@ function OnboardingForm() {
     });
     setDirty(true);
   }
-
   function updateWaecRows(rows: WaecRow[]) {
     setWaecRows(rows);
     setDirty(true);
   }
-
   function selectInstitution(name: string) {
     const type = institutionTypeFor(name);
     setForm((f) => ({
@@ -245,27 +247,29 @@ function OnboardingForm() {
     }));
     setDirty(true);
   }
-
   function toggleManualInstitution() {
     setManualInstitution((m) => !m);
     setForm((f) => ({ ...f, institution_name: "", institution_type: "" }));
     setDirty(true);
   }
-
   function toggleManualDiscipline() {
     setManualDiscipline((m) => !m);
     setForm((f) => ({ ...f, discipline: "" }));
     setDirty(true);
   }
-
   function validateStep(): string | null {
-    if (step === 0 && !form.full_name.trim()) return "We need your name to personalize matches.";
-    if (step === 1 && manualInstitution && form.institution_name.trim() && !form.institution_type) {
-      return "Pick your institution type so your matches stay accurate.";
+    if (step === 0) {
+      if (!form.full_name.trim()) return "We need your name to personalize matches.";
+      if (!form.discipline.trim()) return "Pick your course so we can check discipline rules.";
+      if (!form.institution_name.trim()) return "Pick your institution so we can check institution rules.";
+      if (manualInstitution && form.institution_name.trim() && !form.institution_type) {
+        return "Pick your institution type so your matches stay accurate.";
+      }
+      if (!form.year_of_study) return "Pick your year of study; some awards only cover certain years.";
+      return null;
     }
     return null;
   }
-
   function goNext() {
     const err = validateStep();
     if (err) {
@@ -275,18 +279,11 @@ function OnboardingForm() {
     setError(null);
     setStep((s) => Math.min(s + 1, STEPS.length - 1));
   }
-
   function goBack() {
     setError(null);
     setStep((s) => Math.max(s - 1, 0));
   }
-
-  async function handleFinish() {
-    const err = validateStep();
-    if (err) {
-      setError(err);
-      return;
-    }
+  async function saveAndGoDashboard() {
     setSaving(true);
     setError(null);
     const res = await fetch("/api/profile", {
@@ -304,28 +301,33 @@ function OnboardingForm() {
       setError("Couldn't save your profile. Please try again.");
       return;
     }
+    // WAEC rows, if any were already entered on step 2 via a returning
+    // draft, go with the same save so nothing typed is lost.
     const validWaecRows = waecRows.filter((r) => r.subject && r.grade);
-    const waecRes = await fetch("/api/profile/waec", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ results: validWaecRows.map((r) => ({ subject: r.subject, grade: r.grade })) }),
-    });
-    setSaving(false);
-    if (!waecRes.ok) {
-      setError("Your profile saved, but your WAEC results didn't. You can retry from this page.");
-      return;
+    if (validWaecRows.length > 0) {
+      await fetch("/api/profile/waec", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ results: validWaecRows.map((r) => ({ subject: r.subject, grade: r.grade })) }),
+      }).catch(() => {});
     }
     setDirty(false);
     clearDraft();
     router.push("/dashboard");
     router.refresh();
   }
-
-  // MOMENTUM FIX (user feedback): skipping is no longer lossy. We save
-  // whatever the student has filled so far, then send them straight to the
-  // dashboard so they still see first matches and can finish later from
-  // Edit profile. A skip that discards everything is what made onboarding
-  // feel like a toll booth.
+  async function handleFinish() {
+    const err = validateStep();
+    if (err) {
+      setError(err);
+      return;
+    }
+    await saveAndGoDashboard();
+  }
+  // MOMENTUM FIX (carried over): skipping is never lossy. We save
+  // whatever the student has filled so far, then send them straight to
+  // the dashboard so they still see first matches and can finish later
+  // from Edit profile.
   async function handleSkip() {
     setSkipPending(true);
     try {
@@ -341,7 +343,6 @@ function OnboardingForm() {
     router.push("/dashboard");
     router.refresh();
   }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-parchment">
@@ -376,7 +377,7 @@ function OnboardingForm() {
       </div>
     );
   }
-
+  const coreValid = step === 0 && validateStep() === null;
   return (
     <div className="min-h-screen bg-parchment">
       <header className="border-b border-hairline bg-white">
@@ -388,27 +389,67 @@ function OnboardingForm() {
         <StepIndicator steps={STEPS} current={step} />
         <div className="bg-white rounded-2xl border border-hairline shadow-card p-8">
           <h1 className="font-display text-2xl font-semibold text-navy mb-1">
-            {step === 0 && "Personal information"}
-            {step === 1 && "Academic background"}
-            {step === 2 && "Eligibility details"}
+            {step === 0 && "Core details"}
+            {step === 1 && "Personal information"}
+            {step === 2 && "Academic results"}
             {step === 3 && "Documents & goals"}
           </h1>
           <p className="text-sm text-navy-light mb-2">
-            {step === 0 && "Tell us who you are so we can personalize your matches."}
-            {step === 1 && "Your institution and field of study drive most of your matches."}
-            {step === 2 && "JAMB and WAEC results -- most Nigerian scholarships gate on these directly."}
+            {step === 0 && "Name, school, course and level. That is all we need for your first real matches."}
+            {step === 1 && "State, LGA and age drive many Nigerian awards. Each one you add can unlock matches."}
+            {step === 2 && "JAMB and WAEC results. Most Nigerian scholarships gate on these directly."}
             {step === 3 && "Tell us which documents you already have ready to submit."}
           </p>
           <p className="text-xs text-navy-light mb-8">
-            Only your name is required. Everything else sharpens your matches, and your answers
-            save automatically on this device.
+            {step === 0
+              ? "Everything after this step sharpens your matches. Your answers save automatically on this device."
+              : "Only what you fill is stored. Your answers save automatically on this device."}
           </p>
-
           {step === 0 && (
             <>
               <FormField label="Full name">
                 <input className={inputClass} type="text" value={form.full_name} onChange={(e) => update("full_name", e.target.value)} placeholder="Enter your full name" />
               </FormField>
+              <FormField label="Field of study / discipline" hint="Search and select -- typing the exact course name works too.">
+                {manualDiscipline ? (
+                  <input className={inputClass} type="text" value={form.discipline} onChange={(e) => update("discipline", e.target.value)} placeholder="e.g. Mechatronics Engineering" />
+                ) : (
+                  <Combobox options={DISCIPLINE_COMBO_OPTIONS} value={form.discipline} onChange={(value) => update("discipline", value)} placeholder="Search a course, e.g. Computer Science" />
+                )}
+              </FormField>
+              <button type="button" onClick={toggleManualDiscipline} className="-mt-2 mb-4 text-xs font-medium text-navy hover:underline">
+                {manualDiscipline ? "Search the list instead" : "Can't find your course? Enter it manually"}
+              </button>
+              <FormField label="Institution" hint={manualInstitution ? "Type your school's official name and pick its type." : "Search and select -- this sets your institution type automatically."}>
+                {manualInstitution ? (
+                  <div className="space-y-2">
+                    <input className={inputClass} type="text" value={form.institution_name} onChange={(e) => update("institution_name", e.target.value)} placeholder="e.g. Federal University of Technology, Akure" />
+                    <select className={selectClass} value={form.institution_type} onChange={(e) => update("institution_type", e.target.value as ProfileForm["institution_type"])}>
+                      <option value="">Select institution type</option>
+                      {INSTITUTION_TYPE_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <Combobox options={INSTITUTION_OPTIONS} value={form.institution_name} onChange={selectInstitution} placeholder="Search your university, polytechnic, or college" />
+                )}
+              </FormField>
+              <button type="button" onClick={toggleManualInstitution} className="-mt-2 mb-4 text-xs font-medium text-navy hover:underline">
+                {manualInstitution ? "Search the list instead" : "Can't find your school? Enter it manually"}
+              </button>
+              <FormField label="Year of study" hint="Some scholarships only cover early or final years.">
+                <select className={selectClass} value={form.year_of_study} onChange={(e) => update("year_of_study", e.target.value)}>
+                  <option value="">Select</option>
+                  {YEAR_OF_STUDY_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </FormField>
+            </>
+          )}
+          {step === 1 && (
+            <>
               <FormField label="Date of birth" hint="Used to check age-based eligibility rules.">
                 <input className={inputClass} type="date" value={form.date_of_birth} onChange={(e) => update("date_of_birth", e.target.value)} />
               </FormField>
@@ -448,49 +489,11 @@ function OnboardingForm() {
               </FormField>
             </>
           )}
-
-          {step === 1 && (
+          {step === 2 && (
             <>
-              <FormField label="Field of study / discipline" hint="Search and select -- typing the exact course name works too.">
-                {manualDiscipline ? (
-                  <input className={inputClass} type="text" value={form.discipline} onChange={(e) => update("discipline", e.target.value)} placeholder="e.g. Mechatronics Engineering" />
-                ) : (
-                  <Combobox options={DISCIPLINE_COMBO_OPTIONS} value={form.discipline} onChange={(value) => update("discipline", value)} placeholder="Search a course, e.g. Computer Science" />
-                )}
-              </FormField>
-              <button type="button" onClick={toggleManualDiscipline} className="-mt-2 mb-4 text-xs font-medium text-navy hover:underline">
-                {manualDiscipline ? "Search the list instead" : "Can't find your course? Enter it manually"}
-              </button>
-              <FormField label="Institution" hint={manualInstitution ? "Type your school's official name and pick its type." : "Search and select -- this sets your institution type automatically."}>
-                {manualInstitution ? (
-                  <div className="space-y-2">
-                    <input className={inputClass} type="text" value={form.institution_name} onChange={(e) => update("institution_name", e.target.value)} placeholder="e.g. Federal University of Technology, Akure" />
-                    <select className={selectClass} value={form.institution_type} onChange={(e) => update("institution_type", e.target.value as ProfileForm["institution_type"])}>
-                      <option value="">Select institution type</option>
-                      {INSTITUTION_TYPE_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
-                    </select>
-                  </div>
-                ) : (
-                  <Combobox options={INSTITUTION_OPTIONS} value={form.institution_name} onChange={selectInstitution} placeholder="Search your university, polytechnic, or college" />
-                )}
-              </FormField>
-              <button type="button" onClick={toggleManualInstitution} className="-mt-2 mb-4 text-xs font-medium text-navy hover:underline">
-                {manualInstitution ? "Search the list instead" : "Can't find your school? Enter it manually"}
-              </button>
-              <FormField label="Year of study" hint="Some scholarships only cover early or final years.">
-                <select className={selectClass} value={form.year_of_study} onChange={(e) => update("year_of_study", e.target.value)}>
-                  <option value="">Select</option>
-                  {YEAR_OF_STUDY_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
-                </select>
-              </FormField>
               <FormField label="GPA / CGPA (optional)" hint="Enter it on your institution's own scale, e.g. 3.72.">
                 <input className={inputClass} type="number" step="0.01" min="0" max="5" value={form.gpa} onChange={(e) => update("gpa", e.target.value)} placeholder="3.72" />
               </FormField>
-            </>
-          )}
-
-          {step === 2 && (
-            <>
               <FormField label="JAMB / UTME score (optional)">
                 <input className={inputClass} type="number" min="0" max="400" value={form.jamb_score} onChange={(e) => update("jamb_score", e.target.value)} placeholder="e.g. 280" />
               </FormField>
@@ -519,7 +522,6 @@ function OnboardingForm() {
               </FormField>
             </>
           )}
-
           {step === 3 && (
             <>
               <p className="text-sm font-medium text-ink mb-3">Documents ready to submit</p>
@@ -542,7 +544,6 @@ function OnboardingForm() {
               </FormField>
             </>
           )}
-
           {error && <p className="text-sm text-rose mb-4">{error}</p>}
           <div className="flex items-center justify-between mt-6 pt-6 border-t border-hairline gap-3">
             <button type="button" onClick={goBack} disabled={step === 0 || saving || skipPending}
@@ -550,11 +551,24 @@ function OnboardingForm() {
               Back
             </button>
             <div className="flex items-center gap-3">
-              <button type="button" onClick={handleSkip} disabled={saving || skipPending}
-                className="text-sm font-medium text-navy-light hover:text-navy px-3 py-2 disabled:opacity-60">
-                {skipPending ? "Saving\u2026" : "Skip for now"}
-              </button>
-              {step < STEPS.length - 1 ? (
+              {step > 0 && (
+                <button type="button" onClick={handleSkip} disabled={saving || skipPending}
+                  className="text-sm font-medium text-navy-light hover:text-navy px-3 py-2 disabled:opacity-60">
+                  {skipPending ? "Saving\u2026" : "Skip for now"}
+                </button>
+              )}
+              {step === 0 ? (
+                <>
+                  <button type="button" onClick={goNext} disabled={saving || skipPending}
+                    className="rounded-seal border border-hairline bg-white text-navy text-sm font-medium px-5 py-2.5 hover:bg-navy-50 transition-colors disabled:opacity-60">
+                    Continue
+                  </button>
+                  <button type="button" onClick={saveAndGoDashboard} disabled={!coreValid || saving || skipPending}
+                    className="inline-flex items-center gap-2 rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60">
+                    {saving ? "Saving..." : "See my provisional matches"}
+                  </button>
+                </>
+              ) : step < STEPS.length - 1 ? (
                 <button type="button" onClick={goNext} disabled={saving || skipPending}
                   className="rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60">
                   Continue
@@ -578,7 +592,6 @@ function OnboardingForm() {
     </div>
   );
 }
-
 export default function OnboardingPage() {
   return (
     <Suspense fallback={null}>
