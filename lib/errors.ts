@@ -9,9 +9,9 @@ import { NextResponse } from "next/server";
 import { logError } from "@/lib/logging";
 export function dbErrorResponse(
   route: string,
-  error: { code?: string; message?: string },
+  error: { code?: string; message?: string; details?: string; hint?: string },
   fallback = "Something went wrong on our side. Please try again."
 ) {
-  logError(route, "db_error", { code: error.code }, error);
+  logError(route, "db_error", { code: error.code, details: error.details, hint: error.hint }, error);
   return NextResponse.json({ error: fallback, code: error.code }, { status: 500 });
 }
