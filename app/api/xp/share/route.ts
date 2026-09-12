@@ -39,13 +39,13 @@
 // can never call it directly (e.g. via supabase.rpc() from devtools with
 // a fabricated point value). This route is the one narrow, server-
 // controlled path allowed to award it, with the point value hardcoded
-// here -- never accepted from the request body.
+// here (lib/config.ts XP) -- never accepted from the request body.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { checkRateLimit } from '@/lib/ratelimit'
-
+import { XP } from '@/lib/config'
 // Exactly one entity id required; which field determines the kind.
 // Scholarship stays the default so existing ScholarshipCard calls
 // (scholarship_id only) keep working unchanged.
@@ -57,10 +57,6 @@ const bodySchema = z
   .refine((b) => Boolean(b.scholarship_id) !== Boolean(b.opportunity_id), {
     message: 'Provide exactly one of scholarship_id or opportunity_id',
   })
-
-const SHARE_POINTS = 3
-const MAX_SHARES_PER_DAY = 10
-
 export async function POST(request: Request) {
   const supabase = await createClient()
   const {
@@ -76,23 +72,19 @@ export async function POST(request: Request) {
     extraKeys: [`user:${user.id}`],
   })
   if (limited) return limited
-
   const raw = await request.json().catch(() => null)
   const parsed = bodySchema.safeParse(raw)
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
-
   const isOpportunity = Boolean(parsed.data.opportunity_id)
   const entityId = isOpportunity ? parsed.data.opportunity_id! : parsed.data.scholarship_id!
   // 'opportunity_share' needs migration 0017 (xp_event_type enum value) --
   // apply it before deploying this route.
   const eventType = isOpportunity ? 'opportunity_share' : 'share_click'
-
   const today = new Date().toISOString().slice(0, 10)
   const dedupeKey = `${eventType}:${entityId}:${today}`
   const service = createServiceClient()
-
   // Per-profile daily cap. dedupe_key always ends with ":<YYYY-MM-DD>"
   // for share events, so suffix-matching counts today's awards without
   // depending on columns beyond the ones award_xp already guarantees
@@ -107,19 +99,18 @@ export async function POST(request: Request) {
   if (countError) {
     return NextResponse.json({ error: countError.message }, { status: 500 })
   }
-  if ((awardedToday ?? 0) >= MAX_SHARES_PER_DAY) {
+  if ((awardedToday ?? 0) >= XP.MAX_SHARES_PER_DAY) {
     return NextResponse.json({ awarded: false, points: 0 })
   }
-
   const { error } = await service.rpc('award_xp', {
     p_profile_id: user.id,
     p_event_type: eventType,
-    p_points: SHARE_POINTS,
+    p_points: XP.SHARE_POINTS,
     p_dedupe_key: dedupeKey,
     p_metadata: isOpportunity ? { opportunity_id: entityId } : { scholarship_id: entityId },
   })
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-  return NextResponse.json({ awarded: true, points: SHARE_POINTS })
+  return NextResponse.json({ awarded: true, points: XP.SHARE_POINTS })
 }
