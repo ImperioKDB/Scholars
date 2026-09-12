@@ -68,7 +68,7 @@ export default async function ReviewsPage() {
                 )}
                 <div className="min-w-0">
                   <p className="font-medium text-ink text-sm leading-snug">{r.full_name}</p>
-                  <p className="text-xs text-navy-light mt-0.5">{r.role}</p>
+                  <p className="text-xs text-navy-light mt-1">{r.role}</p>
                 </div>
               </div>
               <blockquote className="text-sm text-ink leading-relaxed">
