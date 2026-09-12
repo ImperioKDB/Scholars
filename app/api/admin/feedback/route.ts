@@ -1,62 +1,75 @@
 // app/api/admin/feedback/route.ts
-// GET   /api/admin/feedback - list student feedback newest-first, admin only.
-// PATCH /api/admin/feedback - flip a feedback row open <-> resolved.
+// GET  /api/admin/feedback -- list feedback (open + resolved), admin only.
+// PATCH /api/admin/feedback -- update status (open -> resolved -> open),
+//      admin only. The update policy from migration 0021 is the real
+//      enforcement; assertAdmin here is defense in depth and gives a
+//      clean 403 before any DB work.
 //
-// The student-facing intake (app/api/feedback/route.ts) already emails the
-// support mailbox; this is the in-app inbox so feedback can be worked and
-// closed without living only in Gmail. Resolve, don't delete: feedback is
-// a record, and migration 0021 deliberately adds no delete policy.
+// ERROR HYGIENE: 500s go through dbErrorResponse so raw Postgres messages
+// never reach the admin client.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { assertAdmin } from '@/lib/admin/guard'
 import { dbErrorResponse } from '@/lib/errors'
+import { ADMIN_LIST_CAP } from '@/lib/config'
+
 const ROUTE = 'admin/feedback'
-const patchSchema = z.object({
-  id: z.string().uuid(),
+
+const updateSchema = z.object({
   status: z.enum(['open', 'resolved']),
 })
+
 export async function GET(request: Request) {
   const limited = await checkRateLimit(request, { route: ROUTE, limit: 60 })
   if (limited) return limited
+
   const supabase = await createClient()
   const guard = await assertAdmin(supabase)
   if (!guard.ok) return guard.response
-  const { data, error } = await supabase
+
+  const { data: feedback, error } = await supabase
     .from('feedback')
-    .select('id, category, message, contact_email, page_url, created_at, status, resolved_at, profiles(full_name)')
+    .select('id, profile_id, category, message, contact_email, page_url, status, resolved_at, created_at')
     .order('created_at', { ascending: false })
-    .limit(200)
+    .limit(ADMIN_LIST_CAP)
+
   if (error) return dbErrorResponse(ROUTE, error)
-  return NextResponse.json({ feedback: data ?? [] })
+
+  return NextResponse.json({ feedback: feedback ?? [] })
 }
+
 export async function PATCH(request: Request) {
   const limited = await checkRateLimit(request, { route: ROUTE, limit: 60 })
   if (limited) return limited
+
   const supabase = await createClient()
   const guard = await assertAdmin(supabase)
   if (!guard.ok) return guard.response
+
   const raw = await request.json().catch(() => null)
-  const parsed = patchSchema.safeParse(raw)
-  if (!parsed.success) {
+  const parsed = updateSchema.safeParse(raw)
+  if (!parsed.success || typeof raw?.id !== 'string') {
     return NextResponse.json(
-      { error: 'Invalid request body', issues: parsed.error.issues },
+      { error: 'Invalid update. Send { id, status }.' },
       { status: 400 }
     )
   }
-  const resolved = parsed.data.status === 'resolved'
+
+  const resolvedAt = parsed.data.status === 'resolved' ? new Date().toISOString() : null
+
   const { data, error } = await supabase
     .from('feedback')
-    .update({ status: parsed.data.status, resolved_at: resolved ? new Date().toISOString() : null })
-    .eq('id', parsed.data.id)
+    .update({ status: parsed.data.status, resolved_at: resolvedAt })
+    .eq('id', raw.id)
     .select('id, status, resolved_at')
-    .single()
-  if (error) {
-    if (error.code === 'PGRST116') {
-      return NextResponse.json({ error: 'Feedback not found' }, { status: 404 })
-    }
-    return dbErrorResponse(ROUTE, error)
+    .maybeSingle()
+
+  if (error) return dbErrorResponse(ROUTE, error)
+  if (!data) {
+    return NextResponse.json({ error: 'Feedback not found' }, { status: 404 })
   }
+
   return NextResponse.json({ feedback: data })
 }
