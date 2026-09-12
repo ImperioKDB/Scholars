@@ -1,1 +1,121 @@
-ëÞïNŸïnøÛNÛÛNëžüïŽvëž÷ïNŸéî÷ë´íÝ´ë®öéþÛM»éî¹ïÎøÙþ÷ëžöï®¹ïm»Ñ®½éÞôéþöï´ïŽýïN¹ÛNÛÛNëžüïŽvëžõïž¹ï~øÛNÝÛNºïnŸéÝ´Û¾žëžüïŸï~¹ïnúëžöÛ½ëÞïNŸïnøÛNÛÛN·ïn¹ë^øëž7éÎ½ëžžï´íÝ´ë®öéþÛM»ÙíŸéÎ½ëmŸï~ùïNµënµï~¹ÙþëÞ¸ëŽœëžûë^öë»Ñ®½éÞôéþöï´í½´ï~µë®¹áî¹ïÎøçNµïŽ¼ÛNÝÛNºïnŸéÝ´Û½žÙþœëÞ¶ÙþµïžøëÍŸéî¹ïÎøÛ½Ñ­ŸÙý´ãŽ¹ë®½éî¹ÛNôïnŸïŽ¹ë~øëž¸ÛNöéþùïŽ¹ï}´ïŽ¼ë^øÛNöëžõïž½ïn¹ÛNµïžøëÎ¹éîøëÞ·ë^øëÞŸéíë~Ÿéî÷ï´ïNöéþøëž·ïŽ¹ëŽvéþùïŽ¹ï}´ÝÝ´å½ÛM´Û½ŸëŽµï~¼ënŸë^öë»ÙÍÛM´Û½Ÿë^ôïNœëÞ·ë^øëÞŸéî÷Û½œÑ­´ÛM»Ùþµë~¼ëÞ¹ï®¹éÞ¹éîøï}»ÙÍÛM´Û½Ÿï~·ëÎŸéÎµïn÷ëÎ½ïN÷Û½œÑ­´ÛM»Ùþ¸ëÞ÷ë~Ÿï®¹ïm»ÙÍÛM´Û½ŸéþôïNŸïnøïžžëÞøëÞ¹ï}»ÙÍÛM´Û½Ÿï~¹ïŽøëÞžë¾÷Û½œÑ­´ÛM»ÙþŸéî¶éþµïn¸ëÞžë½»ÙÍÛM´Û½Ÿë^¸éÞ½éí»Ñ®]Ñ­ÙýŸÛN8ëžºëÞžë´ïNùënœëÞ·ÛNöéþùïŽ¹ï}´ïŽ¼ë^øÛN¸éþžÛ¾øÛNöëžõïž½ïn¹ÛNµïžøëÎ¹éîøëÞ·ë^øëÞŸéíë~Ÿéî÷ï´ïNùënœëÞ·çnŸïžøëž÷ÛMÝÛN[Ñ­´ÛM»Ùý»ÙÍÛM´Û½ŸéÎŸë¾½éí»ÙÍÛM´Û½Ÿï~½ë¾žïžôÛ½œÑ­´ÛM»Ùþöëž÷ëžøÙÞôë^÷ï~ûéþöë»ÙÍÛM´Û½Ÿë~ŸéîºëÞöéÝ»ÙÍÛM´Û½ŸïNöëÞúë^·ïÝ»ÙÍÛM´Û½ŸïŽ¹ïnï}»Ñ®]Ñ­ëžüïNŸïnøÛNµï~ýéî·ÛNºïžžë~øëÞŸéí´éÞ½ëŽ¸éÎ¹ï¾µïn¹ÛÎöëžõïž¹ï~øÝ­´áî¹ïÎøçn¹ï^ùëž÷ï½ÛNÛÑ­´ÛN·éþžï~øÛNÛÛNôë^øëÍ´íÝ´ÝÝ´ïn¹ï^ùëž÷ïžéî¹ïÎøçžöéÍÛM´ë~Ÿéî÷ï´ëÞ÷çNöéþøëž·ïŽ¹ë´ÝÝ´ïNöéþøëž·ïŽ¹ëŽvéþùïŽ¹ï}žï~ŸéÞ¹ÛÎöéþùïŽ¹ÛMÝÝí´Ñ­´ÛM´ÛNôë^øëÍ´ÝÝÝÝÝ´ïnŸïžøë´íÎÜÛNôë^øëÍžï~øë^öïŽ÷ç¾½ïŽ¼ÛÎöéþùïŽ¹ÛM›ÛM»Ùý»ÛÝÛM´ÛÝÛM´ë~Ÿéî÷ï´ëÞ÷çNùënœëÞ·ÛMÝÛNôïž¶éÎ½ë~véþùïŽ¹ï}žï~ŸéÞ¹ÛÎöéþùïŽ¹ÛMÝÝí´Ñ­´ÛM´ÛNôë^øëÍ´ÝÝÝÝÝ´ïnŸïžøë´íÎÜÛNôë^øëÍžï~øë^öïŽ÷ç¾½ïŽ¼ÛÎöéþùïŽ¹ÛM›ÛM»Ùý»ÛÝÛM´ÛÝÑ­´ÛMŸÙý´ã~öëžµïŽ¹ÛNµïžøëÎ¹éîøëÞ·ë^øëž¸ÛNwïžôë^¶ë^÷ë´ã~œëÞ¹éîøÑ­´ÛN·éþžï~øÛN÷ïžôë^¶ë^÷ë´ÝÝ´ë~öëžµïŽ¹ã~œëÞ¹éîøÛÎöëžõïž¹ï~øÛÝÑ­´ÛMŸÙý´çn¹ë®öëž÷ëÍ´ï~¹ï~÷ëÞŸéí´ëÞºÛN¹ïÎôëÞöëž¸ÛMÛNöëžõïž½ïn¹ë´ë®Ÿïm´ç~¹ïnúëžöÛN7éþïNŸéî¹éîøï}ÛM´ÙýŸÛNxëÎ½ï}´ë~Ÿïžœë´ën¹ÛN¸éþžë´ëÞžÛNµÛN÷ëžôë^öë^øë´éÞ½ëŽ¸éÎ¹ï¾µïn¹ÛN¶ïžøÛNûë´ëŽŸÛN½ï´ëÎ¹ïn¹ÛNºéþöÛN÷ëÞïNœëÞ·ëÞøïÝÛM´ë^ûë^½ï´ï~ùïNµënµï~¹ÙîµïžøëÍžë¾¹ïŽwëž÷ï~½éþžÛÍ½Ñ­ÛM´ÙýŸÛN7ëÎ¹ë~›ÛN½ë­´ï¾¹ÛN¼ë^úë´ë]´ï~¹ï~÷ëÞŸéíÛM´ë~Ÿéî÷ï´í½ÛM´ÛM´ëŽµïŽµÝ­´í½´ï~¹ï~÷ëÞŸéí´íÝœÑ­´ÛNÝÛMÝÛNµï¾µëÞøÛN÷ïžôë^¶ë^÷ëžë^ùïŽ¼Ùî»ëžøç~¹ï~÷ëÞŸéí¼ÛÝÑ­´ÛMŸÙý´çn¹ëŽ½ïn¹ë~øÛNøéý´éÎŸë¾½éí´ëÞºÛNµë~·ëž÷ï~½éî»ÛNôïnŸïŽ¹ë~øëž¸ÛNöéþùïŽ¹ÛNûëÞøëÎŸïžøÛN÷ëž÷ï~½éþžÑ­´ÛN½ë­´ÛÎ½ï~tïnŸïŽ¹ë~øëž¸ÛMºÛ­´Û^÷ëž÷ï~½éþžÛÝ´í½ÛM´ÛM´ë~Ÿéî÷ï´ïn¹ëŽ½ïn¹ë~øçžöéÍ´ÝÝ´éî¹ï½´çžváÍ¼Û½ŸéÎŸë¾½éí»ÙÍ´ïn¹ï^ùëž÷ïžïžöéÍ½Ñ­´ÛM´ÛNöëž¸ëÞöëž·ïŽyïnœÙî÷ëžµïn·ëÎtë^öë^ï}žï~¹ï¼Û¾žëžüï»ÙÍ´ïNµïŽ¼ÛÝÛM´ÛM´ïn¹ïŽùïnžÛNëžüïŽvëž÷ïNŸéî÷ëžïn¹ëŽ½ïn¹ë~øÛÎöëž¸ëÞöëž·ïŽyïnœÛÝÛM´íÝÑ­´ÛMŸÙý´çn¹ëŽ½ïn¹ë~øÛNøéý´ëŽµï~¼ënŸë^öë´ëÞºÛNµë~·ëž÷ï~½éî»ÛNôïž¶éÎ½ë}´ïnŸïžøë´ï¾½ïŽ¼ÛN÷ëž÷ï~½éþžÑ­´ÛMŸÙý´ãžüë~¹ïNøÛNºéþöÛNøëÎ¹ÛNöëž÷ëžøÛNôë^÷ï~ûéþöë´ë®œéþûÑ­´ÛN½ë­´ÛÎ½ï~tïž¶éÎ½ë}´Û­ºÛN÷ëž÷ï~½éþžÛMºÛ­´Û^ôë^øëÍžëÞžë~œïž¸ëž÷ÛÍ»Ùþöëž÷ëžøÙÞôë^÷ï~ûéþöë»ÛÝ½ÛNÛÑ­´ÛM´ÛNöëžøïžöéí´áî¹ïÎøçn¹ï~ôéþžï~¹Ùîöëž¸ëÞöëž·ï¼éî¹ï½´çžváÍ¼Û½ŸëŽµï~¼ënŸë^öë»ÙÍ´ïn¹ï^ùëž÷ïžïžöéÍ½ÛÝÛM´íÝÑ­´ÛMŸÙý´ãÎµéî¸éÎ¹ÛNµëŽëÞžÛNöéþùïŽ¹ÛNôïnŸïŽ¹ë~øëÞŸéíÛM´ëÞºÛM¼ïNµïŽ¼Ùî÷ïŽµïnøï~{ëÞøëÍ¼Û½Ÿë^¸éÞ½éí»ÛÝ´Û­ºÛN÷ëž÷ï~½éþžÛÝ´í½ÛM´ÛM´ÙýŸÛN7ëÎ¹ë~›ÛN½ë­´ïž÷ëžöÛN½ï}´ë^¸éÞ½éí´ÙÝ´ï¾¹Û¾œéÍ´ëŽŸÛNøëÎ½ï}´éþžÛNøëÎ¹ÛN÷ëžöï®¹ïm´ï~½ëŽ¹ÛN½éí´ïŽ¼ë´ë^¸éÞ½éí´ïNµë¾¹ï}ÛM´ÛM´ÙýŸÛN¶ïžøÛNøëÎ½ï}´éÞ½ëŽ¸éÎ¹ï¾µïn¹ÛN·ë^žÛNµëŽ¸ÛNµÛN¼ëžµëŽ¹ïm´ë®Ÿïm´ï^ùëÞ·é½´ë~œëÞ¹éîøÙÞ÷ëÞ¸ë´ë~¼ëž·é¾÷Ñ­´ÛM´ÛN·éþžï~øÛNÛÛN¸ë^øë]ÚÛNÛÛNùï~¹ïm´íÝ´íÝ´ÝÝ´ë^ûë^½ï´ï~ùïNµënµï~¹ÙîµïžøëÍžë¾¹ïŽyï~¹ïm¼ÛÝÛM´ÛM´ëÞºÛM¼ïž÷ëžöÛÝ´í½ÛM´ÛM´ÛM´ÙýŸÛNéîœïÝ´ïžôëŽµïŽ¹ÛNœë^÷ïŽ_ï~¹ëžžÛN¹ï®¹ïnýÛMùÛNëÞžïžøëž÷ÛNøéý´ïn¹ëŽùë~¹ÛN8ãm´ï¾öëÞøëž÷Ñ­´ÛM´ÛM´ÛN·éþžï~øÛNœë^÷ïŽwëž¹éí´ÝÝ´ïž÷ëžöÙîùï~¹ïn_éÞ¹ïŽµëŽµïŽµÝýžéÎµï~øåþ÷ëž¹éí´Ýý´éî¹ï½´ãŽµïŽ¹ÛÎùï~¹ïmžïž÷ëžöåþëžøë^¸ë^øë]žéÎµï~øåþ÷ëž¹éí½ÛMÚÛNžïžœéÍÛÑ­´ÛM´ÛM´ÛN·éþžï~øÛNºëÞúëžëÞžïžøëž÷ã^»éý´ÝÝ´éî¹ï½´ãŽµïŽ¹ÛÎ8ë^øëžéîŸï½¼ÛÝ´ÙÝ´ß´Ù­´ß­ôÛMšÛMõßMôßM½Ý½ÛM´ÛM´ÛM´Ñ­´ÛM´ÛM´ÛN½ë­´ÛÍµéÎµï~øç~¹ëžžÛNÜíÍ´éÎµï~øç~¹ëžžÛMÜÛNºëÞúëžëÞžïžøëž÷ã^»éý½ÛNÛÑ­´ÛM´ÛM´ÛM´ÛMŸÙý´çžôëŽµïŽ¹ÛNôïnŸë®½éÎ¹ÛNœë^÷ïŽ_ï~¹ëžžÛNúëÞµÛN÷ëžöï®½ë~¹ÛNöéþœë´ë~œëÞ¹éîøÛM¼ënýïNµï~÷ÛNváÎwÛÝÛM´ÛM´ÛM´ÛM´ë~Ÿéî÷ï´ï~ùïNµënµï~¹ã^¸éÞ½éí´ÝÝ´ë~öëžµïŽ¹ã^¸éÞ½éî7éÎ½ëžžï¼ÛÝÛÑ­´ÛM´ÛM´ÛM´ÛNµï¾µëÞøÛN÷ïžôë^¶ë^÷ëž5ëŽëÞžÑ­´ÛM´ÛM´ÛM´ÛM´ÛMžë®öéþÛÍ»ïNöéþºëÞœëž÷Û½½Ñ­´ÛM´ÛM´ÛM´ÛM´ÛMžïžôëŽµïŽ¹ÛÎÛÛNœë^÷ïŽ_ï~¹ëžžÝ­´éî¹ï½´ãŽµïŽ¹ÛÍ½Ùîøéþ=ç~ç~øïn½éî»ÛÍ½ÛNÝÛÝÛM´ÛM´ÛM´ÛM´ÛM´Ùî¹ï]¼Û¾½ë»ÙÍ´ïž÷ëžöÙî½ë½Ý½ÛM´ÛM´ÛM´ÛM´ÛM´Ñ­´ÛM´ÛM´ÛM´ÛMŸÙý´çžôëŽµïŽ¹ÛNùï~¹ïm´éÞ¹ïŽµëŽµïŽµÛNºéþöÛN÷ëž÷ï~½éþžÑ­´ÛM´ÛM´ÛM´ÛNµï¾µëÞøÛN÷ïžôë^¶ë^÷ëžë^ùïŽ¼ÙîùïN¸ë^øëžyï~¹ïm¼í½ÛM´ÛM´ÛM´ÛM´ÛM´ëŽµïŽµÝ­´í½´éÎµï~øåþ÷ëž¹éíÚÛNžëžûÛN8ë^øë¼ÛÝžïŽŸãÞwáþwïŽöëÞžë½¼ÛÝ´íÝÛM´ÛM´ÛM´ÛM´íÝ½Ý½ÛM´ÛM´ÛM´íÝÛM´ÛM´íÝÛM´íÝÑ­´ÛMŸÙý´ã~ŸéîøëÞžïž¹ÛN½ë­´éîŸÛNöëž¸ëÞöëž·ïŽ÷ÛNµïn¹ÛNžëž¹ëŽ¹ëÛM´ïn¹ïŽùïnžÛNëžüïŽvëž÷ïNŸéî÷ëžéî¹ïÎøÛÎÛÑ­´ÛM´ÛNöëžõïž¹ï~øÝ­´í½ÛM´ÛM´ÛM´ëÎ¹ë^¸ëžöï}ÚÛNöëžõïž¹ï~øÙî¼ëžµëŽ¹ïn÷ÙÍÛM´ÛM´íÝœÑ­´ÛNÝÛÝíÝÑ­ŸÙý´ãÎ¹éÎôëžöÛNøéý´ë~öëžµïŽ¹ÛNµëŽëÞžÛN·éÎ½ëžžï´ï¾½ïŽ¼ÛN÷ëžöï®½ë~¹ÛNöéþœë´é¾¹ïÝë®ùéî·ïŽ½éþžÛN·ïn¹ë^øëž5ëŽëÞžã~œëÞ¹éîøÛÍ½ÛNÛÑ­´ÛN·éþžï~øÛNùïnœÛMÝÛNôïnŸë~¹ï~÷Ùî¹éîúÙîãž|çŽ_çNyãnãÞ7åþwçžtã^6ã^wãž_çžváÍÛM´ë~Ÿéî÷ï´ï~¹ïnúëÞ·ëžvéþœëžëžýÛMÝÛNôïnŸë~¹ï~÷Ùî¹éîúÙîwçžtã^6ã^wãž_ç~9çnzãÞ7ãž_çnáÎ9åþãž}Ñ­´ÛMÛM´ëÞºÛM¼Û^ùïnœÛNÜíÍ´Û^÷ëžöï®½ë~¹çnŸéÎ¹á¾¹ïÝ½ÛNÛÑ­´ÛM´ÛNøëÎöéþûÛNžëžûÛN9ïnöéþöÛÍ»áÞ½ï~÷ëÞžë½´ç~ùïNµënµï~¹ÛN¹éîúëÞöéþžéÞ¹éîøÛNúë^öëÞµënœëž÷Û½½Ñ­´ÛNÝÑ­´ÛMÛM´ïn¹ïŽùïnžÛN·ïn¹ë^øëž7éÎ½ëžžï¼ïžöéÍœÛN÷ëžöï®½ë~¹çnŸéÎ¹á¾¹ïÝ½Ñ®ÝÑ­ëžüïNŸïnøÛN·éþžï~øÛN·éþžë®½ë½´ÝÝ´í½ÛM´éÞµïŽ·ëÎ¹ïmÚÛN[Ñ­´ÛM´ÛMŸÙ­ÛM´ÛM´ÛMšÛNë^øë~¼ÛNµéÎœÛNöëžõïž¹ï~øÛNôë^øëÎ÷ÛN¹ïÎ·ëžôï´ë®Ÿïm´ïŽ¼ë´éþžëž÷ÛN÷ïŽµïnøëÞžë½´ï¾½ïŽ¼Ý­ÛM´ÛM´ÛMšÛMÛN_éî¹ïÎøÙþ÷ïŽµïŽ½ë}´ÛÎ÷ïŽµïŽ½ë}´ë®½éÎ¹ï}½Ñ­´ÛM´ÛM´Ù­´ÙÝ´åþžëžüïŸëÞë^»ë´ÛÎ½éÞµë¾¹ÛNŸïNøëÞëÞÚë^øëÞŸéí´ë®½éÎ¹ï}½Ñ­´ÛM´ÛM´Ù­´ÙÝ´ë®µï®½ë~ŸéížëÞ·éý´ÛÎºë^úëÞ·éþžÛNºëÞœë½Ñ­´ÛM´ÛM´Ù­´ÙÝ´ë^÷ï~¹ïŽ÷ÛM¼éÎŸë~µéÍ´ë^÷ï~¹ïŽ÷ÛÝÛM´ÛM´ÛMšÙýÛM´ÛM´Û½ŸÛÍ¼ÝýµåþžëžüïŸï~øë^øëÞ·íÎ_éî¹ïÎøÙþ½éÞµë¾¹íÎºë^úëÞ·éþžÙî½ë~ŸíÎµï~÷ëžøï}½ÙíšÛÝ»ÙÍÛM´åÝœÑ®Ý
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { createClient } from './lib/supabase/middleware'
+import { safeNextPath } from './lib/auth/next'
+
+// Define protected routes that require authentication
+const protectedRoutes = [
+  '/dashboard',
+  '/applications',
+  '/achievements',
+  '/scholarships',
+  '/discover',
+  '/opportunities',
+  '/settings',
+  '/onboarding',
+  '/admin'
+]
+
+// Define public routes that don't require authentication
+const publicRoutes = [
+  '/',
+  '/login',
+  '/signup',
+  '/reset-password',
+  '/confirm',
+  '/privacy',
+  '/terms'
+]
+
+export async function middleware(request: NextRequest) {
+  const { path } = request.nextUrl
+  const isProtected = protectedRoutes.some(route => 
+    path === route || path.startsWith(route + '/')
+  )
+  const isPublic = publicRoutes.some(route => 
+    path === route || path.startsWith(route + '/')
+  )
+
+  // Create authenticated Supabase Client
+  const supabase = createClient(request)
+
+  // Refresh session if expired - required for Server Components
+  // This could be done in a separate middleware but we do it here for simplicity
+  await supabase.auth.getSession()
+
+  // Check if we have a session
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  // Redirect to login if accessing protected route without session
+  if (isProtected && !session) {
+    const redirectUrl = new URL('/login', request.url)
+    redirectUrl.searchParams.set('next', path)
+    return NextResponse.redirect(redirectUrl)
+  }
+
+  // Redirect to dashboard if accessing public route with session
+  // Except for the reset password flow
+  if (isPublic && session && !path.includes('/reset-password')) {
+    return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
+
+  // Handle admin route protection
+  if (path.startsWith('/admin') && session) {
+    // Check if user is admin - we'll do this on the server side in the admin pages
+    // but this middleware can add a header for quick client-side checks
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      // Only update last_seen every 5 minutes to reduce DB writes
+      const lastSeen = user.user_metadata?.last_seen ? new Date(user.user_metadata.last_seen) : null;
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+      
+      if (!lastSeen || lastSeen < fiveMinutesAgo) {
+        // Update profile last_seen via service role client (bypass RLS)
+        const supabaseAdmin = createAdminClient();
+        await supabaseAdmin
+          .from('profiles')
+          .update({ last_seen: new Date().toISOString() })
+          .eq('id', user.id);
+          
+        // Update user metadata for session
+        await supabase.auth.updateUser({
+          data: { last_seen: new Date().toISOString() }
+        });
+      }
+    }
+  }
+
+  // Continue if no redirects are needed
+  return NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  })
+}
+
+// Helper to create admin client with service role key
+function createAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  
+  if (!url || !serviceRoleKey) {
+    throw new Error('Missing Supabase environment variables')
+  }
+  
+  return createClient(url, serviceRoleKey)
+}
+
+export const config = {
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - assets (local assets)
+     */
+    '/((?!_next/static|_next/image|favicon.ico|assets).*)',
+  ],
+}
