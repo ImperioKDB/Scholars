@@ -4,7 +4,7 @@
 // paperwork before seeing a single match, and 85% of signups never
 // finished. The order is now Core, Personal, Academic, Documents:
 //   - Step 0 (Core) collects exactly the fields the matching engine gates
-//     on: name, institution (+type), discipline, year of study.
+//     on: name, course, institution (+type), year of study.
 //   - Step 0 ends with a second exit, "See my provisional matches", which
 //     saves the partial profile and routes straight to the dashboard. The
 //     dashboard already computes real matches from a partial profile and
@@ -270,6 +270,7 @@ function OnboardingForm() {
     }
     return null;
   }
+  const coreValid = step === 0 && validateStep() === null;
   function goNext() {
     const err = validateStep();
     if (err) {
@@ -283,7 +284,7 @@ function OnboardingForm() {
     setError(null);
     setStep((s) => Math.max(s - 1, 0));
   }
-  async function saveAndGoDashboard() {
+  async function saveProfileAndGoDashboard() {
     setSaving(true);
     setError(null);
     const res = await fetch("/api/profile", {
@@ -301,16 +302,6 @@ function OnboardingForm() {
       setError("Couldn't save your profile. Please try again.");
       return;
     }
-    // WAEC rows, if any were already entered on step 2 via a returning
-    // draft, go with the same save so nothing typed is lost.
-    const validWaecRows = waecRows.filter((r) => r.subject && r.grade);
-    if (validWaecRows.length > 0) {
-      await fetch("/api/profile/waec", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ results: validWaecRows.map((r) => ({ subject: r.subject, grade: r.grade })) }),
-      }).catch(() => {});
-    }
     setDirty(false);
     clearDraft();
     router.push("/dashboard");
@@ -322,12 +313,44 @@ function OnboardingForm() {
       setError(err);
       return;
     }
-    await saveAndGoDashboard();
+    setSaving(true);
+    setError(null);
+    const res = await fetch("/api/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(profilePayload(form)),
+    });
+    if (res.status === 401) {
+      setSaving(false);
+      router.replace("/login");
+      return;
+    }
+    if (!res.ok) {
+      setSaving(false);
+      setError("Couldn't save your profile. Please try again.");
+      return;
+    }
+    const validWaecRows = waecRows.filter((r) => r.subject && r.grade);
+    const waecRes = await fetch("/api/profile/waec", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ results: validWaecRows.map((r) => ({ subject: r.subject, grade: r.grade })) }),
+    });
+    setSaving(false);
+    if (!waecRes.ok) {
+      setError("Your profile saved, but your WAEC results didn't. You can retry from this page.");
+      return;
+    }
+    setDirty(false);
+    clearDraft();
+    router.push("/dashboard");
+    router.refresh();
   }
-  // MOMENTUM FIX (carried over): skipping is never lossy. We save
-  // whatever the student has filled so far, then send them straight to
-  // the dashboard so they still see first matches and can finish later
-  // from Edit profile.
+  // MOMENTUM FIX (user feedback): skipping is no longer lossy. We save
+  // whatever the student has filled so far, then send them straight to the
+  // dashboard so they still see first matches and can finish later from
+  // Edit profile. A skip that discards everything is what made onboarding
+  // feel like a toll booth.
   async function handleSkip() {
     setSkipPending(true);
     try {
@@ -377,7 +400,6 @@ function OnboardingForm() {
       </div>
     );
   }
-  const coreValid = step === 0 && validateStep() === null;
   return (
     <div className="min-h-screen bg-parchment">
       <header className="border-b border-hairline bg-white">
@@ -397,7 +419,7 @@ function OnboardingForm() {
           <p className="text-sm text-navy-light mb-2">
             {step === 0 && "Name, school, course and level. That is all we need for your first real matches."}
             {step === 1 && "State, LGA and age drive many Nigerian awards. Each one you add can unlock matches."}
-            {step === 2 && "JAMB and WAEC results. Most Nigerian scholarships gate on these directly."}
+            {step === 2 && "JAMB and WAEC results -- most Nigerian scholarships gate on these directly."}
             {step === 3 && "Tell us which documents you already have ready to submit."}
           </p>
           <p className="text-xs text-navy-light mb-8">
@@ -426,9 +448,7 @@ function OnboardingForm() {
                     <input className={inputClass} type="text" value={form.institution_name} onChange={(e) => update("institution_name", e.target.value)} placeholder="e.g. Federal University of Technology, Akure" />
                     <select className={selectClass} value={form.institution_type} onChange={(e) => update("institution_type", e.target.value as ProfileForm["institution_type"])}>
                       <option value="">Select institution type</option>
-                      {INSTITUTION_TYPE_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
+                      {INSTITUTION_TYPE_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
                     </select>
                   </div>
                 ) : (
@@ -441,9 +461,7 @@ function OnboardingForm() {
               <FormField label="Year of study" hint="Some scholarships only cover early or final years.">
                 <select className={selectClass} value={form.year_of_study} onChange={(e) => update("year_of_study", e.target.value)}>
                   <option value="">Select</option>
-                  {YEAR_OF_STUDY_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
+                  {YEAR_OF_STUDY_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
                 </select>
               </FormField>
             </>
@@ -563,7 +581,7 @@ function OnboardingForm() {
                     className="rounded-seal border border-hairline bg-white text-navy text-sm font-medium px-5 py-2.5 hover:bg-navy-50 transition-colors disabled:opacity-60">
                     Continue
                   </button>
-                  <button type="button" onClick={saveAndGoDashboard} disabled={!coreValid || saving || skipPending}
+                  <button type="button" onClick={saveProfileAndGoDashboard} disabled={!coreValid || saving || skipPending}
                     className="inline-flex items-center gap-2 rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60">
                     {saving ? "Saving..." : "See my provisional matches"}
                   </button>
