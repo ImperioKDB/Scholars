@@ -1,3 +1,7 @@
+// components/Sidebar.tsx
+// App shell navigation: desktop aside, mobile drawer, and the transient
+// mobile tab bar. Initials now come from the shared lib/text/initials.ts
+// (this file used to carry its own copy, the one that accepted null).
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -6,7 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/Logo";
 import { FeedbackModal } from "@/components/FeedbackWidget";
 import { levelForXp } from "@/lib/xp/level";
-
+import { initialsFor } from "@/lib/text/initials";
 function DashboardIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -98,22 +102,12 @@ function SpinnerIcon() {
     </svg>
   );
 }
-function initialsFor(name: string | null): string {
-  if (!name) return "?";
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return "?";
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return (words[0][0] + words[1][0]).toUpperCase();
-}
-
 const MOBILE_TABS = [
   { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
   { href: "/applications", label: "Applications", Icon: ApplicationsIcon },
   { href: "/achievements", label: "Achievements", Icon: AchievementsIcon },
 ];
-
 const BAR_HIDE_MS = 2500;
-
 export function Sidebar({
   fullName,
   isAdmin,
@@ -135,7 +129,6 @@ export function Sidebar({
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [barVisible, setBarVisible] = useState(false);
   const barHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   useEffect(() => {
     function reveal() {
       setBarVisible(true);
@@ -149,9 +142,7 @@ export function Sidebar({
       if (barHideTimer.current) clearTimeout(barHideTimer.current);
     };
   }, []);
-
   const { level } = levelForXp(xpTotal);
-
   const navItems = [
     { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
     { href: "/discover", label: "Browse", Icon: DiscoverIcon },
@@ -161,14 +152,12 @@ export function Sidebar({
     { href: "/settings", label: "Profile", Icon: SettingsIcon },
     ...(isAdmin ? [{ href: "/admin", label: "Admin", Icon: AdminIcon }] : []),
   ];
-
   async function handleLogout() {
     setLoggingOut(true);
     await supabase.auth.signOut();
     router.push("/login");
     router.refresh();
   }
-
   const profileBlock = (
     <div className="px-4 py-4 border-b border-hairline">
       <div className="flex items-center gap-3 mb-2.5">
@@ -198,7 +187,6 @@ export function Sidebar({
       </div>
     </div>
   );
-
   const navList = (
     <nav className="flex flex-col gap-1">
       {navItems.map(({ href, label, Icon }) => {
@@ -220,7 +208,6 @@ export function Sidebar({
       })}
     </nav>
   );
-
   // Account block: feedback lives here, directly above Log out, on both
   // desktop and the mobile drawer. No floating pill anywhere.
   const accountBlock = (
@@ -245,7 +232,6 @@ export function Sidebar({
       </button>
     </div>
   );
-
   return (
     <>
       <a
@@ -329,8 +315,8 @@ export function Sidebar({
         </div>
       </nav>
       {/* Feedback modal, triggered from the account block above. Rendered
-          once at the Sidebar root so it is not duplicated between the
-          desktop aside and the mobile drawer. */}
+      once at the Sidebar root so it is not duplicated between the
+      desktop aside and the mobile drawer. */}
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </>
   );
