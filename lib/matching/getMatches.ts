@@ -4,20 +4,22 @@ import { rankScholarships, evaluateScholarship } from "./engine";
 import { toMatchableProfile } from "./profileMapper";
 import { getCachedMatches, setCachedMatches } from "./matchCache";
 import { predictNextCycle, type CycleEvent } from "../cycles";
+import { logError } from "@/lib/logging";
 import type { MatchableProfile, ScholarshipMatch, ScholarshipRule, ScholarshipRow } from "./types";
+
 // PERF (batch 1): list evaluation drops `description`. Cards and the
 // dashboard never render it, and pulling a large text column for every
 // scholarship on every dashboard load was pure payload weight. The detail
 // page fetches its own copy via SCHOLARSHIP_DETAIL_COLUMNS.
-// Push C: last_verified_at added so detail + share pages can show a dated
-// "last checked" trust line.
 const SCHOLARSHIP_LIST_COLUMNS =
-  "id, title, provider_name, amount, deadline, opens_at, last_cycle_closed_at, last_verified_at, application_url, how_to_apply, level, discipline, verified, awards_available, estimated_applicant_pool, competitiveness_tier, historical_acceptance_rate";
+  "id, title, provider_name, amount, deadline, opens_at, last_cycle_closed_at, application_url, how_to_apply, level, discipline, verified, awards_available, estimated_applicant_pool, competitiveness_tier, historical_acceptance_rate";
 const SCHOLARSHIP_DETAIL_COLUMNS = SCHOLARSHIP_LIST_COLUMNS + ", description";
+
 type CachedMatchPayload = {
   matches: ScholarshipMatch[];
   profileCompleteness: number;
 };
+
 // Phase 2: attach a predicted next cycle window to each match from
 // cycle_events history. One extra query for the whole list (in-clause on
 // scholarship_id), grouped client-side. Fail-open: if the cycle_events
@@ -45,6 +47,7 @@ async function attachCyclePredictions(
     cycle: byId.has(m.id) ? predictNextCycle(byId.get(m.id)!) : null,
   }));
 }
+
 export async function getMatchesForCurrentUser(): Promise<{
   matches: ScholarshipMatch[];
   profileCompleteness: number;
@@ -53,6 +56,7 @@ export async function getMatchesForCurrentUser(): Promise<{
   const { user, profile: profileRow } = await getCurrentUserAndProfile();
   if (!user) return { matches: [], profileCompleteness: 0, error: "not_authenticated" };
   if (!profileRow) return { matches: [], profileCompleteness: 0, error: "profile_not_found" };
+
   // PERF (batch 1): warm-cache path. Returns the exact same payload
   // shape, so callers (dashboard, POST /api/scholarships/match, gaps)
   // are unchanged. TTL bounds staleness at 10 minutes; profile and WAEC
@@ -67,6 +71,7 @@ export async function getMatchesForCurrentUser(): Promise<{
       error: null,
     };
   }
+
   const profile: MatchableProfile = toMatchableProfile(profileRow);
   const supabase = createClient();
   const [{ data: scholarships, error: scholarshipsError }, { data: rules, error: rulesError }] =
@@ -78,9 +83,30 @@ export async function getMatchesForCurrentUser(): Promise<{
         .in("level", ["undergrad", "both"]),
       supabase.from("scholarship_rules").select("id, scholarship_id, field, operator, value"),
     ]);
+
+  // HARDENING: previously fetch_failed swallowed the underlying PostgREST
+  // error, so schema drift (missing column, missing table) surfaced as a
+  // blank matches list with no diagnostic anywhere. Now we log the real
+  // error to Vercel Logs with enough context to pinpoint the missing
+  // column, while still returning the same client-facing shape.
   if (scholarshipsError || rulesError || !scholarships) {
+    if (scholarshipsError) {
+      logError("matching/getMatches", "scholarships_fetch_failed", {
+        code: scholarshipsError.code,
+        details: scholarshipsError.details,
+        hint: scholarshipsError.hint,
+      }, scholarshipsError);
+    }
+    if (rulesError) {
+      logError("matching/getMatches", "rules_fetch_failed", {
+        code: rulesError.code,
+        details: rulesError.details,
+        hint: rulesError.hint,
+      }, rulesError);
+    }
     return { matches: [], profileCompleteness: profile.profile_completeness, error: "fetch_failed" };
   }
+
   const rows = ((scholarships ?? []) as unknown as ScholarshipRow[]).map((s) => ({
     ...s,
     description: null as string | null,
@@ -91,14 +117,18 @@ export async function getMatchesForCurrentUser(): Promise<{
     list.push(rule as ScholarshipRule);
     rulesByScholarship.set(rule.scholarship_id, list);
   }
+
   const ranked = rankScholarships(profile, rows, rulesByScholarship);
   const matches = await attachCyclePredictions(supabase, ranked);
+
   await setCachedMatches(user.id, {
     matches,
     profileCompleteness: profile.profile_completeness,
   });
+
   return { matches, profileCompleteness: profile.profile_completeness, error: null };
 }
+
 export async function getMatchForScholarship(scholarshipId: string): Promise<{
   match: ScholarshipMatch | null;
   profileCompleteness: number;
@@ -107,6 +137,7 @@ export async function getMatchForScholarship(scholarshipId: string): Promise<{
   const { user, profile: profileRow } = await getCurrentUserAndProfile();
   if (!user) return { match: null, profileCompleteness: 0, error: "not_authenticated" };
   if (!profileRow) return { match: null, profileCompleteness: 0, error: "profile_not_found" };
+
   const profile: MatchableProfile = toMatchableProfile(profileRow);
   const supabase = createClient();
   const [
@@ -130,12 +161,29 @@ export async function getMatchForScholarship(scholarshipId: string): Promise<{
       .select("kind, event_date")
       .eq("scholarship_id", scholarshipId),
   ]);
+
+  // HARDENING: same diagnostic logging as above. A missing column on
+  // scholarships or scholarship_rules now names itself in Vercel Logs.
   if (scholarshipError || rulesError) {
+    if (scholarshipError) {
+      logError("matching/getMatchForScholarship", "scholarship_fetch_failed", {
+        id: scholarshipId,
+        code: scholarshipError.code,
+        details: scholarshipError.details,
+      }, scholarshipError);
+    }
+    if (rulesError) {
+      logError("matching/getMatchForScholarship", "rules_fetch_failed", {
+        id: scholarshipId,
+        code: rulesError.code,
+      }, rulesError);
+    }
     return { match: null, profileCompleteness: profile.profile_completeness, error: "fetch_failed" };
   }
   if (!scholarship) {
     return { match: null, profileCompleteness: profile.profile_completeness, error: "not_found" };
   }
+
   const evaluated = evaluateScholarship(profile, scholarship as unknown as ScholarshipRow, (rules ?? []) as ScholarshipRule[]);
   const match: ScholarshipMatch = {
     ...evaluated,
