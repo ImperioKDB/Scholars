@@ -11,6 +11,7 @@ import { CompetitivenessBadge, type CompetitivenessTier } from "@/components/Com
 import { RequirementsList, type Requirement } from "@/components/RequirementsList";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { useAde } from "@/components/ade/AdeProvider";
+import { formatVerifiedOn } from "@/lib/dates";
 import type { CyclePrediction } from "@/lib/cycles";
 type ScholarshipDetail = {
   id: string;
@@ -32,6 +33,7 @@ type ScholarshipDetail = {
   tier: "excellent" | "good" | "possible" | "unlikely";
   requirements: Requirement[];
   cycle?: CyclePrediction | null;
+  last_verified_at?: string | null;
 };
 export type SimilarScholarship = {
   id: string;
@@ -145,6 +147,12 @@ export function ScholarshipDetailClient({
             </p>
             <h1 className="font-display text-2xl font-semibold text-navy leading-snug">{scholarship.title}</h1>
             <p className="text-sm text-navy-light mt-1">{scholarship.provider_name}</p>
+            {/* Push C trust line, mirrors the public share page. */}
+            {scholarship.last_verified_at ? (
+              <p className="text-xs text-navy-light mt-0.5">
+                Last checked {formatVerifiedOn(scholarship.last_verified_at)}
+              </p>
+            ) : null}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 mb-4">
