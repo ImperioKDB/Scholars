@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { createPublicClient } from "@/lib/supabase/public";
-
+import { formatVerifiedOn } from "@/lib/dates";
 // app/s/[id]/page.tsx
 // GET /s/[id] -- public, unauthenticated share landing page for a single
 // verified scholarship. Deliberately outside app/scholarships/** (which
@@ -12,24 +12,21 @@ import { createPublicClient } from "@/lib/supabase/public";
 //
 // PERF (batch 1): ISR. Share pages are the growth channel and change
 // rarely (verification flips). A 5-minute revalidation window keeps
-// WhatsApp previews fast and off the database. This route is eligible
-// for ISR because it reads through the cookie-free public client only.
+// WhatsApp previews fast and off the database. This route is eligible for
+// ISR because it reads through the cookie-free public client only.
 export const revalidate = 300;
-
 // Shows only facts every visitor can honestly see: title, provider,
-// amount, deadline, description. NEVER a match score or eligibility
-// status -- those are computed against a signed-in student's profile
-// (lib/matching/engine.ts), and showing one here for an anonymous visitor
-// would mean fabricating a number. The panel below states plainly that
-// eligibility gets checked, without pretending to already know the answer
-// for this visitor.
+// amount, deadline, description, and (Push C) when a human last checked
+// the listing. NEVER a match score or eligibility status -- those are
+// computed against a signed-in student's profile (lib/matching/engine.ts),
+// and showing one here for an anonymous visitor would mean fabricating a
+// number.
 //
 // The ?ref=<sharer_profile_id> query param (added by ShareButton.tsx) is
 // captured into a cookie by middleware.ts before this component ever
 // renders -- this file doesn't need to read or forward it.
 const PUBLIC_COLUMNS =
-  "id, title, provider_name, description, amount, deadline, level, discipline, verified";
-
+  "id, title, provider_name, description, amount, deadline, level, discipline, verified, last_verified_at";
 type PublicScholarship = {
   id: string;
   title: string;
@@ -40,8 +37,8 @@ type PublicScholarship = {
   level: "undergrad" | "postgrad" | "both";
   discipline: string | null;
   verified: boolean;
+  last_verified_at: string | null;
 };
-
 async function loadScholarship(id: string): Promise<PublicScholarship | null> {
   const supabase = createPublicClient();
   const { data } = await supabase
@@ -52,7 +49,6 @@ async function loadScholarship(id: string): Promise<PublicScholarship | null> {
     .maybeSingle();
   return data as PublicScholarship | null;
 }
-
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const scholarship = await loadScholarship(id);
@@ -69,13 +65,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       ". See if you qualify on Scholars.",
   };
 }
-
 function formatDeadline(deadline: string): string {
   const date = new Date(deadline + "T00:00:00Z");
   if (Number.isNaN(date.getTime())) return deadline;
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
-
 export default async function PublicScholarshipPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const scholarship = await loadScholarship(id);
@@ -107,6 +101,14 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
               {scholarship.discipline ? " \u00b7 " + scholarship.discipline : ""}
             </span>
           </div>
+          {/* Push C trust line: a dated claim beats a timeless badge. For
+              rows verified before migration 0021 we say who verified, not
+              when, rather than inventing a date. */}
+          <p className="text-xs text-navy-light mb-4">
+            {scholarship.last_verified_at
+              ? `Last checked by the Scholars team on ${formatVerifiedOn(scholarship.last_verified_at)}.`
+              : "Verified by the Scholars team."}
+          </p>
           {scholarship.description && (
             <p className="text-sm text-ink leading-relaxed mb-5">{scholarship.description}</p>
           )}
