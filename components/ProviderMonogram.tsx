@@ -4,20 +4,13 @@
 // left slot visually consistent (MatchSeal for scored cards, this for
 // unscored ones, e.g. the Saved section) without adding a second
 // competing signature element.
+import { initialsFor } from "@/lib/text/initials";
 const PALETTE = [
   { bg: "bg-navy-50", text: "text-navy" },
   { bg: "bg-emerald-light", text: "text-emerald" },
   { bg: "bg-amber-light", text: "text-amber" },
   { bg: "bg-rose-light", text: "text-rose" },
 ] as const;
-
-function initialsFor(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return "?";
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return (words[0][0] + words[1][0]).toUpperCase();
-}
-
 function toneFor(name: string) {
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
@@ -25,7 +18,6 @@ function toneFor(name: string) {
   }
   return PALETTE[hash % PALETTE.length];
 }
-
 export function ProviderMonogram({ name, size = 52 }: { name: string; size?: number }) {
   const tone = toneFor(name);
   return (
