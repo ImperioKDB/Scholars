@@ -1,3 +1,4 @@
+import type { CyclePrediction } from "../cycles";
 export type RuleOperator = "eq" | "gte" | "lte" | "in" | "exists";
 export type ScholarshipRule = {
   id: string;
@@ -38,7 +39,7 @@ export type ScholarshipRow = {
   amount: string | null;
   deadline: string | null;
   opens_at: string | null;
-  // NEW: Last confirmed date this scholarship's application window closed.
+  // Last confirmed date this scholarship's application window closed.
   // Used to distinguish "open by default" from "known closed, unknown reopen".
   last_cycle_closed_at: string | null;
   application_url: string | null;
@@ -71,4 +72,7 @@ export type ScholarshipMatch = ScholarshipRow & {
   requirements: EvaluatedRequirement[];
   missingProfileFields: EvaluatedRequirement[];
   unverifiable: EvaluatedRequirement[];
+  // Phase 2 cycle intelligence: predicted next application window from
+  // cycle_events history (lib/cycles.ts). Null when there is no history.
+  cycle?: CyclePrediction | null;
 };
