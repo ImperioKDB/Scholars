@@ -2,7 +2,6 @@
 import { useState } from "react";
 import { useAde } from "@/components/ade/AdeProvider";
 import { fetchWithTimeout } from "@/lib/fetch";
-
 // components/DraftPanel.tsx
 //
 // Review-and-confirm UI for an auto-generated application draft. Lives
@@ -13,6 +12,10 @@ import { fetchWithTimeout } from "@/lib/fetch";
 // copying the statement + summary into the scholarship's own
 // application_url, which is why that link sits right next to the confirm
 // button rather than being buried elsewhere on the card.
+//
+// Push C: "Download packet" bundles the statement, the facts sheet and the
+// document checklist into a single .txt the student can keep offline or
+// paste from. Client-side Blob download, no new backend, no new storage.
 //
 // "Open real application" routes through useAde().confirmApply() instead of
 // a bare <a href> -- this application is always already tracked, so it
@@ -33,9 +36,7 @@ export type Draft = {
   draft_generated_at: string | null;
   draft_confirmed_at: string | null;
 };
-
 const STATEMENT_MAX_CHARS = 6000;
-
 export function DraftPanel({
   applicationId,
   scholarshipTitle,
@@ -56,12 +57,11 @@ export function DraftPanel({
   const [statement, setStatement] = useState(draft.draft_statement ?? "");
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-
+  const [downloaded, setDownloaded] = useState(false);
   const hasDraft = Boolean(draft.draft_generated_at);
   const confirmed = Boolean(draft.draft_confirmed_at);
   const dirty = statement !== (draft.draft_statement ?? "");
   const overLimit = statement.length > STATEMENT_MAX_CHARS;
-
   async function generate() {
     setGenerating(true);
     setError(null);
@@ -82,7 +82,6 @@ export function DraftPanel({
       setGenerating(false);
     }
   }
-
   async function save(confirm: boolean) {
     if (overLimit) {
       setError(`Statement is ${statement.length - STATEMENT_MAX_CHARS} characters over the limit.`);
@@ -109,7 +108,6 @@ export function DraftPanel({
       setSaving(false);
     }
   }
-
   async function copyAll() {
     const facts = draft.draft_summary?.facts.map((f) => `${f.label}: ${f.value}`).join("\n") ?? "";
     const text = `${statement}\n---\nApplication summary\n${facts}`;
@@ -117,7 +115,28 @@ export function DraftPanel({
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
-
+  // Push C: one-file packet the student can keep offline. Plain text on
+  // purpose: opens everywhere, pastes cleanly into any provider form, and
+  // carries no formatting that a provider portal would mangle.
+  function downloadPacket() {
+    const facts = draft.draft_summary?.facts.map((f) => `${f.label}: ${f.value}`).join("\n") ?? "";
+    const checklist =
+      draft.draft_summary?.checklist.map((c) => `[${c.have ? "x" : " "}] ${c.item}`).join("\n") ?? "";
+    const text =
+      `${scholarshipTitle}\n\nPERSONAL STATEMENT\n\n${statement}\n\n` +
+      `APPLICATION SUMMARY\n${facts}\n\nDOCUMENT CHECKLIST\n${checklist}\n`;
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${scholarshipTitle.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase()}-packet.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setDownloaded(true);
+    setTimeout(() => setDownloaded(false), 2000);
+  }
   function openRealApplication() {
     if (!applicationUrl) return;
     confirmApply({
@@ -128,7 +147,6 @@ export function DraftPanel({
       onTrack: async () => ({ id: applicationId }),
     });
   }
-
   if (!hasDraft) {
     return (
       <div className="mt-3 pt-3 border-t border-hairline">
@@ -148,7 +166,6 @@ export function DraftPanel({
       </div>
     );
   }
-
   return (
     <div className="mt-3 pt-3 border-t border-hairline">
       <div className="flex items-center justify-between gap-2 mb-2">
@@ -231,6 +248,9 @@ export function DraftPanel({
             )}
             <button type="button" onClick={copyAll} className="text-xs font-medium text-navy-light hover:text-navy">
               {copied ? "Copied!" : "Copy statement + summary"}
+            </button>
+            <button type="button" onClick={downloadPacket} className="text-xs font-medium text-navy-light hover:text-navy">
+              {downloaded ? "Downloaded!" : "Download packet (.txt)"}
             </button>
             <button
               type="button"
