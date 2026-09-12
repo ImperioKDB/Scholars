@@ -2,7 +2,6 @@
 // Small shared helpers for deadline math, used by the dashboard page and
 // ScholarshipCard. Kept UTC-based so "today" doesn't shift depending on the
 // server's local timezone vs. the student's.
-
 export function daysUntil(deadline: string | null | undefined): number | null {
   if (!deadline) return null;
   const target = new Date(`${deadline}T00:00:00Z`).getTime();
@@ -11,21 +10,18 @@ export function daysUntil(deadline: string | null | undefined): number | null {
   const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   return Math.ceil((target - todayUtc) / (1000 * 60 * 60 * 24));
 }
-
 export function formatDeadlineLabel(days: number): string {
   if (days < 0) return "Closed";
   if (days === 0) return "Today";
   if (days === 1) return "1 day left";
   return `${days} days left`;
 }
-
 export function deadlineTone(days: number): "closed" | "urgent" | "soon" | "later" {
   if (days < 0) return "closed";
   if (days <= 7) return "urgent";
   if (days <= 30) return "soon";
   return "later";
 }
-
 export function formatOpensLabel(opensAt: string): string {
   const date = new Date(`${opensAt}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return `Opens ${opensAt}`;
@@ -37,7 +33,6 @@ export function formatOpensLabel(opensAt: string): string {
   });
   return `Opens ${formatted}`;
 }
-
 export function formatLastClosedLabel(closedAt: string): string {
   const date = new Date(`${closedAt}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return `Last cycle closed ${closedAt}`;
@@ -48,4 +43,17 @@ export function formatLastClosedLabel(closedAt: string): string {
     timeZone: "UTC",
   });
   return `Last cycle closed ${formatted}`;
+}
+// Trust surface (Push C): human-readable "last checked" date for the
+// verified badge. en-GB day-month-year reads naturally in Nigeria and
+// avoids US month/day ambiguity.
+export function formatVerifiedOn(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+  return d.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
