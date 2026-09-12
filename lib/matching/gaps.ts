@@ -47,7 +47,7 @@ const TIER_RANK: Record<MatchTier, number> = {
 // match drivers (discipline, institution, year) into step 0.
 const FIELD_TO_ONBOARDING_STEP: Record<string, number> = {
   discipline: 0,
-  institution_type: 0,
+  institution_type: 0, // collected via institution selection on step 0
   year_of_study: 0,
   nationality: 1,
   gender: 1,
