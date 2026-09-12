@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { DashboardIcon, HealthIcon, ScholarshipIcon, OpportunitiesIcon, UsersIcon, TestimonialsIcon } from './icons';
+// CORRECTED: Changed from './icons' to '@/components/icons' to match your project structure
+import { DashboardIcon, HealthIcon, ScholarshipIcon, OpportunitiesIcon, UsersIcon, TestimonialsIcon } from '@/components/icons';
 
 interface NavItem {
   href: string;
