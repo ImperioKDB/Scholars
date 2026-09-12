@@ -1,121 +1,143 @@
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
-import { createClient } from './lib/supabase/middleware'
-import { safeNextPath } from './lib/auth/next'
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
+import { COOKIE_NAMES, REF_COOKIE_MAX_AGE_S } from "@/lib/config";
 
-// Define protected routes that require authentication
-const protectedRoutes = [
-  '/dashboard',
-  '/applications',
-  '/achievements',
-  '/scholarships',
-  '/discover',
-  '/opportunities',
-  '/settings',
-  '/onboarding',
-  '/admin'
-]
+const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/discover", "/opportunities", "/saved", "/applications", "/admin", "/scholarships", "/settings"];
+const AUTH_PREFIXES = ["/login", "/signup"];
 
-// Define public routes that don't require authentication
-const publicRoutes = [
-  '/',
-  '/login',
-  '/signup',
-  '/reset-password',
-  '/confirm',
-  '/privacy',
-  '/terms'
-]
+// INPUT HARDENING: ?ref= is attacker-controllable query input that ends up
+// in a cookie and later in profiles.referred_by. Only a well-formed UUID
+// passes. Inlined (not imported from lib/validate.ts) to keep the edge
+// middleware bundle free of zod. app/auth/callback re-validates before the
+// value ever reaches the database.
+const REF_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// AUTH SECURITY AUDIT: session cookies written server-side are pinned to
+// SameSite=lax and Secure in production. Secure is safe here because
+// Vercel serves HTTPS-only; dev (http) keeps the default so local work
+// still functions. SameSite=lax is the CSRF brake for a cookie the
+// browser client can read (Supabase's SSR architecture cannot make it
+// HttpOnly -- see lib/supabase/server.ts note).
+function hardened(options: CookieOptions): CookieOptions {
+  return {
+    ...options,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production" ? true : options.secure,
+  };
+}
 
 export async function middleware(request: NextRequest) {
-  const { path } = request.nextUrl
-  const isProtected = protectedRoutes.some(route => 
-    path === route || path.startsWith(route + '/')
-  )
-  const isPublic = publicRoutes.some(route => 
-    path === route || path.startsWith(route + '/')
-  )
+  const path = request.nextUrl.pathname;
 
-  // Create authenticated Supabase Client
-  const supabase = createClient(request)
+  // PERF (batch 1): /s/** (scholarships) and /o/** (opportunities) are the
+  // public growth surfaces. Capturing the referral cookie needs no session,
+  // so return BEFORE the Supabase auth round trip. Every share-page visit
+  // previously paid a full getUser() network call (~50-150ms) for nothing.
+  //
+  // This early return also sidesteps the cookies.set() reassignment trap
+  // documented further down: we build our own response object here and
+  // set the ref cookie on it directly, so no Supabase callback can swap
+  // it out from under us.
+  if (path.startsWith("/s/") || path.startsWith("/o/")) {
+    const shareResponse = NextResponse.next();
+    const ref = request.nextUrl.searchParams.get("ref");
+    const alreadyHasRef = request.cookies.get(COOKIE_NAMES.REF)?.value;
+    const consentChoice = request.cookies.get(COOKIE_NAMES.CONSENT)?.value;
 
-  // Refresh session if expired - required for Server Components
-  // This could be done in a separate middleware but we do it here for simplicity
-  await supabase.auth.getSession()
+    // Honor a rejected consent choice: no referral credit cookie for
+    // browsers that declined. Accept (or no recorded choice yet) keeps
+    // the previous behavior. UUID gate added: anything that isn't a
+    // profile id is dropped at the door.
+    if (ref && REF_UUID_RE.test(ref) && !alreadyHasRef && consentChoice !== "rejected") {
+      shareResponse.cookies.set(COOKIE_NAMES.REF, ref, {
+        maxAge: REF_COOKIE_MAX_AGE_S,
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+      });
+    }
+    return shareResponse;
+  }
 
-  // Check if we have a session
+  let response = NextResponse.next({ request: { headers: request.headers } });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return request.cookies.get(name)?.value;
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          request.cookies.set({ name, value, ...options });
+          response = NextResponse.next({ request: { headers: request.headers } });
+          response.cookies.set({ name, value, ...hardened(options) });
+        },
+        remove(name: string, options: CookieOptions) {
+          request.cookies.set({ name, value: "", ...options });
+          response = NextResponse.next({ request: { headers: request.headers } });
+          response.cookies.set({ name, value: "", ...options });
+        },
+      },
+    }
+  );
+
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  // Redirect to login if accessing protected route without session
-  if (isProtected && !session) {
-    const redirectUrl = new URL('/login', request.url)
-    redirectUrl.searchParams.set('next', path)
-    return NextResponse.redirect(redirectUrl)
-  }
+  const isProtected = PROTECTED_PREFIXES.some((p) => path.startsWith(p));
+  const isAuthPage = AUTH_PREFIXES.some((p) => path.startsWith(p));
 
-  // Redirect to dashboard if accessing public route with session
-  // Except for the reset password flow
-  if (isPublic && session && !path.includes('/reset-password')) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
-  }
-
-  // Handle admin route protection
-  if (path.startsWith('/admin') && session) {
-    // Check if user is admin - we'll do this on the server side in the admin pages
-    // but this middleware can add a header for quick client-side checks
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      // Only update last_seen every 5 minutes to reduce DB writes
-      const lastSeen = user.user_metadata?.last_seen ? new Date(user.user_metadata.last_seen) : null;
-      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-      
-      if (!lastSeen || lastSeen < fiveMinutesAgo) {
-        // Update profile last_seen via service role client (bypass RLS)
-        const supabaseAdmin = createAdminClient();
-        await supabaseAdmin
-          .from('profiles')
-          .update({ last_seen: new Date().toISOString() })
-          .eq('id', user.id);
-          
-        // Update user metadata for session
-        await supabase.auth.updateUser({
-          data: { last_seen: new Date().toISOString() }
-        });
-      }
+  // AUTH SECURITY AUDIT (server-side authorization, defense in depth):
+  // every /api/admin/** handler already checks is_admin server-side, and
+  // RLS enforces admin writes at the database. This gate makes the
+  // middleware a second, independent enforcement point, so a handler that
+  // ever forgets its check cannot leak the admin list. JSON responses
+  // (not redirects) because these are fetch() calls from the admin UI.
+  if (path.startsWith("/api/admin")) {
+    if (!user) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+    const { data: adminProfile } = await supabase
+      .from("profiles")
+      .select("is_admin")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (!adminProfile?.is_admin) {
+      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     }
   }
 
-  // Continue if no redirects are needed
-  return NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  })
-}
-
-// Helper to create admin client with service role key
-function createAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  
-  if (!url || !serviceRoleKey) {
-    throw new Error('Missing Supabase environment variables')
+  if (isProtected && !user) {
+    const redirectUrl = new URL("/login", request.url);
+    redirectUrl.searchParams.set("next", path);
+    return NextResponse.redirect(redirectUrl);
   }
-  
-  return createClient(url, serviceRoleKey)
+
+  if (isAuthPage && user) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  return response;
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - assets (local assets)
-     */
-    '/((?!_next/static|_next/image|favicon.ico|assets).*)',
+    "/dashboard/:path*",
+    "/onboarding/:path*",
+    "/discover/:path*",
+    "/opportunities/:path*",
+    "/saved/:path*",
+    "/applications/:path*",
+    "/admin/:path*",
+    "/api/admin/:path*",
+    "/scholarships/:path*",
+    "/settings/:path*",
+    "/s/:path*",
+    "/o/:path*",
+    "/login",
+    "/signup",
   ],
-}
+};
