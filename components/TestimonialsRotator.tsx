@@ -1,14 +1,3 @@
-"use client";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-
-export type TestimonialItem = {
-  id: string;
-  quote: string;
-  full_name: string;
-  role: string;
-  photo_url: string | null;
-};
-
 // components/TestimonialsRotator.tsx
 //
 // SMART READ MORE (test feedback): the toggle now renders ONLY when the
@@ -19,6 +8,17 @@ export type TestimonialItem = {
 //
 // Mobile stays a horizontal scroll-snap carousel with a filled segment
 // track; desktop renders a static three-column grid.
+// Initials come from the shared lib/text/initials.ts (local copy removed).
+"use client";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { initialsFor } from "@/lib/text/initials";
+export type TestimonialItem = {
+  id: string;
+  quote: string;
+  full_name: string;
+  role: string;
+  photo_url: string | null;
+};
 export function TestimonialsRotator({ items }: { items: TestimonialItem[] }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -26,7 +26,6 @@ export function TestimonialsRotator({ items }: { items: TestimonialItem[] }) {
   const [active, setActive] = useState(0);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [clampedIds, setClampedIds] = useState<Set<string>>(new Set());
-
   useEffect(() => {
     const track = trackRef.current;
     if (!track) return;
@@ -44,7 +43,6 @@ export function TestimonialsRotator({ items }: { items: TestimonialItem[] }) {
     cardRefs.current.forEach((el) => el && observer.observe(el));
     return () => observer.disconnect();
   }, [items.length]);
-
   // Measure which quotes are genuinely clamped. Re-runs when the item
   // set changes, when a card collapses (expandedId change re-applies the
   // clamp), and on resize. document.fonts.ready covers the case where
@@ -74,18 +72,9 @@ export function TestimonialsRotator({ items }: { items: TestimonialItem[] }) {
       window.removeEventListener("resize", measure);
     };
   }, [items, expandedId]);
-
   function goTo(index: number) {
     cardRefs.current[index]?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
   }
-
-  function initialsFor(name: string): string {
-    const words = name.trim().split(/\s+/).filter(Boolean);
-    if (words.length === 0) return "?";
-    if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-    return (words[0][0] + words[1][0]).toUpperCase();
-  }
-
   return (
     <div>
       <div
@@ -131,9 +120,9 @@ export function TestimonialsRotator({ items }: { items: TestimonialItem[] }) {
                 }}
                 className={"text-sm text-ink leading-relaxed " + (expanded ? "" : "line-clamp-3")}
               >
-                {"“"}
+                {"\u201C"}
                 {t.quote}
-                {"”"}
+                {"\u201D"}
               </blockquote>
               {showToggle && (
                 <button
