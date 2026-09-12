@@ -24,7 +24,8 @@ import {
 type AdminScholarship = Omit<
   ScholarshipFormValues,
   | "opens_at"
-  | "awards_available"
+| "last_cycle_closed_at"
+| "awards_available"
   | "estimated_applicant_pool"
   | "competitiveness_tier"
   | "historical_acceptance_rate"
@@ -32,7 +33,8 @@ type AdminScholarship = Omit<
 > & {
   id: string;
   opens_at: string | null;
-  awards_available: number | null;
+last_cycle_closed_at: string | null;
+awards_available: number | null;
   estimated_applicant_pool: number | null;
   competitiveness_tier: "low" | "medium" | "high" | "very_high" | null;
   historical_acceptance_rate: number | null;
@@ -82,7 +84,8 @@ export default function EditScholarshipPage() {
         amount: scholarship.amount ?? "",
         deadline: scholarship.deadline,
         opens_at: scholarship.opens_at ?? "",
-        application_url: scholarship.application_url ?? "",
+last_cycle_closed_at: scholarship.last_cycle_closed_at ?? "",
+application_url: scholarship.application_url ?? "",
         how_to_apply: scholarship.how_to_apply ?? "",
         level: scholarship.level,
         discipline: scholarship.discipline ?? "",
@@ -140,7 +143,8 @@ export default function EditScholarshipPage() {
         amount: parsed.data.amount || null,
         deadline: parsed.data.deadline,
         opens_at: parsed.data.opens_at || null,
-        application_url: parsed.data.application_url || null,
+last_cycle_closed_at: parsed.data.last_cycle_closed_at || null,
+application_url: parsed.data.application_url || null,
         how_to_apply: parsed.data.how_to_apply || null,
         level: parsed.data.level,
         discipline: parsed.data.discipline || null,
