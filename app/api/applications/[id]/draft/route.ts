@@ -160,6 +160,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       estimated_applicant_pool: null,
       competitiveness_tier: null,
       historical_acceptance_rate: null,
+      last_verified_at: null,
     },
     rules
   )
