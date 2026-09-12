@@ -9,13 +9,8 @@
 // of a confusing RLS failure buried in a Postgres error. The middleware
 // /api/admin gate is a third, independent enforcement point.
 //
-// INPUT HARDENING: application_url uses httpUrlSchema (http/https only),
-// because z.string().url() accepts javascript:/data: URLs and this value
-// is opened via window.open in the student UI.
-//
-// Push C: when a listing is created already verified, stamp
-// last_verified_at so the public "last checked" trust line has a real date
-// from day one.
+// ERROR HYGIENE (Push C): 500s now go through dbErrorResponse() so raw
+// Postgres messages never reach the admin client.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -24,6 +19,8 @@ import { assertAdmin } from '@/lib/admin/guard'
 import { httpUrlSchema } from '@/lib/validate'
 import { decodeUnicodeEscapes } from '@/lib/text/unicode'
 import { ADMIN_LIST_CAP } from '@/lib/config'
+import { dbErrorResponse } from '@/lib/errors'
+const ROUTE = 'admin/scholarships'
 const ruleSchema = z.object({
   field: z.enum(['gpa', 'nationality', 'gender', 'financial_need', 'academic_level', 'discipline', 'career_goals']),
   operator: z.enum(['eq', 'gte', 'lte', 'in', 'exists']),
@@ -35,16 +32,7 @@ const scholarshipSchema = z.object({
   description: z.string().trim().max(5000).transform(decodeUnicodeEscapes).nullable().optional(),
   amount: z.string().trim().max(200).transform(decodeUnicodeEscapes).nullable().optional(),
   deadline: z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'Invalid date'),
-  opens_at: z
-    .string()
-    .nullable()
-    .optional()
-    .refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Invalid date'),
-last_cycle_closed_at: z
-.string()
-.nullable()
-.optional()
-.refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Invalid date'),
+  opens_at: z.string().nullable().optional().refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Invalid date'),
   application_url: httpUrlSchema.nullable().optional(),
   how_to_apply: z.string().trim().max(2000).transform(decodeUnicodeEscapes).nullable().optional(),
   level: z.enum(['undergrad', 'postgrad', 'both']).default('both'),
@@ -58,7 +46,7 @@ last_cycle_closed_at: z
   rules: z.array(ruleSchema).optional().default([]),
 })
 export async function GET(request: Request) {
-  const limited = await checkRateLimit(request, { route: 'admin-scholarships', limit: 60 })
+  const limited = await checkRateLimit(request, { route: ROUTE, limit: 60 })
   if (limited) return limited
   const supabase = await createClient()
   const guard = await assertAdmin(supabase)
@@ -68,13 +56,11 @@ export async function GET(request: Request) {
     .select('*, scholarship_rules ( id, field, operator, value )')
     .order('created_at', { ascending: false })
     .limit(ADMIN_LIST_CAP)
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
+  if (error) return dbErrorResponse(ROUTE, error)
   return NextResponse.json({ scholarships })
 }
 export async function POST(request: Request) {
-  const limited = await checkRateLimit(request, { route: 'admin-scholarships', limit: 60 })
+  const limited = await checkRateLimit(request, { route: ROUTE, limit: 60 })
   if (limited) return limited
   const supabase = await createClient()
   const guard = await assertAdmin(supabase)
@@ -88,28 +74,19 @@ export async function POST(request: Request) {
     )
   }
   const { rules, ...scholarshipFields } = parsed.data
-  // Push C trust surface: a listing born verified gets its first
-  // last_verified_at stamp immediately.
-  const stamp = parsed.data.verified ? new Date().toISOString() : null
   const { data: scholarship, error: insertError } = await supabase
     .from('scholarships')
-    .insert({ ...scholarshipFields, last_verified_at: stamp, created_by: guard.userId })
+    .insert({ ...scholarshipFields, created_by: guard.userId })
     .select('*')
     .single()
-  if (insertError) {
-    return NextResponse.json({ error: insertError.message }, { status: 500 })
-  }
+  if (insertError) return dbErrorResponse(ROUTE, insertError)
   if (rules.length > 0) {
     const { error: rulesError } = await supabase.from('scholarship_rules').insert(
       rules.map((r) => ({ ...r, scholarship_id: scholarship.id }))
     )
     if (rulesError) {
       return NextResponse.json(
-        {
-          error: 'Scholarship created but rules failed to save',
-          details: rulesError.message,
-          scholarship,
-        },
+        { error: 'Scholarship created but rules failed to save', details: rulesError.message, scholarship },
         { status: 207 }
       )
     }
