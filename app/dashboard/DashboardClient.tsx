@@ -3,11 +3,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ScholarshipCard, Spinner, type CardScholarship } from "@/components/ScholarshipCard";
+import { WhatsappOptIn } from "@/components/WhatsappOptIn";
 import { consumeReturnScroll, saveReturnScroll } from "@/lib/scrollRestore";
 import { daysUntil, formatDeadlineLabel } from "@/lib/dates";
+import { track } from "@/lib/analytics";
 import type { GapNudge } from "@/lib/matching/gaps";
 import { fetchWithTimeout, FetchTimeoutError, FetchNetworkError } from "@/lib/fetch";
-
 type MatchTier = "excellent" | "good" | "possible" | "unlikely";
 type MatchApiItem = CardScholarship & {
   score: number;
@@ -16,23 +17,22 @@ type MatchApiItem = CardScholarship & {
   requirements: { status: "met" | "not_met" | "missing_data" | "unverifiable"; label: string }[];
 };
 type SavedApiItem = { id: string; saved_at: string; scholarship: CardScholarship };
-
 const TABS: { value: "all" | MatchTier; label: string }[] = [
   { value: "all", label: "All matches" },
   { value: "excellent", label: "Excellent fit" },
   { value: "good", label: "Worth a look" },
   { value: "possible", label: "Possible" },
 ];
-
 const SPINNER_DELAY_MS = 150;
-
+// Once per browser session, not once per mount: returning to the dashboard
+// ten times in a sitting must not produce ten funnel events.
+const PMV_SESSION_KEY = "scholars:pmv_tracked";
 function timeGreeting() {
   const h = new Date().getHours();
   if (h < 12) return "Good morning";
   if (h < 18) return "Good afternoon";
   return "Good evening";
 }
-
 function StatTile({ value, label, tone = "navy" }: { value: string | number; label: string; tone?: "navy" | "amber" | "emerald" }) {
   const toneClass = tone === "amber" ? "text-amber" : tone === "emerald" ? "text-emerald" : "text-navy";
   return (
@@ -42,7 +42,6 @@ function StatTile({ value, label, tone = "navy" }: { value: string | number; lab
     </div>
   );
 }
-
 function GapNudgeBanner({ gaps }: { gaps: GapNudge[] }) {
   if (gaps.length === 0) return null;
   const top = gaps[0];
@@ -61,26 +60,31 @@ function GapNudgeBanner({ gaps }: { gaps: GapNudge[] }) {
             </p>
           )}
         </div>
-        <Link href={`/onboarding?step=${top.onboardingStep}`} className="shrink-0 text-xs font-medium text-white bg-emerald rounded-full px-4 py-2 hover:opacity-90 transition-opacity">
+        <Link
+          href={`/onboarding?step=${top.onboardingStep}`}
+          onClick={() =>
+            track("gap_nudge_clicked", {
+              field: top.field,
+              scholarships: top.scholarshipCount,
+            })
+          }
+          className="shrink-0 text-xs font-medium text-white bg-emerald rounded-full px-4 py-2 hover:opacity-90 transition-opacity"
+        >
           Add it now
         </Link>
       </div>
     </div>
   );
 }
-
 function DeadlineCard({ scholarship, days }: { scholarship: CardScholarship; days: number }) {
   const [navigating, setNavigating] = useState(false);
   const [showSpinner, setShowSpinner] = useState(false);
   const spinnerTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   useEffect(() => () => { if (spinnerTimeout.current) clearTimeout(spinnerTimeout.current); }, []);
-
   function handleNavigate() {
     setNavigating(true);
     spinnerTimeout.current = setTimeout(() => setShowSpinner(true), SPINNER_DELAY_MS);
   }
-
   return (
     <div className={[
       "relative shrink-0 w-56 bg-white rounded-xl border border-hairline p-4",
@@ -109,9 +113,8 @@ function DeadlineCard({ scholarship, days }: { scholarship: CardScholarship; day
     </div>
   );
 }
-
 export function DashboardClient({
-  userId, fullName, initialMatches, initialProfileCompleteness, initialSaved, initialError, gaps,
+  userId, fullName, initialMatches, initialProfileCompleteness, initialSaved, initialError, gaps, whatsappOptIn,
 }: {
   userId: string;
   fullName: string | null;
@@ -120,6 +123,7 @@ export function DashboardClient({
   initialSaved: SavedApiItem[];
   initialError: string | null;
   gaps: GapNudge[];
+  whatsappOptIn: boolean;
 }) {
   const router = useRouter();
   const [loadError, setLoadError] = useState<string | null>(initialError);
@@ -129,14 +133,27 @@ export function DashboardClient({
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set(initialSaved.map((s) => s.scholarship.id)));
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<"all" | MatchTier>("all");
-
   useEffect(() => {
     const y = consumeReturnScroll("/dashboard");
     if (y === null) return;
     const raf = requestAnimationFrame(() => window.scrollTo(0, y));
     return () => cancelAnimationFrame(raf);
   }, []);
-
+  // PHASE 1 funnel event: an incomplete profile that already has real
+  // matches has seen the value proposition. Track once per session.
+  useEffect(() => {
+    if (initialProfileCompleteness >= 100 || initialMatches.length === 0) return;
+    try {
+      if (sessionStorage.getItem(PMV_SESSION_KEY)) return;
+      sessionStorage.setItem(PMV_SESSION_KEY, "1");
+    } catch {
+      // storage blocked: fall through and track once per mount
+    }
+    track("provisional_matches_viewed", {
+      completeness: initialProfileCompleteness,
+      matches: initialMatches.length,
+    });
+  }, [initialProfileCompleteness, initialMatches.length]);
   async function refreshSaved() {
     try {
       const res = await fetchWithTimeout("/api/scholarships/save");
@@ -149,14 +166,12 @@ export function DashboardClient({
       // Silent fail -- saved list is supplementary
     }
   }
-
   const openMatches = useMemo(() => matches.filter((m) => m.isOpenNow), [matches]);
   const comingSoon = useMemo(() => matches.filter((m) => !m.isOpenNow), [matches]);
   const filteredMatches = useMemo(
     () => (tab === "all" ? openMatches : openMatches.filter((m) => m.tier === tab)),
-    [openMatches, tab]
+    [openMatches]
   );
-
   const upcomingDeadlines = useMemo(() => {
     const map = new Map<string, CardScholarship>();
     for (const m of matches) map.set(m.id, m);
@@ -166,19 +181,16 @@ export function DashboardClient({
       .sort((a, b) => new Date(a.deadline as string).getTime() - new Date(b.deadline as string).getTime())
       .slice(0, 5);
   }, [matches, saved]);
-
   const closingSoonCount = useMemo(() => {
     const ids = new Set<string>();
     for (const m of matches) { const d = daysUntil(m.deadline); if (d !== null && d >= 0 && d <= 30) ids.add(m.id); }
     for (const s of saved) { const d = daysUntil(s.scholarship.deadline); if (d !== null && d >= 0 && d <= 30) ids.add(s.scholarship.id); }
     return ids.size;
   }, [matches, saved]);
-
   async function toggleSave(scholarshipId: string) {
     const wasSaved = savedIds.has(scholarshipId);
     setSavedIds((prev) => { const n = new Set(prev); if (wasSaved) n.delete(scholarshipId); else n.add(scholarshipId); return n; });
     setPendingIds((prev) => new Set(prev).add(scholarshipId));
-
     try {
       const res = wasSaved
         ? await fetchWithTimeout(`/api/scholarships/save?scholarship_id=${scholarshipId}`, { method: "DELETE" })
@@ -198,9 +210,7 @@ export function DashboardClient({
     }
     setPendingIds((prev) => { const n = new Set(prev); n.delete(scholarshipId); return n; });
   }
-
   const firstName = fullName?.trim().split(/\s+/)[0];
-
   return (
     <div>
       <div className="mb-8">
@@ -219,6 +229,7 @@ export function DashboardClient({
           </div>
         )}
         <GapNudgeBanner gaps={gaps} />
+        <WhatsappOptIn initialOptIn={whatsappOptIn} />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatTile value={openMatches.length} label="Open now" />
           <StatTile value={comingSoon.length} label="Coming soon" tone={comingSoon.length > 0 ? "amber" : "navy"} />
