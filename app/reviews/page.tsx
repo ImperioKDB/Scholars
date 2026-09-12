@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { createPublicClient } from "@/lib/supabase/public";
-
+import { initialsFor } from "@/lib/text/initials";
 // app/reviews/page.tsx
 // GET /reviews -- public, unauthenticated page showing EVERY approved +
 // consented student review in full (no clamping, no rotator). The homepage
@@ -12,9 +12,7 @@ export const metadata: Metadata = {
   title: "Reviews | Scholars",
   description: "What students say about Scholars, in their own words.",
 };
-
 export const revalidate = 300;
-
 type Review = {
   id: string;
   quote: string;
@@ -22,14 +20,6 @@ type Review = {
   role: string;
   photo_url: string | null;
 };
-
-function initialsFor(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return "?";
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return (words[0][0] + words[1][0]).toUpperCase();
-}
-
 export default async function ReviewsPage() {
   const supabase = createPublicClient();
   const { data } = await supabase
