@@ -7,17 +7,19 @@
 // in Postgres (see calculate_profile_completeness()) so it can't be spoofed by
 // a client sending a high number to game the matching score.
 //
-// avatar_url IS accepted but only as a URL string: the actual bytes go to
-// Supabase Storage straight from the browser (storage RLS scopes writes to
-// the owner's folder, see migration 0010), and this route only records the
-// resulting public URL.
+// avatar_url IS accepted but only as a URL string pinned to this project's
+// own avatars bucket (isOwnStorageUrl): the bytes go to Supabase Storage
+// straight from the browser (storage RLS scopes writes to the owner's
+// folder, see migration 0010), and this route only records the resulting
+// public URL. A client can therefore only point its own avatar at its own
+// stored photo, never at an attacker host or a script URL.
 //
-// INPUT HARDENING: avatar_url used to be z.string().url(), which accepts
-// javascript:/data: schemes and any external host. It is now pinned to an
-// https object inside THIS project's own avatars bucket (isOwnStorageUrl),
-// the only place AvatarUploader ever writes. A client can therefore only
-// point its own avatar at its own stored photo -- never at an attacker
-// host, never at a script URL.
+// PHASE 1 (activation measurement): POST now records two server-side
+// events into public.events (migration 0019): profile_created on the
+// first-ever save, and profile_completed when completeness crosses to 100.
+// Server-side because only the server reliably knows the before/after
+// state. Event writes are fire-and-forget: analytics must never fail a
+// profile save.
 //
 // Undergrad-only pivot: academic_level is gone. Added the eligibility fields
 // most Nigerian scholarships actually gate on (state/LGA of origin, DOB,
@@ -28,7 +30,6 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { invalidateMatchesCache } from '@/lib/matching/matchCache'
 import { isOwnStorageUrl } from '@/lib/validate'
-
 const profileSchema = z.object({
   full_name: z.string().trim().min(1).max(200).nullable().optional(),
   discipline: z.string().trim().min(1).max(200).nullable().optional(),
@@ -63,12 +64,25 @@ const profileSchema = z.object({
     .string()
     .refine(
       (v) => isOwnStorageUrl(v, 'avatars'),
-      'avatar_url must be an https URL in this project\'s avatars storage bucket'
+      "avatar_url must be an https URL in this project's avatars storage bucket"
     )
     .nullable()
     .optional(),
+  whatsapp_opt_in: z.boolean().optional(),
+  whatsapp_number: z.string().trim().max(20).nullable().optional(),
 })
-
+// Fire-and-forget activation event. Analytics failures are swallowed:
+// losing a funnel datapoint is acceptable, failing a profile save is not.
+function recordEvent(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  profileId: string,
+  event: string
+) {
+  supabase
+    .from('events')
+    .insert({ profile_id: profileId, event })
+    .then(() => {});
+}
 export async function GET() {
   const supabase = await createClient()
   const {
@@ -78,23 +92,19 @@ export async function GET() {
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
-
   const { data: profile, error } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', user.id)
     .single()
-
   if (error) {
     if (error.code === 'PGRST116') {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
   return NextResponse.json({ profile })
 }
-
 export async function POST(request: Request) {
   const supabase = await createClient()
   const {
@@ -104,7 +114,6 @@ export async function POST(request: Request) {
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
-
   const raw = await request.json().catch(() => null)
   const parsed = profileSchema.safeParse(raw)
   if (!parsed.success) {
@@ -113,33 +122,43 @@ export async function POST(request: Request) {
       { status: 400 }
     )
   }
-
+  // Before-state for the activation events: did a profile row exist, and
+  // what was its completeness? One cheap keyed read.
+  const { data: existing } = await supabase
+    .from('profiles')
+    .select('id, profile_completeness')
+    .eq('id', user.id)
+    .maybeSingle()
   const { data: profile, error } = await supabase
     .from('profiles')
     .upsert({ id: user.id, ...parsed.data }, { onConflict: 'id' })
     .select('*')
     .single()
-
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
+  if (!existing) {
+    recordEvent(supabase, user.id, 'profile_created')
+  } else if (
+    (existing.profile_completeness ?? 0) < 100 &&
+    (profile?.profile_completeness ?? 0) === 100
+  ) {
+    recordEvent(supabase, user.id, 'profile_completed')
+  }
   // PERF (batch 1): profile fields drive match evaluation, so the cached
   // matches payload must be dropped the moment they change. Fail-open:
   // a cache error never blocks the profile save (TTL bounds staleness).
   await invalidateMatchesCache(user.id)
-
   return NextResponse.json({ profile })
 }
-
 // DELETE /api/profile -- self-serve account deletion (user feedback batch).
 //
 // Privacy question raised by a tester: students need a way to erase their
 // data without emailing support. This handler deletes the caller's own
 // profile row; FK ON DELETE CASCADE on saved_scholarships, applications,
-// waec_results, notifications, user_achievements, xp_events, and feedback
-// (see migrations 0001/0004/0006/0011/0014) wipes all app data attached
-// to it in one operation.
+// waec_results, notifications, user_achievements, xp_events, feedback and
+// events (see migrations 0001/0004/0006/0011/0014/0019) wipes everything
+// attached to it in one operation.
 //
 // The auth email in auth.users is NOT deleted -- that requires the service
 // role key, which this route deliberately does not hold. The settings page
@@ -159,25 +178,20 @@ export async function DELETE() {
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
-
   const { error, count } = await supabase
     .from('profiles')
     .delete({ count: 'exact' })
     .eq('id', user.id)
-
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
   // PERF (batch 1): drop any cached matches for this user as well.
   await invalidateMatchesCache(user.id)
-
   if (!count) {
     // No profile row existed yet -- nothing to delete, but the intent
     // is satisfied. Return success rather than 404 so the client can
     // still sign out and redirect cleanly.
     return NextResponse.json({ deleted: false })
   }
-
   return NextResponse.json({ deleted: true })
 }
