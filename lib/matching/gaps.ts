@@ -26,60 +26,53 @@
 // scholarship's own competitivenessFactor before comparing tiers, so an
 // "unlock" nudge only fires when the displayed tier would actually move --
 // not just the underlying eligibility number.
-
 import { tierFor } from "./engine";
 import type { MatchTier, ScholarshipMatch } from "./types";
-
 export type GapNudge = {
   field: string;
   label: string;
   scholarshipCount: number;
   onboardingStep: number;
 };
-
 const TIER_RANK: Record<MatchTier, number> = {
   unlikely: 0,
   possible: 1,
   good: 2,
   excellent: 3,
 };
-
-// Which onboarding step (see app/onboarding/page.tsx STEPS) collects each
-// field, so a nudge can deep-link straight to the right step instead of
-// dropping the student on step 0 every time.
+// Which onboarding step (see app/onboarding/page.tsx STEPS, value-first
+// order: Core, Personal, Academic, Documents) collects each field, so a
+// nudge can deep-link straight to the right step instead of dropping the
+// student on step 0 every time. Remapped when onboarding moved the three
+// match drivers (discipline, institution, year) into step 0.
 const FIELD_TO_ONBOARDING_STEP: Record<string, number> = {
-  nationality: 0,
-  gender: 0,
-  state_of_origin: 0,
-  lga_of_origin: 0,
-  age: 0, // collected as date_of_birth on step 0
-  discipline: 1,
-  gpa: 1,
-  year_of_study: 1,
-  institution_type: 1, // collected via institution selection on step 1
+  discipline: 0,
+  institution_type: 0,
+  year_of_study: 0,
+  nationality: 1,
+  gender: 1,
+  state_of_origin: 1,
+  lga_of_origin: 1,
+  age: 1, // collected as date_of_birth on step 1
+  gpa: 2,
   financial_need: 2,
   jamb_score: 2,
   waec_credit_count: 2,
   has_english_maths_credit: 2,
   disability_status: 2,
 };
-
 // Pure function over already-computed matches -- no DB access, so it's
 // cheap to call right after getMatchesForCurrentUser() and easy to test.
 export function computeProfileGaps(matches: ScholarshipMatch[]): GapNudge[] {
   const byField = new Map<string, { label: string; scholarshipIds: Set<string> }>();
-
   for (const match of matches) {
     const evaluable = match.requirements.filter((r) => r.status !== "unverifiable");
     if (evaluable.length === 0) continue;
-
     const metCount = evaluable.filter((r) => r.status === "met").length;
     const gatingFailed = evaluable.some((r) => r.gating && r.status === "not_met");
     const currentTierRank = TIER_RANK[match.tier];
-
     const missing = evaluable.filter((r) => r.status === "missing_data");
     if (missing.length === 0) continue;
-
     // Each missing requirement simulated independently -- "if only this
     // one were filled in", not "if all of them were". Filling in several
     // real fields at once can only do at least as well as the best single
@@ -91,7 +84,6 @@ export function computeProfileGaps(matches: ScholarshipMatch[]): GapNudge[] {
         ? hypotheticalEligibilityScore
         : Math.round(hypotheticalEligibilityScore * match.competitivenessFactor);
       const hypotheticalTier = tierFor(hypotheticalScore, gatingFailed);
-
       if (TIER_RANK[hypotheticalTier] > currentTierRank) {
         const entry = byField.get(req.field) ?? { label: req.label, scholarshipIds: new Set<string>() };
         entry.scholarshipIds.add(match.id);
@@ -99,7 +91,6 @@ export function computeProfileGaps(matches: ScholarshipMatch[]): GapNudge[] {
       }
     }
   }
-
   return Array.from(byField.entries())
     .map(([field, { label, scholarshipIds }]) => ({
       field,
