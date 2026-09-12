@@ -1,6 +1,6 @@
 name: ci
 # Safety net for the Colab-push workflow: every push and PR gets a full
-# typecheck + production build before Vercel ever sees it. Placeholder
+# typecheck + production build before Vercel deploys it. Placeholder
 # Supabase env vars are required because ISR pages (/, /reviews, sitemap)
 # prerender at build time through the public client; with env missing the
 # build dies on a non-null assertion instead of rendering empty states.
