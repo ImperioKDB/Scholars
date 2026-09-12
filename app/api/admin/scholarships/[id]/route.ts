@@ -12,6 +12,10 @@
 // by scholarship + kind + date), so cycle history builds organically from
 // real admin work instead of requiring a separate data-entry step. A
 // cycle-log failure never fails the PATCH itself.
+//
+// Push C: re-saving a listing while verified refreshes last_verified_at,
+// so the public "last checked" line means "last time a human confirmed
+// this", not "first verified".
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -62,9 +66,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       { status: 400 }
     )
   }
+  // Push C: refreshing the verified stamp is a side effect of confirming
+  // the listing is still live, not a field the admin edits by hand.
+  const patch: Record<string, unknown> = { ...parsed.data }
+  if (parsed.data.verified === true) {
+    patch.last_verified_at = new Date().toISOString()
+  }
   const { data: scholarship, error } = await supabase
     .from('scholarships')
-    .update(parsed.data)
+    .update(patch)
     .eq('id', id)
     .select('*, scholarship_rules ( id, field, operator, value )')
     .single()
