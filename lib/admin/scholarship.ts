@@ -188,6 +188,10 @@ export const scholarshipSchema = z.object({
     .string()
     .optional()
     .refine((v) => !v || !Number.isNaN(Date.parse(v)), "Invalid date"),
+last_cycle_closed_at: z
+.string()
+.optional()
+.refine((v) => !v || !Number.isNaN(Date.parse(v)), "Invalid date"),
   application_url: z
     .string()
     .optional()
@@ -221,7 +225,8 @@ export const EMPTY_SCHOLARSHIP: ScholarshipFormValues = {
   amount: "",
   deadline: "",
   opens_at: "",
-  application_url: "",
+last_cycle_closed_at: "",
+application_url: "",
   how_to_apply: "",
   level: "both",
   discipline: "",
