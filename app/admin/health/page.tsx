@@ -2,22 +2,24 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/admin/access";
 import { createClient } from "@/lib/supabase/server";
 import { daysUntil } from "@/lib/dates";
-import { ADMIN_HEALTH_ROW_CAP } from "@/lib/config";
 // app/admin/health/page.tsx
 // GET /admin/health
 //
 // Weekly maintenance triage in one server-rendered page. Pulls the
 // scholarships table once (small by design) and partitions it into the
-// three buckets maintenance actually acts on:
+// buckets maintenance actually acts on:
 //
-//   1. Unverified drafts waiting on review (sub-count: already past
+//   1. Verification queue (Phase 2): unverified drafts oldest-first with a
+//      days-waiting SLA chip (amber past 7 days, rose past 14), plus an
+//      "Oldest pending" tile so queue age is visible at a glance.
+//   2. Unverified drafts waiting on review (sub-count: already past
 //      deadline, i.e. likely dead listings that should be deleted, not
 //      verified).
-//   2. Live (verified) listings with no application path -- neither
+//   3. Live (verified) listings with no application path -- neither
 //      application_url nor how_to_apply -- students can see these but
 //      cannot apply. Same rule as the missingApplyPath warning in
 //      components/admin/ScholarshipFields.tsx.
-//   3. Past-deadline listings. Verified ones are called out separately
+//   4. Past-deadline listings. Verified ones are called out separately
 //      because they still render to students as "Closed" until someone
 //      unverifies or extends them.
 //
@@ -28,10 +30,10 @@ import { ADMIN_HEALTH_ROW_CAP } from "@/lib/config";
 // AUDIT FIX (batch 3): RELIABILITY CAP. The original query had no limit,
 // so a 10,000-row catalog would serialize every row into one serverless
 // response and risk blowing the function's memory/time budget. Health
-// triage only ever acts on the soonest deadlines, so we cap at
-// ADMIN_HEALTH_ROW_CAP ordered by deadline and say so loudly when the
-// cap bites.
-const ROW_CAP = ADMIN_HEALTH_ROW_CAP;
+// triage only ever acts on the soonest deadlines, so we cap at ROW_CAP
+// ordered by deadline and say so loudly when the cap bites.
+const ROW_CAP = 2000;
+const QUEUE_LIMIT = 12;
 type Row = {
   id: string;
   title: string;
@@ -40,11 +42,25 @@ type Row = {
   verified: boolean;
   application_url: string | null;
   how_to_apply: string | null;
-  updated_at: string;
+  created_at: string;
 };
 function isPast(deadline: string): boolean {
   const d = daysUntil(deadline);
   return d !== null && d < 0;
+}
+function daysWaiting(createdAt: string): number {
+  const t = Date.parse(createdAt);
+  if (Number.isNaN(t)) return 0;
+  return Math.max(0, Math.floor((Date.now() - t) / 86400000));
+}
+function WaitingChip({ days }: { days: number }) {
+  const tone =
+    days > 14 ? "bg-rose-light text-rose" : days > 7 ? "bg-amber-light text-amber" : "bg-navy-50 text-navy-light";
+  return (
+    <span className={`text-xs font-mono font-medium px-2 py-1 rounded-full ${tone}`}>
+      {days}d waiting
+    </span>
+  );
 }
 function DeadlineChip({ deadline }: { deadline: string }) {
   const d = daysUntil(deadline);
@@ -128,7 +144,7 @@ export default async function AdminHealthPage() {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("scholarships")
-    .select("id, title, provider_name, deadline, verified, application_url, how_to_apply, updated_at")
+    .select("id, title, provider_name, deadline, verified, application_url, how_to_apply, created_at")
     .order("deadline", { ascending: true })
     .limit(ROW_CAP);
   if (error) {
@@ -144,6 +160,12 @@ export default async function AdminHealthPage() {
   const stale = rows.filter((r) => isPast(r.deadline));
   const staleLive = stale.filter((r) => r.verified);
   const attention = unverified.length + missingPath.length + staleLive.length;
+  // Phase 2 verification queue: oldest unverified drafts first, capped so
+  // the section stays scannable on a phone.
+  const queue = [...unverified]
+    .sort((a, b) => (a.created_at < b.created_at ? -1 : 1))
+    .slice(0, QUEUE_LIMIT);
+  const oldestDays = queue.length > 0 ? daysWaiting(queue[0].created_at) : 0;
   return (
     <div>
       <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
@@ -165,12 +187,18 @@ export default async function AdminHealthPage() {
           page loads on purpose; use the scholarships table for anything older.
         </p>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
         <Tile
           value={unverified.length}
           label="Unverified drafts"
           hint={`${unverifiedPast.length} already past deadline`}
           tone={unverified.length > 0 ? "amber" : "emerald"}
+        />
+        <Tile
+          value={oldestDays}
+          label="Oldest pending (days)"
+          hint={oldestDays > 14 ? "breaches the 14-day SLA" : oldestDays > 7 ? "past the 7-day target" : "within SLA"}
+          tone={oldestDays > 14 ? "rose" : oldestDays > 7 ? "amber" : "emerald"}
         />
         <Tile
           value={missingPath.length}
@@ -185,6 +213,27 @@ export default async function AdminHealthPage() {
           tone={staleLive.length > 0 ? "rose" : stale.length > 0 ? "amber" : "emerald"}
         />
       </div>
+      <Section
+        title="Verification queue"
+        sub="Oldest unverified drafts first. Amber past 7 days waiting, rose past 14: verify, push the deadline forward, or delete the draft."
+      >
+        {queue.length === 0 ? (
+          <AllClear />
+        ) : (
+          queue.map((r) => (
+            <HealthRow
+              key={r.id}
+              row={r}
+              right={
+                <>
+                  <WaitingChip days={daysWaiting(r.created_at)} />
+                  <DeadlineChip deadline={r.deadline} />
+                </>
+              }
+            />
+          ))
+        )}
+      </Section>
       <Section
         title="Unverified drafts"
         sub="Waiting on review. Past-deadline ones are usually dead listings: delete rather than verify."
