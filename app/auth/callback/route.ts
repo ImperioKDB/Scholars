@@ -8,9 +8,6 @@
 // emailRedirectTo) send the browser straight to a protected page with no
 // session yet, and middleware.ts bounces it back to /login.
 //
-// `next` defaults to /dashboard so any redirect that forgets to pass it
-// still lands somewhere sensible rather than erroring.
-//
 // INPUT HARDENING: `next` is user-controlled input that decides a
 // redirect target. safeNextPath (lib/validate.ts) whitelists same-origin
 // relative paths only -- blocking //evil.com, absolute URLs, backslash
@@ -36,20 +33,17 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/logging";
 import { safeNextPath, isUuid } from "@/lib/validate";
-
-const REF_COOKIE_NAME = "ref_id";
-
+import { COOKIE_NAMES } from "@/lib/config";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   const next = safeNextPath(searchParams.get("next"), "/dashboard");
-
   if (code) {
     const supabase = createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error && data.user) {
       const cookieStore = cookies();
-      const refId = cookieStore.get(REF_COOKIE_NAME)?.value;
+      const refId = cookieStore.get(COOKIE_NAMES.REF)?.value;
       if (refId && isUuid(refId) && refId !== data.user.id) {
         const { error: attributionError } = await supabase
           .from("profiles")
@@ -59,12 +53,11 @@ export async function GET(request: Request) {
         if (attributionError) {
           logError("auth/callback", "referral attribution failed", undefined, attributionError);
         }
-        cookieStore.set(REF_COOKIE_NAME, "", { maxAge: 0, path: "/" });
+        cookieStore.set(COOKIE_NAMES.REF, "", { maxAge: 0, path: "/" });
       }
       return NextResponse.redirect(origin + next);
     }
   }
-
   return NextResponse.redirect(
     origin +
       "/login?error=" +
