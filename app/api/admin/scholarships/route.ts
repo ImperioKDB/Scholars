@@ -9,40 +9,22 @@
 // of a confusing RLS failure buried in a Postgres error. The middleware
 // /api/admin gate is a third, independent enforcement point.
 //
-// INPUT HARDENING: application_url was z.string().url(), which accepts
-// javascript:/data:/file: URLs -- and this URL is opened via window.open
-// in the student UI, i.e. a stored-XSS primitive. It now uses
-// httpUrlSchema (http/https only) from lib/validate.ts.
+// INPUT HARDENING: application_url uses httpUrlSchema (http/https only),
+// because z.string().url() accepts javascript:/data: URLs and this value
+// is opened via window.open in the student UI.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { assertAdmin } from '@/lib/admin/guard'
 import { httpUrlSchema } from '@/lib/validate'
-
-// PERF (batch 1): reliability cap, same rationale as the scholarships
-// admin list and the health page's ROW_CAP. A 10k-row catalog with
-// embedded rules must not serialize into one serverless response. At
-// current catalog size the cap never bites; when it eventually does, add
-// real pagination to the admin list UI.
-const ADMIN_LIST_CAP = 1000;
-
-// Decodes literal \uXXXX escape sequences pasted into free-text fields.
-// A row arrived with amount stored as the six ASCII chars "\u20a6150,000"
-// instead of the real naira sign; transforming on write means the catalog
-// can never re-accumulate literal escapes from a bad paste or seed.
-function decodeUnicodeEscapes(value: string): string {
-  return value.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex: string) =>
-    String.fromCharCode(parseInt(hex, 16))
-  );
-}
-
+import { decodeUnicodeEscapes } from '@/lib/text/unicode'
+import { ADMIN_LIST_CAP } from '@/lib/config'
 const ruleSchema = z.object({
   field: z.enum(['gpa', 'nationality', 'gender', 'financial_need', 'academic_level', 'discipline', 'career_goals']),
   operator: z.enum(['eq', 'gte', 'lte', 'in', 'exists']),
   value: z.unknown(),
 })
-
 const scholarshipSchema = z.object({
   title: z.string().trim().min(1).max(300).transform(decodeUnicodeEscapes),
   provider_name: z.string().trim().min(1).max(300).transform(decodeUnicodeEscapes),
@@ -66,36 +48,28 @@ const scholarshipSchema = z.object({
   competitiveness_notes: z.string().trim().max(2000).nullable().optional(),
   rules: z.array(ruleSchema).optional().default([]),
 })
-
 export async function GET(request: Request) {
   const limited = await checkRateLimit(request, { route: 'admin-scholarships', limit: 60 })
   if (limited) return limited
-
   const supabase = await createClient()
   const guard = await assertAdmin(supabase)
   if (!guard.ok) return guard.response
-
   const { data: scholarships, error } = await supabase
     .from('scholarships')
     .select('*, scholarship_rules ( id, field, operator, value )')
     .order('created_at', { ascending: false })
     .limit(ADMIN_LIST_CAP)
-
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
   return NextResponse.json({ scholarships })
 }
-
 export async function POST(request: Request) {
   const limited = await checkRateLimit(request, { route: 'admin-scholarships', limit: 60 })
   if (limited) return limited
-
   const supabase = await createClient()
   const guard = await assertAdmin(supabase)
   if (!guard.ok) return guard.response
-
   const raw = await request.json().catch(() => null)
   const parsed = scholarshipSchema.safeParse(raw)
   if (!parsed.success) {
@@ -104,18 +78,15 @@ export async function POST(request: Request) {
       { status: 400 }
     )
   }
-
   const { rules, ...scholarshipFields } = parsed.data
   const { data: scholarship, error: insertError } = await supabase
     .from('scholarships')
     .insert({ ...scholarshipFields, created_by: guard.userId })
     .select('*')
     .single()
-
   if (insertError) {
     return NextResponse.json({ error: insertError.message }, { status: 500 })
   }
-
   if (rules.length > 0) {
     const { error: rulesError } = await supabase.from('scholarship_rules').insert(
       rules.map((r) => ({ ...r, scholarship_id: scholarship.id }))
@@ -131,12 +102,10 @@ export async function POST(request: Request) {
       )
     }
   }
-
   const { data: full } = await supabase
     .from('scholarships')
     .select('*, scholarship_rules ( id, field, operator, value )')
     .eq('id', scholarship.id)
     .single()
-
   return NextResponse.json({ scholarship: full ?? scholarship }, { status: 201 })
 }
