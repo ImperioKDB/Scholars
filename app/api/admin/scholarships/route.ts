@@ -40,6 +40,11 @@ const scholarshipSchema = z.object({
     .nullable()
     .optional()
     .refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Invalid date'),
+last_cycle_closed_at: z
+.string()
+.nullable()
+.optional()
+.refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Invalid date'),
   application_url: httpUrlSchema.nullable().optional(),
   how_to_apply: z.string().trim().max(2000).transform(decodeUnicodeEscapes).nullable().optional(),
   level: z.enum(['undergrad', 'postgrad', 'both']).default('both'),
