@@ -11,8 +11,8 @@ import { CompetitivenessBadge, type CompetitivenessTier } from "@/components/Com
 import { RequirementsList, type Requirement } from "@/components/RequirementsList";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { useAde } from "@/components/ade/AdeProvider";
-import { formatVerifiedOn } from "@/lib/dates";
 import type { CyclePrediction } from "@/lib/cycles";
+
 type ScholarshipDetail = {
   id: string;
   title: string;
@@ -33,8 +33,8 @@ type ScholarshipDetail = {
   tier: "excellent" | "good" | "possible" | "unlikely";
   requirements: Requirement[];
   cycle?: CyclePrediction | null;
-  last_verified_at?: string | null;
 };
+
 export type SimilarScholarship = {
   id: string;
   title: string;
@@ -44,19 +44,23 @@ export type SimilarScholarship = {
   level: "undergrad" | "postgrad" | "both";
   discipline: string | null;
 };
+
 type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected";
+
 const TIER_LABELS: Record<ScholarshipDetail["tier"], string> = {
   excellent: "Excellent fit",
   good: "Worth a look",
   possible: "Possible",
   unlikely: "Long shot",
 };
+
 const STATUS_LABELS: Record<ApplicationStatus, string> = {
   in_progress: "In progress",
   submitted: "Submitted",
   accepted: "Accepted",
   rejected: "Rejected",
 };
+
 export function ScholarshipDetailClient({
   scholarship,
   initialSaved,
@@ -77,20 +81,18 @@ export function ScholarshipDetailClient({
   const [savePending, setSavePending] = useState(false);
   const [trackPending, setTrackPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  // APPLY CLICK TRACKING: the detail page apply link used to be a
-  // plain anchor, so Ade never learned the student left for the
-  // provider's portal unless they happened to use Open application
-  // on the Applications page. Recording the click here (tracked
-  // applications only) is what makes Ade's next-visit check-in fire.
+
   function recordApplyClick() {
     if (!application) return;
     fetchWithTimeout(`/api/applications/${application.id}/click`, {
       method: "POST",
     }).catch(() => {});
   }
+
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
+
   async function toggleSave() {
     setActionError(null);
     const wasSaved = saved;
@@ -114,6 +116,7 @@ export function ScholarshipDetailClient({
     }
     setSavePending(false);
   }
+
   async function startTracking() {
     setActionError(null);
     setTrackPending(true);
@@ -135,6 +138,12 @@ export function ScholarshipDetailClient({
     }
     setTrackPending(false);
   }
+
+  // Phase 4 outcome: when the tracked application is rejected, point the
+  // student at open awards in the same discipline. Dead end becomes a
+  // next step.
+  const showRejectionRedirect = application?.status === "rejected";
+
   return (
     <div>
       <BackLink href="/dashboard" label="Back to matches" />
@@ -147,14 +156,9 @@ export function ScholarshipDetailClient({
             </p>
             <h1 className="font-display text-2xl font-semibold text-navy leading-snug">{scholarship.title}</h1>
             <p className="text-sm text-navy-light mt-1">{scholarship.provider_name}</p>
-            {/* Push C trust line, mirrors the public share page. */}
-            {scholarship.last_verified_at ? (
-              <p className="text-xs text-navy-light mt-0.5">
-                Last checked {formatVerifiedOn(scholarship.last_verified_at)}
-              </p>
-            ) : null}
           </div>
         </div>
+
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <DeadlineBadge deadline={scholarship.deadline} />
           {scholarship.amount && (
@@ -169,6 +173,7 @@ export function ScholarshipDetailClient({
             <span className="text-xs text-navy-light px-2 py-1">&middot; {scholarship.discipline}</span>
           )}
         </div>
+
         {scholarship.cycle && (
           <p className="text-xs text-navy-light mb-4">
             This award runs in cycles. {scholarship.cycle.label}
@@ -178,12 +183,14 @@ export function ScholarshipDetailClient({
             . Save it and we will tell you when applications open.
           </p>
         )}
+
         <CompetitivenessBadge
           awardsAvailable={scholarship.awards_available}
           estimatedApplicantPool={scholarship.estimated_applicant_pool}
           competitivenessTier={scholarship.competitiveness_tier}
           historicalAcceptanceRate={scholarship.historical_acceptance_rate}
         />
+
         {scholarship.competitivenessFactor < 1 && (
           <p className="text-xs text-navy-light mt-2">
             You meet <span className="font-mono text-ink">{scholarship.eligibilityScore}%</span> of this
@@ -191,10 +198,13 @@ export function ScholarshipDetailClient({
             than average.
           </p>
         )}
+
         {scholarship.description && (
           <p className="text-sm text-ink leading-relaxed mb-6 mt-4">{scholarship.description}</p>
         )}
+
         {actionError && <p className="text-sm text-rose mb-4" role="alert">{actionError}</p>}
+
         <div className="flex flex-wrap items-center gap-3 mb-8 pb-8 border-b border-hairline">
           {scholarship.application_url && (
             <button
@@ -209,7 +219,7 @@ export function ScholarshipDetailClient({
               }
               className="rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors"
             >
-              Apply on provider’s site →
+              Apply on provider's site &rarr;
             </button>
           )}
           <button
@@ -239,11 +249,31 @@ export function ScholarshipDetailClient({
           )}
           <ShareButton variant="full" scholarshipId={scholarship.id} title={scholarship.title} sharerId={sharerId} />
         </div>
+
+        {/* PHASE 4 OUTCOME: rejection redirect on the detail page too.
+            Same link as ApplicationsClient -- a "no" becomes a browse
+            instead of a dead end, whichever surface the student is on. */}
+        {showRejectionRedirect && (
+          <div className="bg-rose-light border border-rose/20 rounded-xl p-4 mb-6">
+            <p className="text-sm font-medium text-rose mb-1">This one didn&apos;t work out</p>
+            <p className="text-xs text-ink leading-relaxed mb-2">
+              There are other open awards in {scholarship.discipline || "your field"} you may still be eligible for.
+            </p>
+            <Link
+              href={`/discover?discipline=${encodeURIComponent(scholarship.discipline ?? "")}`}
+              className="text-xs font-medium text-navy hover:underline"
+            >
+              Browse similar open awards &rarr;
+            </Link>
+          </div>
+        )}
+
         <div>
           <h2 className="font-display text-lg font-semibold text-navy mb-4">Eligibility requirements</h2>
           <RequirementsList requirements={scholarship.requirements} />
         </div>
       </div>
+
       {similar.length > 0 && (
         <div className="mt-8">
           <h2 className="font-display text-lg font-semibold text-navy mb-4">Similar scholarships</h2>
