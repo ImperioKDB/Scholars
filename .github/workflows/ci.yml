@@ -1,0 +1,29 @@
+name: ci
+# Safety net for the Colab-push workflow: every push and PR gets a full
+# typecheck + production build before Vercel ever sees it. Placeholder
+# Supabase env vars are required because ISR pages (/, /reviews, sitemap)
+# prerender at build time through the public client; with env missing the
+# build dies on a non-null assertion instead of rendering empty states.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npx tsc --noEmit
+      - run: npm run build
