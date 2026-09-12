@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ProviderMonogram } from "@/components/ProviderMonogram";
 import { DeadlineBadge } from "@/components/DeadlineBadge";
@@ -9,23 +10,19 @@ import { DraftPanel, type Draft } from "@/components/DraftPanel";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useAde } from "@/components/ade/AdeProvider";
 import { fetchWithTimeout } from "@/lib/fetch";
-
 type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected";
 type ApplicationApiItem = Draft & {
   id: string; status: ApplicationStatus; notes: string | null; created_at: string; updated_at: string;
   scholarship: CardScholarship;
 };
 type SavedApiItem = { id: string; saved_at: string; scholarship: CardScholarship };
-
 const STATUS_LABELS: Record<ApplicationStatus, string> = {
   in_progress: "In progress", submitted: "Submitted", accepted: "Accepted", rejected: "Rejected",
 };
-
 const STATUS_TONE: Record<ApplicationStatus, string> = {
   in_progress: "bg-amber-light text-amber", submitted: "bg-navy-50 text-navy",
   accepted: "bg-emerald-light text-emerald", rejected: "bg-rose-light text-rose",
 };
-
 export function ApplicationsClient({ initialApplications, initialSaved, initialError }: {
   initialApplications: ApplicationApiItem[]; initialSaved: SavedApiItem[]; initialError: string | null;
 }) {
@@ -36,16 +33,8 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
   const [applications, setApplications] = useState<ApplicationApiItem[]>(initialApplications);
   const [saved, setSaved] = useState<SavedApiItem[]>(initialSaved);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
-  // AUDIT item 2: ids of cards that just changed status, used to run a
-  // one-shot highlight ring so the optimistic write is visibly acknowledged.
   const [flashIds, setFlashIds] = useState<Set<string>>(new Set());
-  // FINAL CLEANUP: native confirm() replaced with the shared focus-trapped
-  // ConfirmDialog (same component the admin scholarships pages use).
-  const [confirmState, setConfirmState] = useState<{
-    message: string;
-    onConfirm: () => void;
-  } | null>(null);
-
+  const [confirmState, setConfirmState] = useState<{ message: string; onConfirm: () => void } | null>(null);
   async function load() {
     setLoadError(null);
     try {
@@ -61,7 +50,6 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
       setLoadError("Couldn't load your applications. Check your connection and try again.");
     }
   }
-
   const trackedScholarshipIds = useMemo(() => new Set(applications.map((a) => a.scholarship.id)), [applications]);
   const untrackedSaved = useMemo(() => saved.filter((s) => !trackedScholarshipIds.has(s.scholarship.id)), [saved, trackedScholarshipIds]);
   const counts = useMemo(() => {
@@ -69,7 +57,6 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
     for (const a of applications) c[a.status] += 1;
     return c;
   }, [applications]);
-
   async function startTracking(scholarshipId: string) {
     setPendingIds((p) => new Set(p).add(scholarshipId));
     setActionError(null);
@@ -86,7 +73,6 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
     }
     setPendingIds((p) => { const n = new Set(p); n.delete(scholarshipId); return n; });
   }
-
   async function updateStatus(applicationId: string, status: ApplicationStatus) {
     setPendingIds((p) => new Set(p).add(applicationId));
     setActionError(null);
@@ -106,7 +92,6 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
     }
     setPendingIds((p) => { const n = new Set(p); n.delete(applicationId); return n; });
   }
-
   async function doStopTracking(applicationId: string) {
     setPendingIds((p) => new Set(p).add(applicationId));
     setActionError(null);
@@ -121,23 +106,19 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
     }
     setPendingIds((p) => { const n = new Set(p); n.delete(applicationId); return n; });
   }
-
   function stopTracking(applicationId: string) {
     setConfirmState({
       message: "Stop tracking this application? It leaves your Applications list; any saved scholarship stays saved.",
       onConfirm: () => doStopTracking(applicationId),
     });
   }
-
   function handleDraftChange(applicationId: string, updated: Draft) {
     setApplications((prev) => prev.map((a) => (a.id === applicationId ? { ...a, ...updated } : a)));
   }
-
   function openApplication(a: ApplicationApiItem) {
     if (!a.scholarship.application_url) return;
     confirmApply({ scholarshipTitle: a.scholarship.title, applicationUrl: a.scholarship.application_url, alreadyTracked: true, applicationId: a.id, onTrack: async () => ({ id: a.id }) });
   }
-
   return (
     <div>
       {confirmState && (
@@ -215,8 +196,19 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
                       {(Object.keys(STATUS_LABELS) as ApplicationStatus[]).map((s) => (<option key={s} value={s}>{STATUS_LABELS[s]}</option>))}
                     </select>
                   </label>
+                  {/* OUTCOME LOOP (Push C): a rejection is a dead end today.
+                      Point the student at open awards in their discipline so
+                      a "no" becomes a next step instead of a stop. */}
+                  {a.status === "rejected" && (
+                    <Link
+                      href={`/discover?discipline=${encodeURIComponent(a.scholarship.discipline ?? "")}`}
+                      className="inline-block text-xs font-medium text-navy hover:underline mt-3"
+                    >
+                      Didn&apos;t work out? Browse similar open awards →
+                    </Link>
+                  )}
                   {a.scholarship.application_url ? (
-                    <button type="button" onClick={() => openApplication(a)} className="inline-block text-xs font-medium text-navy hover:underline mt-3">Open application &rarr;</button>
+                    <button type="button" onClick={() => openApplication(a)} className="inline-block text-xs font-medium text-navy hover:underline mt-3">Open application →</button>
                   ) : a.scholarship.how_to_apply ? (
                     <p className="text-xs text-navy-light mt-3 leading-relaxed"><span className="font-medium text-ink">How to apply: </span>{a.scholarship.how_to_apply}</p>
                   ) : null}
@@ -241,7 +233,7 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
               <ProviderMonogram name={s.scholarship.provider_name} size={52} />
               <div className="min-w-0 flex-1">
                 <p className="font-medium text-ink leading-snug">{s.scholarship.title}</p>
-                <p className="text-xs text-navy-light mt-0.5">{s.scholarship.provider_name}</p>
+                <p className="text-xs text-navy-light">{s.scholarship.provider_name}</p>
               </div>
             </div>
           ))}
