@@ -7,7 +7,7 @@ import { ShareButton } from "@/components/ShareButton";
 import { DeadlineBadge } from "@/components/DeadlineBadge";
 import { saveReturnScroll } from "@/lib/scrollRestore";
 import { daysUntil, formatLastClosedLabel, formatOpensLabel } from "@/lib/dates";
-
+import type { CyclePrediction } from "@/lib/cycles";
 export type CardScholarship = {
   id: string;
   title: string;
@@ -22,8 +22,8 @@ export type CardScholarship = {
   how_to_apply?: string | null;
   isOpenNow?: boolean;
   isTrending?: boolean;
+  cycle?: CyclePrediction | null;
 };
-
 export function Spinner({ className = "" }: { className?: string }) {
   return (
     <svg className={`animate-spin ${className}`} viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -32,7 +32,6 @@ export function Spinner({ className = "" }: { className?: string }) {
     </svg>
   );
 }
-
 // MOTION/FEEDBACK (item 1): one-shot scale spring on save/unsave. The
 // save-pop keyframes (app/motion.css) carry the overshoot; cleared by
 // onAnimationEnd so rapid re-taps re-trigger it. Reduced motion disables
@@ -63,7 +62,6 @@ function SaveButton({ saved, pending, onToggle }: { saved: boolean; pending?: bo
     </button>
   );
 }
-
 export function ScholarshipCard({
   scholarship,
   score,
@@ -120,7 +118,9 @@ export function ScholarshipCard({
             </span>
           ) : closedUnknownReopen ? (
             <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-light text-amber">
-              {formatLastClosedLabel(scholarship.last_cycle_closed_at as string)}
+              {scholarship.cycle
+                ? scholarship.cycle.label
+                : formatLastClosedLabel(scholarship.last_cycle_closed_at as string)}
             </span>
           ) : (
             <DeadlineBadge deadline={scholarship.deadline} />
