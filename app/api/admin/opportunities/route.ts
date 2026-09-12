@@ -8,20 +8,20 @@
 // is_admin(auth.uid()), but profile.is_admin is also checked server-side so
 // a non-admin gets a clean 403 instead of a Postgres RLS error.
 //
-// INPUT HARDENING: application_url is http(s)-only (httpUrlSchema) --
-// z.string().url() accepted javascript:/data: URLs, and this value is
-// opened via window.open in the student UI.
+// GUARD MIGRATION (Phase 0): the local requireAdmin() copy is gone; this
+// route now uses assertAdmin() from lib/admin/guard.ts, the same single
+// implementation as the scholarships routes. If assertAdmin ever grows an
+// audit log or scope check, this route inherits it automatically.
+//
+// INPUT HARDENING: application_url uses httpUrlSchema (http/https only).
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
+import { assertAdmin } from '@/lib/admin/guard'
 import { httpUrlSchema } from '@/lib/validate'
-
-// PERF (batch 1): reliability cap, same rationale as the scholarships
-// admin list and the health page's ROW_CAP.
-const ADMIN_LIST_CAP = 1000;
-
+import { ADMIN_LIST_CAP } from '@/lib/config'
 const opportunitySchema = z.object({
   type: z.enum(['fellowship', 'internship', 'competition', 'mentorship']),
   title: z.string().trim().min(1).max(300),
@@ -47,55 +47,28 @@ const opportunitySchema = z.object({
   verified: z.boolean().default(false),
   research_notes: z.string().trim().max(2000).nullable().optional(),
 })
-
-async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-  if (authError || !user) {
-    return { error: NextResponse.json({ error: 'Not authenticated' }, { status: 401 }) }
-  }
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('id', user.id)
-    .single()
-  if (profileError || !profile?.is_admin) {
-    return { error: NextResponse.json({ error: 'Admin access required' }, { status: 403 }) }
-  }
-  return { user }
-}
-
 export async function GET(request: Request) {
   const limited = await checkRateLimit(request, { route: 'admin-opportunities', limit: 60 })
   if (limited) return limited
-
   const supabase = await createClient()
-  const check = await requireAdmin(supabase)
-  if (check.error) return check.error
-
+  const guard = await assertAdmin(supabase)
+  if (!guard.ok) return guard.response
   const { data: opportunities, error } = await supabase
     .from('opportunities')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(ADMIN_LIST_CAP)
-
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
   return NextResponse.json({ opportunities })
 }
-
 export async function POST(request: Request) {
   const limited = await checkRateLimit(request, { route: 'admin-opportunities', limit: 60 })
   if (limited) return limited
-
   const supabase = await createClient()
-  const check = await requireAdmin(supabase)
-  if (check.error) return check.error
-
+  const guard = await assertAdmin(supabase)
+  if (!guard.ok) return guard.response
   const raw = await request.json().catch(() => null)
   const parsed = opportunitySchema.safeParse(raw)
   if (!parsed.success) {
@@ -104,20 +77,16 @@ export async function POST(request: Request) {
       { status: 400 }
     )
   }
-
   const { data: opportunity, error: insertError } = await supabase
     .from('opportunities')
-    .insert({ ...parsed.data, created_by: check.user!.id })
+    .insert({ ...parsed.data, created_by: guard.userId })
     .select('*')
     .single()
-
   if (insertError) {
     return NextResponse.json({ error: insertError.message }, { status: 500 })
   }
-
   // SHARE PAGES: /o/[id] is ISR (revalidate 300) -- drop its cached render
   // so a new opportunity's share page is live immediately.
   revalidatePath('/o/[id]')
-
   return NextResponse.json({ opportunity }, { status: 201 })
 }
