@@ -5,15 +5,18 @@
 //
 // Mirrors /api/admin/scholarships/[id].
 //
-// INPUT HARDENING: application_url is http(s)-only (httpUrlSchema), and
-// the id path param is UUID-validated before any DB work.
+// GUARD MIGRATION (Phase 0): local requireAdmin() copy removed in favour
+// of assertAdmin() from lib/admin/guard.ts.
+//
+// INPUT HARDENING: application_url uses httpUrlSchema (http/https only),
+// and the id path param is UUID-validated before any DB work.
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
+import { assertAdmin } from '@/lib/admin/guard'
 import { httpUrlSchema, isUuid } from '@/lib/validate'
-
 const updateSchema = z
   .object({
     type: z.enum(['fellowship', 'internship', 'competition', 'mentorship']),
@@ -40,39 +43,16 @@ const updateSchema = z
   })
   .partial()
   .refine((obj) => Object.keys(obj).length > 0, 'No fields to update')
-
-async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-  if (authError || !user) {
-    return { error: NextResponse.json({ error: 'Not authenticated' }, { status: 401 }) }
-  }
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('id', user.id)
-    .single()
-  if (profileError || !profile?.is_admin) {
-    return { error: NextResponse.json({ error: 'Admin access required' }, { status: 403 }) }
-  }
-  return { user }
-}
-
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const limited = await checkRateLimit(request, { route: 'admin-opportunities-id', limit: 60 })
   if (limited) return limited
-
   const { id } = await params
   if (!isUuid(id)) {
     return NextResponse.json({ error: 'Opportunity not found' }, { status: 404 })
   }
-
   const supabase = await createClient()
-  const check = await requireAdmin(supabase)
-  if (check.error) return check.error
-
+  const guard = await assertAdmin(supabase)
+  if (!guard.ok) return guard.response
   const raw = await request.json().catch(() => null)
   const parsed = updateSchema.safeParse(raw)
   if (!parsed.success) {
@@ -81,47 +61,37 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       { status: 400 }
     )
   }
-
   const { data: opportunity, error } = await supabase
     .from('opportunities')
     .update(parsed.data)
     .eq('id', id)
     .select('*')
     .single()
-
   if (error) {
     if (error.code === 'PGRST116') {
       return NextResponse.json({ error: 'Opportunity not found' }, { status: 404 })
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
   // SHARE PAGES: this PATCH flips `verified` (unverify hides the /o/[id]
   // page), so drop the ISR cache for this path too.
   revalidatePath('/o/[id]')
-
   return NextResponse.json({ opportunity })
 }
-
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const limited = await checkRateLimit(request, { route: 'admin-opportunities-id', limit: 60 })
   if (limited) return limited
-
   const { id } = await params
   if (!isUuid(id)) {
     return NextResponse.json({ error: 'Opportunity not found' }, { status: 404 })
   }
-
   const supabase = await createClient()
-  const check = await requireAdmin(supabase)
-  if (check.error) return check.error
-
+  const guard = await assertAdmin(supabase)
+  if (!guard.ok) return guard.response
   const { error } = await supabase.from('opportunities').delete().eq('id', id)
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
   revalidatePath('/o/[id]')
-
   return NextResponse.json({ message: 'Opportunity deleted' })
 }
