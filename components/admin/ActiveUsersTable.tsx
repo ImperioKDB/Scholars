@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from "react";
-import { Avatar } from "@/components/Avatar";
+import { Avatar } from "@/components/Avatar";  // CORRECTED PATH - matches your project structure
 
 interface ActiveUser {
   id: string;
