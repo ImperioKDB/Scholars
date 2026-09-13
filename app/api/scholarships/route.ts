@@ -52,8 +52,8 @@ export async function GET(request: Request) {
   let query = supabase
     .from('scholarships')
     .select(
-      'id, title, provider_name, description, amount, deadline, opens_at, last_cycle_closed_at, application_url, level, discipline, verified',
-      { count: 'exact' }
+      'id, title, provider_name, amount, deadline, opens_at, last_cycle_closed_at, application_url, level, discipline, verified',
+      { count: 'planned' }
     )
     .eq('verified', true)
     .in('level', ['undergrad', 'both'])

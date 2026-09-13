@@ -40,10 +40,14 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
   );
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const requestIdRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
   const filtersActive = keyword.trim() !== "" || type !== "" || discipline.trim() !== "";
 
   async function load(offset: number, replace: boolean) {
     const requestId = ++requestIdRef.current;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setLoading(true);
     setLoadError(null);
     const params = new URLSearchParams();
@@ -53,7 +57,7 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
     params.set("limit", String(PAGE_SIZE));
     params.set("offset", String(offset));
     try {
-      const res = await fetchWithTimeout("/api/opportunities?" + params.toString());
+      const res = await fetchWithTimeout("/api/opportunities?" + params.toString(), { signal: controller.signal });
       if (requestId !== requestIdRef.current) return;
       if (!res.ok) {
         setLoadError("Couldn't load opportunities. Try again.");
@@ -67,6 +71,7 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
       setNextOffset(offset + page.length);
     } catch {
       if (requestId !== requestIdRef.current) return;
+      if (controller.signal.aborted) return;
       setLoadError("Couldn't load opportunities. Check your connection and try again.");
     }
     setLoading(false);
@@ -74,7 +79,10 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
 
   useEffect(() => {
     const t = setTimeout(() => load(0, true), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      abortRef.current?.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyword, type, discipline]);
 

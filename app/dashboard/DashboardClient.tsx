@@ -170,7 +170,7 @@ export function DashboardClient({
   const comingSoon = useMemo(() => matches.filter((m) => !m.isOpenNow), [matches]);
   const filteredMatches = useMemo(
     () => (tab === "all" ? openMatches : openMatches.filter((m) => m.tier === tab)),
-    [openMatches]
+    [openMatches, tab]
   );
   const upcomingDeadlines = useMemo(() => {
     const map = new Map<string, CardScholarship>();

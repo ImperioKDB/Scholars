@@ -26,10 +26,14 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
 
   const requestIdRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
   const filtersActive = keyword.trim() !== "" || level !== "" || discipline.trim() !== "";
 
   async function load(offset: number, replace: boolean) {
     const requestId = ++requestIdRef.current;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setLoading(true);
     setLoadError(null);
 
@@ -41,7 +45,7 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
     params.set("offset", String(offset));
 
     try {
-      const res = await fetchWithTimeout("/api/scholarships?" + params.toString());
+      const res = await fetchWithTimeout("/api/scholarships?" + params.toString(), { signal: controller.signal });
       if (requestId !== requestIdRef.current) return;
       if (!res.ok) {
         setLoadError("Couldn't load scholarships. Try again.");
@@ -55,6 +59,7 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
       setNextOffset(offset + page.length);
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
+      if (controller.signal.aborted) return;
       if (err instanceof FetchTimeoutError) {
         setLoadError("Request timed out. Check your connection and try again.");
       } else if (err instanceof FetchNetworkError) {
@@ -68,7 +73,10 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
 
   useEffect(() => {
     const t = setTimeout(() => load(0, true), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      abortRef.current?.abort();
+    };
   }, [keyword, level, discipline]);
 
   const openNowItems = useMemo(

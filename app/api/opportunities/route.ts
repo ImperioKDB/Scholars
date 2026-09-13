@@ -34,7 +34,7 @@ const querySchema = z.object({
 })
 
 const OPPORTUNITY_COLUMNS =
-  'id, type, title, provider_name, description, duration, location, compensation, discipline, deadline, opens_at, application_url, how_to_apply, verified'
+  'id, type, title, provider_name, duration, location, compensation, discipline, deadline, opens_at, application_url, how_to_apply, verified'
 
 export async function GET(request: Request) {
   const supabase = await createClient()
@@ -64,7 +64,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from('opportunities')
-    .select(OPPORTUNITY_COLUMNS, { count: 'exact' })
+    .select(OPPORTUNITY_COLUMNS, { count: 'planned' })
     .eq('verified', true)
     .order('deadline', { ascending: true, nullsFirst: false })
     .range(offset, offset + limit - 1)
