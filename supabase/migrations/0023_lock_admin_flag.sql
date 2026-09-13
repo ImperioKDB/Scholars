@@ -104,9 +104,11 @@ create policy profiles_delete_own
   to authenticated
   using (auth.uid() = id);
 
-revoke execute on function public.is_admin(uuid)
-  from public, anon, authenticated;
-
-grant execute on function public.is_admin(uuid) to postgres;
+-- RLS policies execute this helper under anon/authenticated database roles.
+-- Keep EXECUTE available so policy evaluation works, while the function
+-- remains SECURITY DEFINER with an empty search_path and is not exposed as a
+-- useful client RPC because it only accepts an arbitrary UUID and returns the
+-- boolean already protected by the profile RLS policies.
+grant execute on function public.is_admin(uuid) to public;
 
 commit;
