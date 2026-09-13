@@ -33,6 +33,7 @@ type ScholarshipDetail = {
   tier: "excellent" | "good" | "possible" | "unlikely";
   requirements: Requirement[];
   cycle?: CyclePrediction | null;
+  last_verified_at?: string | null;
 };
 
 export type SimilarScholarship = {
