@@ -9,6 +9,8 @@
 // Palette mirrors the app tokens: navy #0B1E3D, parchment #F7F5EF,
 // card white, emerald CTA #15705A, muted #5B6472, hairline #E4E1D8.
 // No em-dashes anywhere in visible copy.
+import { escapeHtml } from "@/lib/validate";
+
 export type EmailListing = {
 id: string;
 title: string;
@@ -27,13 +29,7 @@ const HAIR = "#E4E1D8";
 const SANS =
 "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 const DISPLAY = "Georgia,'Times New Roman',serif";
-function esc(s: string): string {
-return s
-.replace(/&/g, "&amp;")
-.replace(/</g, "&lt;")
-.replace(/>/g, "&gt;")
-.replace(/"/g, "&quot;");
-}
+const esc = escapeHtml;
 export function formatDate(iso: string): string {
 const d = new Date(iso);
 if (Number.isNaN(d.getTime())) return iso;

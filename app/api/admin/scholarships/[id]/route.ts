@@ -27,6 +27,7 @@ import { assertAdmin } from '@/lib/admin/guard'
 import { decodeUnicodeEscapes } from '@/lib/text/unicode'
 import { logError } from '@/lib/logging'
 import { dbErrorResponse } from '@/lib/errors'
+import { httpUrlSchema, isUuid } from '@/lib/validate'
 
 const ROUTE = 'admin/scholarships/[id]'
 
@@ -45,7 +46,7 @@ const updateSchema = z
       .string()
       .nullable()
       .refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Invalid date'),
-    application_url: z.string().url().nullable(),
+    application_url: httpUrlSchema.nullable(),
     how_to_apply: z.string().trim().max(2000).transform(decodeUnicodeEscapes).nullable(),
     level: z.enum(['undergrad', 'postgrad', 'both']),
     discipline: z.string().trim().max(200).nullable(),
@@ -64,6 +65,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (limited) return limited
 
   const { id } = await params
+  if (!isUuid(id)) {
+    return NextResponse.json({ error: 'Scholarship not found' }, { status: 404 })
+  }
   const supabase = await createClient()
   const guard = await assertAdmin(supabase)
   if (!guard.ok) return guard.response
@@ -139,6 +143,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   if (limited) return limited
 
   const { id } = await params
+  if (!isUuid(id)) {
+    return NextResponse.json({ error: 'Scholarship not found' }, { status: 404 })
+  }
   const supabase = await createClient()
   const guard = await assertAdmin(supabase)
   if (!guard.ok) return guard.response
