@@ -1,20 +1,19 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
-// Server-only. Checks profiles.is_admin for the current session and redirects
-// non-admins away. This is a UX gate, not the security boundary — the real
-// enforcement is the is_admin(auth.uid()) RLS policy on scholarships /
-// scholarship_rules, so a client-side bug here can't expose write access.
-export async function requireAdmin() {
-  const supabase = createClient();
+function adminMfaRequired(): boolean {
+  return process.env.REQUIRE_ADMIN_MFA === "true";
+}
 
+// Server-only admin gate for Server Components. Database RLS and API guards
+// remain the actual authorization boundaries.
+export async function requireAdmin(options: { requireAal2?: boolean } = {}) {
+  const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect("/login?next=/admin");
-  }
+  if (!user) redirect("/login?next=/admin");
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -22,8 +21,14 @@ export async function requireAdmin() {
     .eq("id", user!.id)
     .maybeSingle();
 
-  if (!profile?.is_admin) {
-    redirect("/dashboard");
+  if (profile?.is_admin !== true) redirect("/dashboard");
+
+  if (options.requireAal2 || adminMfaRequired()) {
+    const { data: aal } =
+      await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aal?.currentLevel !== "aal2" || aal?.nextLevel !== "aal2") {
+      redirect("/settings/security?required=admin-mfa");
+    }
   }
 
   return { userId: user!.id, fullName: profile.full_name as string | null };
