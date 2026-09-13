@@ -17,6 +17,7 @@ import { Logo } from "@/components/Logo";
 import { FeedbackModal } from "@/components/FeedbackWidget";
 import { levelForXp } from "@/lib/xp/level";
 import { initialsFor } from "@/lib/text/initials";
+import { usePresenceHeartbeat } from "@/lib/presence";
 import {
   DashboardIcon,
   ApplicationsIcon,
