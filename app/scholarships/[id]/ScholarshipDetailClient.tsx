@@ -157,6 +157,11 @@ export function ScholarshipDetailClient({
             </p>
             <h1 className="font-display text-2xl font-semibold text-navy leading-snug">{scholarship.title}</h1>
             <p className="text-sm text-navy-light mt-1">{scholarship.provider_name}</p>
+            {scholarship.last_verified_at && (
+              <p className="text-xs text-navy-light mt-0.5">
+                Verified by our team on {new Date(scholarship.last_verified_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}.
+              </p>
+            )}
           </div>
         </div>
 
