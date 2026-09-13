@@ -13,6 +13,8 @@
 // a trusted caller (e.g. the CRON_SECRET check in the cron route) —
 // this client has no other access control of its own.
 
+import 'server-only'
+
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 export function createServiceClient() {

@@ -12,6 +12,7 @@
 //
 // meta is capped (10 keys, 200-char strings) so this endpoint can never be
 // used as an unbounded storage sink.
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -58,7 +59,7 @@ export async function POST(request: Request) {
     meta: parsed.data.meta ?? {},
   })
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return dbErrorResponse('events', error)
   }
   return NextResponse.json({ ok: true }, { status: 201 })
 }

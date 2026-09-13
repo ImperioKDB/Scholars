@@ -1,4 +1,6 @@
 // lib/applications/draft.ts
+import 'server-only'
+
 //
 // Auto-apply v1: builds the two pieces of an "application draft" for a
 // scholarship a student is tracking.

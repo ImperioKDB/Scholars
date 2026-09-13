@@ -16,6 +16,7 @@
 //     query, both of which key off `status`.
 //
 // INPUT HARDENING: the id path param is UUID-validated.
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -78,7 +79,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (error.code === 'PGRST116') {
       return NextResponse.json({ error: 'Application not found' }, { status: 404 })
     }
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return dbErrorResponse('applications/[id]/checkin', error)
   }
 
   return NextResponse.json({ application: data })

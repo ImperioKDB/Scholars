@@ -23,6 +23,7 @@
 //
 // INPUT HARDENING: the id path param is UUID-validated -- a malformed id
 // becomes a clean 404 instead of a Postgres cast error surfaced as 500.
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -77,7 +78,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (error.code === 'PGRST116') {
       return NextResponse.json({ error: 'Application not found' }, { status: 404 })
     }
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return dbErrorResponse('applications/[id]', error)
   }
 
   return NextResponse.json({ application: data })
@@ -105,7 +106,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     .eq('profile_id', user.id)
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return dbErrorResponse('applications/[id]', error)
   }
   if (!count) {
     return NextResponse.json({ error: 'Application not found' }, { status: 404 })

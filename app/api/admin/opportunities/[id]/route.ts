@@ -10,6 +10,7 @@
 //
 // INPUT HARDENING: application_url uses httpUrlSchema (http/https only),
 // and the id path param is UUID-validated before any DB work.
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
@@ -71,7 +72,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (error.code === 'PGRST116') {
       return NextResponse.json({ error: 'Opportunity not found' }, { status: 404 })
     }
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return dbErrorResponse('admin/opportunities/[id]', error)
   }
   // SHARE PAGES: this PATCH flips `verified` (unverify hides the /o/[id]
   // page), so drop the ISR cache for this path too.
@@ -90,7 +91,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   if (!guard.ok) return guard.response
   const { error } = await supabase.from('opportunities').delete().eq('id', id)
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return dbErrorResponse('admin/opportunities/[id]', error)
   }
   revalidatePath('/o/[id]')
   return NextResponse.json({ message: 'Opportunity deleted' })

@@ -14,6 +14,7 @@
 // combinations restricted to what the engine supports. This mirrors what
 // the admin form's serializeRuleValue() already produces client-side, so
 // the server no longer trusts the client's serialization.
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -159,7 +160,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (error.code === '23503') {
       return NextResponse.json({ error: 'Scholarship not found' }, { status: 404 })
     }
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return dbErrorResponse('admin/scholarships/[id]/rules', error)
   }
 
   return NextResponse.json({ rule }, { status: 201 })

@@ -16,6 +16,7 @@
 // and any consumer reading scholarship.* unconditionally crashes. Same
 // fix as app/dashboard/page.tsx, app/applications/page.tsx,
 // app/api/applications/route.ts, and app/api/applications/[id]/route.ts.
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
@@ -118,7 +119,7 @@ export async function POST(request: Request) {
         { status: 404 },
       );
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return dbErrorResponse('scholarships/save', error);
   }
   return NextResponse.json({ saved: data }, { status: 201 });
 }
@@ -154,7 +155,7 @@ export async function DELETE(request: Request) {
     .eq("profile_id", user.id)
     .eq("scholarship_id", parsed.data.scholarship_id);
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return dbErrorResponse('scholarships/save', error);
   }
   return NextResponse.json({ message: "Unsaved" });
 }

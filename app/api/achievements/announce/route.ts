@@ -11,6 +11,7 @@
 //
 // INPUT HARDENING: achievement_id is now UUID-format validated instead
 // of an arbitrary min-1 string.
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
     .eq("achievement_id", parsed.data.achievement_id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return dbErrorResponse('achievements/announce', error);
   }
 
   return NextResponse.json({ message: "Announced" });

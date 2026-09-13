@@ -13,7 +13,7 @@ export async function GET() {
 
   const { data, error } = await supabase.auth.mfa.listFactors();
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 502 });
+    return NextResponse.json({ error: 'Could not list MFA factors' }, { status: 502 });
   }
 
   return NextResponse.json({

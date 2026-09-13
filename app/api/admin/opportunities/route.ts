@@ -14,6 +14,7 @@
 // audit log or scope check, this route inherits it automatically.
 //
 // INPUT HARDENING: application_url uses httpUrlSchema (http/https only).
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
@@ -59,7 +60,7 @@ export async function GET(request: Request) {
     .order('created_at', { ascending: false })
     .limit(ADMIN_LIST_CAP)
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return dbErrorResponse('admin/opportunities', error)
   }
   return NextResponse.json({ opportunities })
 }
@@ -83,7 +84,7 @@ export async function POST(request: Request) {
     .select('*')
     .single()
   if (insertError) {
-    return NextResponse.json({ error: insertError.message }, { status: 500 })
+    return dbErrorResponse('admin/opportunities', insertError)
   }
   // SHARE PAGES: /o/[id] is ISR (revalidate 300) -- drop its cached render
   // so a new opportunity's share page is live immediately.

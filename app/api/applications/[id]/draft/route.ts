@@ -31,6 +31,7 @@
 // prompt -- classic prompt-injection surface. Output is stored as plain
 // text and rendered through React's escaping, so the blast radius is a
 // bad draft the student reviews, never script execution.)
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -172,8 +173,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   let statement: string
   try {
     statement = await generateStatement(prompt)
-  } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to generate draft' }, { status: 502 })
+  } catch {
+    return NextResponse.json({ error: 'Draft generation service unavailable' }, { status: 502 })
   }
 
   const { data: updated, error: updateError } = await supabase
@@ -190,7 +191,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     .single()
 
   if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 })
+    return dbErrorResponse('applications/[id]/draft', updateError)
   }
 
   return NextResponse.json({ draft: updated })
@@ -249,7 +250,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (error.code === 'PGRST116') {
       return NextResponse.json({ error: 'Application not found' }, { status: 404 })
     }
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return dbErrorResponse('applications/[id]/draft', error)
   }
 
   return NextResponse.json({ draft: data })

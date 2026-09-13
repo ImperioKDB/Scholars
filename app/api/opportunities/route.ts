@@ -19,6 +19,7 @@
 // INPUT HARDENING: same treatment as GET /api/scholarships -- ILIKE
 // wildcards escaped for `discipline`, PostgREST structural characters
 // stripped and wildcards escaped for `q`.
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -79,7 +80,7 @@ export async function GET(request: Request) {
 
   const { data: opportunities, error, count } = await query
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return dbErrorResponse('opportunities', error)
   }
 
   return NextResponse.json({

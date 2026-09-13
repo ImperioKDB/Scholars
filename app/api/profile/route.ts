@@ -25,6 +25,7 @@
 // most Nigerian scholarships actually gate on (state/LGA of origin, DOB,
 // JAMB/WAEC results, year of study, institution type) plus a document-
 // readiness checklist (booleans only -- no file storage).
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -101,7 +102,7 @@ export async function GET() {
     if (error.code === 'PGRST116') {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
     }
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return dbErrorResponse('profile', error)
   }
   return NextResponse.json({ profile })
 }
@@ -135,7 +136,7 @@ export async function POST(request: Request) {
     .select('*')
     .single()
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return dbErrorResponse('profile', error)
   }
   if (!existing) {
     recordEvent(supabase, user.id, 'profile_created')
@@ -183,7 +184,7 @@ export async function DELETE() {
     .delete({ count: 'exact' })
     .eq('id', user.id)
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return dbErrorResponse('profile', error)
   }
   // PERF (batch 1): drop any cached matches for this user as well.
   await invalidateMatchesCache(user.id)

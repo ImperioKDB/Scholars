@@ -111,7 +111,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: 'Scholarship created but rules failed to save',
-          details: rulesError.message,
+          details: 'Rules could not be saved',
           scholarship,
         },
         { status: 207 }

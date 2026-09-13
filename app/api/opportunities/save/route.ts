@@ -8,6 +8,7 @@
 // fails the opportunities_select_verified RLS policy on the join; !inner
 // drops that row instead of returning { opportunity: null }, same fix
 // already applied throughout the scholarships side of this codebase.
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
@@ -112,7 +113,7 @@ export async function POST(request: Request) {
         { status: 404 },
       );
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return dbErrorResponse('opportunities/save', error);
   }
   return NextResponse.json({ saved: data }, { status: 201 });
 }
@@ -151,7 +152,7 @@ export async function DELETE(request: Request) {
     .eq("profile_id", user.id)
     .eq("opportunity_id", parsed.data.opportunity_id);
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return dbErrorResponse('opportunities/save', error);
   }
   return NextResponse.json({ message: "Unsaved" });
 }

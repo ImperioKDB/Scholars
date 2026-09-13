@@ -17,6 +17,7 @@
 //
 // Only verified listings can be broadcast: an unverified listing has no
 // public page for the email to link to.
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -110,7 +111,7 @@ export async function GET() {
     return NextResponse.json({ recipientCount: recipients.length })
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Couldn't count recipients" },
+      { error: "Couldn't count recipients" },
       { status: 500 }
     )
   }
@@ -144,7 +145,7 @@ export async function POST(request: Request) {
       .eq('verified', true)
       .in('id', parsed.data.scholarship_ids)
     if (schError) {
-      return NextResponse.json({ error: schError.message }, { status: 500 })
+      return dbErrorResponse('admin/broadcast', schError)
     }
     for (const r of scholarships ?? []) {
       items.push({
@@ -167,7 +168,7 @@ export async function POST(request: Request) {
       .eq('verified', true)
       .in('id', parsed.data.opportunity_ids)
     if (oppError) {
-      return NextResponse.json({ error: oppError.message }, { status: 500 })
+      return dbErrorResponse('admin/broadcast', oppError)
     }
     for (const r of opportunities ?? []) {
       items.push({
@@ -194,7 +195,7 @@ export async function POST(request: Request) {
     recipients = await listRecipients(service)
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Couldn't load recipients" },
+      { error: "Couldn't load recipients" },
       { status: 500 }
     )
   }

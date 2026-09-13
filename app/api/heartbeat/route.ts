@@ -11,6 +11,7 @@
 // to spam the endpoint. The update is fire-and-forget from the client's
 // point of view: a failure here just means one missed tick, the next one
 // will still land.
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
     .eq('id', user.id)
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return dbErrorResponse('heartbeat', error)
   }
   return NextResponse.json({ ok: true })
 }

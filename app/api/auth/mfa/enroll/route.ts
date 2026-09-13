@@ -29,7 +29,7 @@ export async function POST(request: Request) {
 
   if (error || !data) {
     return NextResponse.json(
-      { error: error?.message ?? "Could not start MFA enrollment" },
+      { error: "Could not start MFA enrollment" },
       { status: 502 }
     );
   }

@@ -28,7 +28,7 @@ export async function POST(request: Request) {
 
   if (challengeError || !challenge) {
     return NextResponse.json(
-      { error: challengeError?.message ?? "Could not create MFA challenge" },
+      { error: "Could not create MFA challenge" },
       { status: 502 }
     );
   }

@@ -8,6 +8,7 @@
 // scholarship's URL by mistake.
 //
 // INPUT HARDENING: both path params are UUID-validated up front.
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
@@ -40,7 +41,7 @@ export async function DELETE(
     .eq('scholarship_id', scholarshipId)
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return dbErrorResponse('admin/scholarships/[id]/rules/[ruleId]', error)
   }
   if (!count) {
     return NextResponse.json({ error: 'Rule not found on this scholarship' }, { status: 404 })

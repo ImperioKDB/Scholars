@@ -130,7 +130,7 @@ export async function POST(request: Request) {
     const friendly =
       insertError.code === '42501'
         ? "We couldn't save your feedback yet because our database permissions are still being set up. Please try again shortly, or email support.scholarsteam@gmail.com directly."
-        : insertError.message
+        : 'We could not save your feedback. Please try again shortly.'
     return NextResponse.json({ error: friendly }, { status: 500 })
   }
 

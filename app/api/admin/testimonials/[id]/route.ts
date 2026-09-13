@@ -11,6 +11,7 @@
 // INPUT HARDENING: photo_url is pinned to the project's own `site`
 // storage bucket (see the sibling route.ts for the reasoning), and the
 // id path param is UUID-validated.
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -85,7 +86,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (error.code === 'PGRST116') {
       return NextResponse.json({ error: 'Testimonial not found' }, { status: 404 })
     }
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return dbErrorResponse('admin/testimonials/[id]', error)
   }
 
   return NextResponse.json({ testimonial: data })
@@ -105,7 +106,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   if (!guard.ok) return guard.response
 
   const { error, count } = await supabase.from('testimonials').delete({ count: 'exact' }).eq('id', id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return dbErrorResponse('admin/testimonials/[id]', error)
   if (!count) return NextResponse.json({ error: 'Testimonial not found' }, { status: 404 })
 
   return NextResponse.json({ message: 'Testimonial deleted' })

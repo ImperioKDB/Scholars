@@ -13,6 +13,7 @@
 // its %...% wrapper nor widen the match. Values stay parameterized by
 // supabase-js either way -- this closes filter-syntax and wildcard abuse,
 // not classic SQLi (which PostgREST already prevents).
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -67,7 +68,7 @@ export async function GET(request: Request) {
   }
 
   const { data: scholarships, error, count } = await query
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return dbErrorResponse('scholarships', error)
 
   return NextResponse.json({
     scholarships,

@@ -5,6 +5,7 @@
 // own profiles.last_seen_at. No service role needed: profiles_update_own
 // already scopes the update to auth.uid() = id. Returns 401 when signed
 // out so the client hook can stay silent rather than retrying.
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/ratelimit";
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
     .update({ last_seen_at: new Date().toISOString() })
     .eq("id", user.id);
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return dbErrorResponse('presence/heartbeat', error);
   }
   return NextResponse.json({ ok: true });
 }

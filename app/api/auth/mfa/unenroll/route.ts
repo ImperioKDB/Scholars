@@ -25,7 +25,7 @@ export async function POST(request: Request) {
 
   const { data: factors, error: listError } = await supabase.auth.mfa.listFactors();
   if (listError) {
-    return NextResponse.json({ error: listError.message }, { status: 502 });
+    return NextResponse.json({ error: 'Could not list MFA factors' }, { status: 502 });
   }
 
   const verified = (factors?.totp ?? []).filter(
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     factorId: parsed.data.factorId,
   });
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 502 });
+    return NextResponse.json({ error: 'Could not unenroll MFA factor' }, { status: 502 });
   }
 
   return NextResponse.json({ removed: true });

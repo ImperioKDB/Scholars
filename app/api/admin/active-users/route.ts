@@ -7,6 +7,7 @@
 // Capped at ACTIVE_USERS_CAP rows, most-recently-updated first, so the
 // response stays scannable on a phone and the function stays well inside
 // its time budget even as the student base grows.
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -35,7 +36,7 @@ export async function GET(request: Request) {
     .limit(ACTIVE_USERS_CAP);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return dbErrorResponse('admin/active-users', error);
   }
 
   // Emails live in auth.users, not profiles. A single service-role

@@ -9,6 +9,7 @@
 // always phrased as a genuine ask, never an assumption.
 //
 // INPUT HARDENING: the id path param is UUID-validated.
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { isUuid } from '@/lib/validate'
@@ -35,7 +36,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     .eq('profile_id', user.id)
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return dbErrorResponse('applications/[id]/click', error)
   }
   if (!count) {
     return NextResponse.json({ error: 'Application not found' }, { status: 404 })

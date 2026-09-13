@@ -12,6 +12,7 @@
 // public landing page, so photo_url is now pinned to an https object in
 // THIS project's own `site` storage bucket (isOwnStorageUrl) -- the only
 // place the admin UI ever uploads it (testimonials/<id>.jpg).
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -50,7 +51,7 @@ export async function GET(request: Request) {
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: false })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return dbErrorResponse('admin/testimonials', error)
 
   return NextResponse.json({ testimonials: data })
 }
@@ -73,7 +74,7 @@ export async function POST(request: Request) {
   }
 
   const { data, error } = await supabase.from('testimonials').insert(parsed.data).select('*').single()
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return dbErrorResponse('admin/testimonials', error)
 
   return NextResponse.json({ testimonial: data }, { status: 201 })
 }

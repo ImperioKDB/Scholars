@@ -32,6 +32,7 @@
 // .select(APPLICATION_COLUMNS).single() below can come back empty even
 // though the insert/lookup itself succeeded. Not fixed here -- flagged as
 // a known edge case, not a crash, just a less specific error surface.
+import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -60,7 +61,7 @@ export async function GET() {
     .eq('profile_id', user.id)
     .order('updated_at', { ascending: false })
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return dbErrorResponse('applications', error)
   }
   return NextResponse.json({ applications: data })
 }
@@ -109,7 +110,7 @@ export async function POST(request: Request) {
     if (error.code === '23503') {
       return NextResponse.json({ error: 'Scholarship not found' }, { status: 404 })
     }
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return dbErrorResponse('applications', error)
   }
   return NextResponse.json({ application: data }, { status: 201 })
 }
