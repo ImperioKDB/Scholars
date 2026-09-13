@@ -14,85 +14,95 @@
 // Postgres trigger on waec_results (migration: add_waec_results_table)
 // whenever this table changes, the same way profile_completeness is
 // trigger-computed rather than accepted from the client.
-import { NextResponse } from 'next/server'
-import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
-import { invalidateMatchesCache } from '@/lib/matching/matchCache'
-import { WAEC_SUBJECTS, WAEC_GRADES } from '@/lib/data/waec'
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
+import { invalidateMatchesCache } from "@/lib/matching/matchCache";
+import { WAEC_SUBJECTS, WAEC_GRADES } from "@/lib/data/waec";
 
-const subjectValues = WAEC_SUBJECTS as unknown as [string, ...string[]]
-const gradeValues = WAEC_GRADES.map((g) => g.value) as [string, ...string[]]
+const subjectValues = WAEC_SUBJECTS as unknown as [string, ...string[]];
+const gradeValues = WAEC_GRADES.map((g) => g.value) as [string, ...string[]];
 
 const resultSchema = z.object({
   subject: z.enum(subjectValues),
   grade: z.enum(gradeValues),
-})
+});
 
 const bodySchema = z.object({
   results: z.array(resultSchema).max(WAEC_SUBJECTS.length),
-})
+});
 
 export async function GET() {
-  const supabase = await createClient()
+  const supabase = await createClient();
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser()
+  } = await supabase.auth.getUser();
   if (authError || !user) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
   const { data: results, error } = await supabase
-    .from('waec_results')
-    .select('subject, grade')
-    .eq('profile_id', user.id)
-    .order('subject', { ascending: true })
+    .from("waec_results")
+    .select("subject, grade")
+    .eq("profile_id", user.id)
+    .order("subject", { ascending: true });
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("waec_read_failed", { userId: user.id, error });
+    return NextResponse.json(
+      { error: "Unable to load WAEC results" },
+      { status: 500 },
+    );
   }
-  return NextResponse.json({ results })
+  return NextResponse.json({ results });
 }
 
 export async function POST(request: Request) {
-  const supabase = await createClient()
+  const supabase = await createClient();
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser()
+  } = await supabase.auth.getUser();
   if (authError || !user) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
-  const raw = await request.json().catch(() => null)
-  const parsed = bodySchema.safeParse(raw)
+  const raw = await request.json().catch(() => null);
+  const parsed = bodySchema.safeParse(raw);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: 'Invalid WAEC data', issues: parsed.error.issues },
-      { status: 400 }
-    )
+      { error: "Invalid WAEC data", issues: parsed.error.issues },
+      { status: 400 },
+    );
   }
   // De-dupe by subject -- a student shouldn't have two grades for one subject.
-  const bySubject = new Map(parsed.data.results.map((r) => [r.subject, r.grade]))
+  const bySubject = new Map(
+    parsed.data.results.map((r) => [r.subject, r.grade]),
+  );
   const rows = Array.from(bySubject.entries()).map(([subject, grade]) => ({
     profile_id: user.id,
     subject,
     grade,
-  }))
-  const { error: deleteError } = await supabase
-    .from('waec_results')
-    .delete()
-    .eq('profile_id', user.id)
-  if (deleteError) {
-    return NextResponse.json({ error: deleteError.message }, { status: 500 })
-  }
-  if (rows.length > 0) {
-    const { error: insertError } = await supabase.from('waec_results').insert(rows)
-    if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 500 })
-    }
+  }));
+  const { data: replaced, error: replaceError } = await supabase.rpc(
+    "replace_waec_results",
+    {
+      p_profile_id: user.id,
+      p_results: rows,
+    },
+  );
+  if (replaceError) {
+    console.error("waec_replace_failed", {
+      userId: user.id,
+      error: replaceError,
+    });
+    return NextResponse.json(
+      { error: "Unable to save WAEC results" },
+      { status: 500 },
+    );
   }
   // PERF (batch 1): WAEC results drive waec_credit_count and
   // has_english_maths_credit rules, so cached matches must drop here too.
-  await invalidateMatchesCache(user.id)
+  await invalidateMatchesCache(user.id);
   return NextResponse.json({
-    results: rows.map(({ subject, grade }) => ({ subject, grade })),
-  })
+    results: replaced ?? rows.map(({ subject, grade }) => ({ subject, grade })),
+  });
 }

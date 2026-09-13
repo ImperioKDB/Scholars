@@ -26,28 +26,56 @@ function extractRecord(parsed: unknown): Record<string, unknown> {
     const first = parsed[0];
     if (first && typeof first === "object") {
       const body = (first as { body?: unknown }).body;
-      if (body && typeof body === "object") return body as Record<string, unknown>;
+      if (body && typeof body === "object")
+        return body as Record<string, unknown>;
       return first as Record<string, unknown>;
     }
     return {};
   }
   if (parsed && typeof parsed === "object") {
     const legacy = (parsed as { "csp-report"?: unknown })["csp-report"];
-    if (legacy && typeof legacy === "object") return legacy as Record<string, unknown>;
+    if (legacy && typeof legacy === "object")
+      return legacy as Record<string, unknown>;
     return parsed as Record<string, unknown>;
   }
   return {};
 }
 
 export async function POST(request: Request) {
+  const contentLength = request.headers.get("content-length");
+  if (contentLength && Number(contentLength) > MAX_BODY) {
+    return new Response(null, { status: 413 });
+  }
   let detail = "(unreadable body)";
   try {
-    const raw = (await request.text()).slice(0, MAX_BODY);
+    const reader = request.body?.getReader();
+    if (!reader) return new Response(null, { status: 204 });
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    while (total < MAX_BODY) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const remaining = MAX_BODY - total;
+      const chunk =
+        value.byteLength > remaining ? value.slice(0, remaining) : value;
+      chunks.push(chunk);
+      total += chunk.byteLength;
+      if (value.byteLength > remaining) break;
+    }
+    const raw = new TextDecoder().decode(
+      chunks.reduce((all, chunk) => {
+        const next = new Uint8Array(all.length + chunk.length);
+        next.set(all);
+        next.set(chunk, all.length);
+        return next;
+      }, new Uint8Array()),
+    );
     try {
       const record = extractRecord(JSON.parse(raw) as unknown);
       detail = JSON.stringify({
         blocked: record["blocked-uri"],
-        directive: record["violated-directive"] ?? record["effective-directive"],
+        directive:
+          record["violated-directive"] ?? record["effective-directive"],
         document: record["document-uri"],
       });
     } catch {

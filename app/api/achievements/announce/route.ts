@@ -11,38 +11,52 @@
 //
 // INPUT HARDENING: achievement_id is now UUID-format validated instead
 // of an arbitrary min-1 string.
-import { NextResponse } from 'next/server'
-import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
-import { uuidSchema } from '@/lib/validate'
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
 
-const bodySchema = z.object({ achievement_id: uuidSchema })
+// Achievement IDs are stable text slugs (for example profile_complete and
+// first_save), not UUIDs. Keep this bounded to the seeded catalog values.
+const achievementIdSchema = z.enum([
+  "profile_complete",
+  "first_save",
+  "first_application",
+  "first_submission",
+  "scout",
+  "connector",
+  "mentor",
+  "first_opportunity_share",
+]);
+const bodySchema = z.object({ achievement_id: achievementIdSchema });
 
 export async function POST(request: Request) {
-  const supabase = await createClient()
+  const supabase = await createClient();
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser()
+  } = await supabase.auth.getUser();
   if (authError || !user) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const raw = await request.json().catch(() => null)
-  const parsed = bodySchema.safeParse(raw)
+  const raw = await request.json().catch(() => null);
+  const parsed = bodySchema.safeParse(raw);
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 },
+    );
   }
 
   const { error } = await supabase
-    .from('user_achievements')
+    .from("user_achievements")
     .update({ announced_at: new Date().toISOString() })
-    .eq('profile_id', user.id)
-    .eq('achievement_id', parsed.data.achievement_id)
+    .eq("profile_id", user.id)
+    .eq("achievement_id", parsed.data.achievement_id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ message: 'Announced' })
+  return NextResponse.json({ message: "Announced" });
 }

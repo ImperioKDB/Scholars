@@ -40,12 +40,12 @@
 // a fabricated point value). This route is the one narrow, server-
 // controlled path allowed to award it, with the point value hardcoded
 // here (lib/config.ts XP) -- never accepted from the request body.
-import { NextResponse } from 'next/server'
-import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
-import { createServiceClient } from '@/lib/supabase/service'
-import { checkRateLimit } from '@/lib/ratelimit'
-import { XP } from '@/lib/config'
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { checkRateLimit } from "@/lib/ratelimit";
+import { XP } from "@/lib/config";
 // Exactly one entity id required; which field determines the kind.
 // Scholarship stays the default so existing ScholarshipCard calls
 // (scholarship_id only) keep working unchanged.
@@ -55,62 +55,95 @@ const bodySchema = z
     opportunity_id: z.string().uuid().optional(),
   })
   .refine((b) => Boolean(b.scholarship_id) !== Boolean(b.opportunity_id), {
-    message: 'Provide exactly one of scholarship_id or opportunity_id',
-  })
+    message: "Provide exactly one of scholarship_id or opportunity_id",
+  });
 export async function POST(request: Request) {
-  const supabase = await createClient()
+  const supabase = await createClient();
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser()
+  } = await supabase.auth.getUser();
   if (authError || !user) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
   const limited = await checkRateLimit(request, {
-    route: 'xp-share',
+    route: "xp-share",
     limit: 20,
     extraKeys: [`user:${user.id}`],
-  })
-  if (limited) return limited
-  const raw = await request.json().catch(() => null)
-  const parsed = bodySchema.safeParse(raw)
+  });
+  if (limited) return limited;
+  const raw = await request.json().catch(() => null);
+  const parsed = bodySchema.safeParse(raw);
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 },
+    );
   }
-  const isOpportunity = Boolean(parsed.data.opportunity_id)
-  const entityId = isOpportunity ? parsed.data.opportunity_id! : parsed.data.scholarship_id!
+  const isOpportunity = Boolean(parsed.data.opportunity_id);
+  const entityId = isOpportunity
+    ? parsed.data.opportunity_id!
+    : parsed.data.scholarship_id!;
+  const resourceTable = isOpportunity ? "opportunities" : "scholarships";
+  const { data: resource, error: resourceError } = await supabase
+    .from(resourceTable)
+    .select("id")
+    .eq("id", entityId)
+    .maybeSingle();
+  if (resourceError) {
+    console.error("share_resource_lookup_failed", {
+      userId: user.id,
+      error: resourceError,
+    });
+    return NextResponse.json(
+      { error: "Unable to validate resource" },
+      { status: 500 },
+    );
+  }
+  if (!resource)
+    return NextResponse.json({ error: "Resource not found" }, { status: 404 });
   // 'opportunity_share' needs migration 0017 (xp_event_type enum value) --
   // apply it before deploying this route.
-  const eventType = isOpportunity ? 'opportunity_share' : 'share_click'
-  const today = new Date().toISOString().slice(0, 10)
-  const dedupeKey = `${eventType}:${entityId}:${today}`
-  const service = createServiceClient()
+  const eventType = isOpportunity ? "opportunity_share" : "share_click";
+  const today = new Date().toISOString().slice(0, 10);
+  const dedupeKey = `${eventType}:${entityId}:${today}`;
+  const service = createServiceClient();
   // Per-profile daily cap. dedupe_key always ends with ":<YYYY-MM-DD>"
   // for share events, so suffix-matching counts today's awards without
   // depending on columns beyond the ones award_xp already guarantees
   // exist (profile_id, event_type, dedupe_key). One cap across BOTH
   // kinds on purpose -- the cap limits farming, not honest sharing.
   const { count: awardedToday, error: countError } = await service
-    .from('xp_events')
-    .select('id', { count: 'exact', head: true })
-    .eq('profile_id', user.id)
-    .in('event_type', ['share_click', 'opportunity_share'])
-    .like('dedupe_key', `%:${today}`)
+    .from("xp_events")
+    .select("id", { count: "exact", head: true })
+    .eq("profile_id", user.id)
+    .in("event_type", ["share_click", "opportunity_share"])
+    .like("dedupe_key", `%:${today}`);
   if (countError) {
-    return NextResponse.json({ error: countError.message }, { status: 500 })
+    console.error("share_count_failed", { userId: user.id, error: countError });
+    return NextResponse.json(
+      { error: "Unable to process share" },
+      { status: 500 },
+    );
   }
   if ((awardedToday ?? 0) >= XP.MAX_SHARES_PER_DAY) {
-    return NextResponse.json({ awarded: false, points: 0 })
+    return NextResponse.json({ awarded: false, points: 0 });
   }
-  const { error } = await service.rpc('award_xp', {
+  const { data: awarded, error } = await service.rpc("award_xp", {
     p_profile_id: user.id,
     p_event_type: eventType,
     p_points: XP.SHARE_POINTS,
     p_dedupe_key: dedupeKey,
-    p_metadata: isOpportunity ? { opportunity_id: entityId } : { scholarship_id: entityId },
-  })
+    p_metadata: isOpportunity
+      ? { opportunity_id: entityId }
+      : { scholarship_id: entityId },
+  });
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("share_xp_award_failed", { userId: user.id, error });
+    return NextResponse.json({ error: "Unable to award XP" }, { status: 500 });
   }
-  return NextResponse.json({ awarded: true, points: XP.SHARE_POINTS })
+  return NextResponse.json({
+    awarded: awarded === true,
+    points: awarded === true ? XP.SHARE_POINTS : 0,
+  });
 }
