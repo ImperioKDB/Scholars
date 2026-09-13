@@ -54,7 +54,10 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase.rpc('exec_sql', {
     sql: `select table_name, column_name from information_schema.columns where table_schema = 'public' and table_name = any($1)`,
-  }).then(() => ({ data: null, error: { message: 'exec_sql not available' } })).catch(() => ({ data: null, error: null }))
+  }).then(
+    () => ({ data: null, error: { message: 'exec_sql not available' } }),
+    () => ({ data: null, error: null })
+  )
 
   // Fallback: use a raw query via .from() isn't possible for
   // information_schema, so we use the service-role-free approach of
