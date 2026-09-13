@@ -1,49 +1,74 @@
 import { NextResponse } from "next/server";
 import type { createClient } from "@/lib/supabase/server";
 
-// lib/admin/guard.ts
+// Server-side admin assertion for API routes.
 //
-// Single server-side admin assertion for API routes. Replaces the four
-// copy-pasted requireAdmin() blocks that lived inside the admin API route
-// files (app/api/admin/scholarships/**). Same semantics, same 401/403 JSON
-// bodies as before -- this is a dedup, not a behavior change.
-//
-// Distinct from lib/admin/access.ts on purpose: access.ts is the
-// redirect-based gate for Server Components (layouts/pages), where a
-// redirect is the right control flow. API routes need a returnable
-// NextResponse instead, so they use this guard and return guard.response.
-//
-// This is a UX/authorization convenience, not the security boundary -- the
-// real enforcement is the is_admin(auth.uid()) RLS policy on scholarships /
-// scholarship_rules, plus the middleware /api/admin gate, so a bug here
-// cannot expose write access.
+// The database privilege migration is the primary defense: normal API roles
+// cannot write profiles.is_admin. This guard is defense in depth and also
+// supports staged AAL2 enforcement through REQUIRE_ADMIN_MFA=true.
 type Supabase = ReturnType<typeof createClient>;
 
 export type AdminGuard =
   | { ok: true; userId: string }
   | { ok: false; response: NextResponse };
 
-export async function assertAdmin(supabase: Supabase): Promise<AdminGuard> {
+function adminMfaRequired(): boolean {
+  return process.env.REQUIRE_ADMIN_MFA === "true";
+}
+
+export async function assertAdmin(
+  supabase: Supabase,
+  options: { requireAal2?: boolean } = {}
+): Promise<AdminGuard> {
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser();
+
   if (authError || !user) {
     return {
       ok: false,
-      response: NextResponse.json({ error: "Not authenticated" }, { status: 401 }),
+      response: NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      ),
     };
   }
+
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("is_admin")
     .eq("id", user.id)
     .single();
-  if (profileError || !profile?.is_admin) {
+
+  if (profileError || profile?.is_admin !== true) {
     return {
       ok: false,
-      response: NextResponse.json({ error: "Admin access required" }, { status: 403 }),
+      response: NextResponse.json(
+        { error: "Admin access required" },
+        { status: 403 }
+      ),
     };
   }
+
+  if (options.requireAal2 || adminMfaRequired()) {
+    const { data: aal, error: aalError } =
+      await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+
+    if (
+      aalError ||
+      aal?.currentLevel !== "aal2" ||
+      aal?.nextLevel !== "aal2"
+    ) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          { error: "Multi-factor authentication required" },
+          { status: 403 }
+        ),
+      };
+    }
+  }
+
   return { ok: true, userId: user.id };
 }
