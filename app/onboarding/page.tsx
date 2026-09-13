@@ -607,7 +607,7 @@ function OnboardingForm() {
                 </span>
               </label>
               <p className="text-xs leading-5 text-navy-light">
-                Read our <a href="/privacy" className="font-medium text-navy underline">Privacy Notice</a> and <a href="/terms" className="font-medium text-navy underline">Terms of Service</a>. See <button type="button" className="font-medium text-navy underline" onClick={() => setError("Matching uses the profile fields you provide to compare your eligibility with opportunity requirements.")}>how matching uses your information</button>.
+                Read our <a href="/legal/privacy" className="font-medium text-navy underline">Privacy Notice</a> and <a href="/legal/terms" className="font-medium text-navy underline">Terms of Service</a>. See <button type="button" className="font-medium text-navy underline" onClick={() => setError("Matching uses the profile fields you provide to compare your eligibility with opportunity requirements.")}>how matching uses your information</button>.
               </p>
             </div>
           )}
