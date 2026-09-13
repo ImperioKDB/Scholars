@@ -44,21 +44,36 @@ export function AuthRescue() {
     if (!rescuing) return;
     const supabase = createClient();
     let routed = false;
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+    const routeTo = (path: "/dashboard" | "/reset-password/update") => {
       if (routed) return;
+      routed = true;
+      router.replace(path);
+    };
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY") {
-        routed = true;
         try {
           sessionStorage.setItem(RECOVERY_REDIRECT_FLAG, "1");
         } catch {
           // storage blocked -- the update page also listens for the event
         }
-        router.replace("/reset-password/update");
+        routeTo("/reset-password/update");
       } else if (event === "SIGNED_IN") {
-        routed = true;
-        router.replace("/dashboard");
+        routeTo("/dashboard");
       }
     });
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get("code");
+    void (async () => {
+      if (code) {
+        const { data } = await supabase.auth.exchangeCodeForSession(code);
+        if (data.session) {
+          routeTo("/dashboard");
+          return;
+        }
+      }
+      const { data } = await supabase.auth.getSession();
+      if (data.session) routeTo("/dashboard");
+    })();
     // Exchange failed or never fired (expired code, revoked session):
     // drop the splash and strip the dead tokens so the landing renders
     // cleanly.
