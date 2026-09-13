@@ -42,6 +42,7 @@ export type ScholarshipRow = {
   // Last confirmed date this scholarship's application window closed.
   // Used to distinguish "open by default" from "known closed, unknown reopen".
   last_cycle_closed_at: string | null;
+  last_verified_at: string | null;
   application_url: string | null;
   how_to_apply: string | null;
   level: "undergrad" | "postgrad" | "both";
