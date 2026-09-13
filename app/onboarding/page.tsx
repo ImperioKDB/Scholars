@@ -38,7 +38,7 @@ import {
   type ProfileForm,
 } from "@/lib/profile";
 import { INSTITUTION_OPTIONS, institutionTypeFor } from "@/lib/data/institutions";
-const STEPS = ["Core", "Personal", "Academic", "Documents"];
+const STEPS = ["Core", "Personal", "Academic", "Documents", "Matching"];
 const DISCIPLINE_COMBO_OPTIONS = DISCIPLINE_OPTIONS.map((d) => ({ value: d, label: d }));
 const ONBOARDING_DRAFT_KEY = "scholars.onboarding.draft.v2";
 type OnboardingDraft = {
@@ -47,6 +47,7 @@ type OnboardingDraft = {
   step: number;
   manualInstitution: boolean;
   manualDiscipline: boolean;
+  matchingAuthorized: boolean;
 };
 function readDraft(): OnboardingDraft | null {
   if (typeof window === "undefined") return null;
@@ -61,6 +62,7 @@ function readDraft(): OnboardingDraft | null {
       step: typeof parsed.step === "number" ? parsed.step : 0,
       manualInstitution: Boolean(parsed.manualInstitution),
       manualDiscipline: Boolean(parsed.manualDiscipline),
+      matchingAuthorized: Boolean(parsed.matchingAuthorized),
     };
   } catch {
     return null;
@@ -117,6 +119,7 @@ function OnboardingForm() {
   const [waecRows, setWaecRows] = useState<WaecRow[]>([]);
   const [manualInstitution, setManualInstitution] = useState(false);
   const [manualDiscipline, setManualDiscipline] = useState(false);
+  const [matchingAuthorized, setMatchingAuthorized] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [skipPending, setSkipPending] = useState(false);
@@ -193,6 +196,7 @@ function OnboardingForm() {
         }
         setManualInstitution(draft.manualInstitution);
         setManualDiscipline(draft.manualDiscipline);
+        setMatchingAuthorized(draft.matchingAuthorized);
       } else {
         setForm(serverForm);
         setWaecRows(serverWaecRows);
@@ -210,8 +214,8 @@ function OnboardingForm() {
   }, []);
   useEffect(() => {
     if (loading) return;
-    writeDraft({ form, waecRows, step, manualInstitution, manualDiscipline });
-  }, [form, waecRows, step, manualInstitution, manualDiscipline, loading]);
+    writeDraft({ form, waecRows, step, manualInstitution, manualDiscipline, matchingAuthorized });
+  }, [form, waecRows, step, manualInstitution, manualDiscipline, matchingAuthorized, loading]);
   useEffect(() => {
     if (!dirty || saving) return;
     function handler(e: BeforeUnloadEvent) {
@@ -268,6 +272,9 @@ function OnboardingForm() {
       if (!form.year_of_study) return "Pick your year of study; some awards only cover certain years.";
       return null;
     }
+    if (step === STEPS.length - 1 && !matchingAuthorized) {
+      return "Authorize profile-based matching to continue.";
+    }
     return null;
   }
   const coreValid = step === 0 && validateStep() === null;
@@ -285,6 +292,11 @@ function OnboardingForm() {
     setStep((s) => Math.max(s - 1, 0));
   }
   async function saveProfileAndGoDashboard() {
+    if (!matchingAuthorized) {
+      setStep(STEPS.length - 1);
+      setError(null);
+      return;
+    }
     setSaving(true);
     setError(null);
     const res = await fetch("/api/profile", {
@@ -352,6 +364,11 @@ function OnboardingForm() {
   // Edit profile. A skip that discards everything is what made onboarding
   // feel like a toll booth.
   async function handleSkip() {
+    if (!matchingAuthorized) {
+      setStep(STEPS.length - 1);
+      setError(null);
+      return;
+    }
     setSkipPending(true);
     try {
       await fetch("/api/profile", {
@@ -415,17 +432,21 @@ function OnboardingForm() {
             {step === 1 && "Personal information"}
             {step === 2 && "Academic results"}
             {step === 3 && "Documents & goals"}
+            {step === 4 && "Get better scholarship matches"}
           </h1>
           <p className="text-sm text-navy-light mb-2">
             {step === 0 && "Name, school, course and level. That is all we need for your first real matches."}
             {step === 1 && "State, LGA and age drive many Nigerian awards. Each one you add can unlock matches."}
             {step === 2 && "JAMB and WAEC results -- most Nigerian scholarships gate on these directly."}
             {step === 3 && "Tell us which documents you already have ready to submit."}
+            {step === 4 && "One clear authorization, then we compare your profile with opportunity requirements."}
           </p>
           <p className="text-xs text-navy-light mb-8">
             {step === 0
               ? "Everything after this step sharpens your matches. Your answers save automatically on this device."
-              : "Only what you fill is stored. Your answers save automatically on this device."}
+              : step === 4
+                ? "You can withdraw this authorization later in Settings."
+                : "Only what you fill is stored. Your answers save automatically on this device."}
           </p>
           {step === 0 && (
             <>
@@ -561,6 +582,34 @@ function OnboardingForm() {
                 <textarea className={textareaClass} value={form.career_goals} onChange={(e) => update("career_goals", e.target.value)} placeholder="e.g. Become a research scientist focused on renewable energy." />
               </FormField>
             </>
+          )}
+          {step === 4 && (
+            <div className="space-y-6">
+              <div className="rounded-xl border border-navy/15 bg-navy-50/60 p-5">
+                <h2 className="font-display text-lg font-semibold text-navy mb-2">How matching works</h2>
+                <p className="text-sm leading-6 text-navy-light">
+                  Scholars compares the information in your profile with scholarship and opportunity requirements. Some matches are generated automatically. A match is a recommendation, not a guarantee that you will receive an award.
+                </p>
+              </div>
+              <label className="flex items-start gap-3 rounded-xl border border-hairline p-4 cursor-pointer hover:border-navy/40">
+                <input
+                  type="checkbox"
+                  checked={matchingAuthorized}
+                  onChange={(e) => {
+                    setMatchingAuthorized(e.target.checked);
+                    setError(null);
+                    setDirty(true);
+                  }}
+                  className="mt-1 h-4 w-4 rounded border-hairline"
+                />
+                <span className="text-sm leading-6 text-ink">
+                  I authorize Scholars to use the information in my profile to evaluate my eligibility and provide personalized scholarship and opportunity matches. I understand that this may involve automated matching and may use information such as my academic records, date of birth, location, financial-need information, and disability information where provided. I can withdraw this authorization in Settings, but doing so may reduce or disable personalized matching.
+                </span>
+              </label>
+              <p className="text-xs leading-5 text-navy-light">
+                Read our <a href="/privacy" className="font-medium text-navy underline">Privacy Notice</a> and <a href="/terms" className="font-medium text-navy underline">Terms of Service</a>. See <button type="button" className="font-medium text-navy underline" onClick={() => setError("Matching uses the profile fields you provide to compare your eligibility with opportunity requirements.")}>how matching uses your information</button>.
+              </p>
+            </div>
           )}
           {error && <p className="text-sm text-rose mb-4">{error}</p>}
           <div className="flex items-center justify-between mt-6 pt-6 border-t border-hairline gap-3">
