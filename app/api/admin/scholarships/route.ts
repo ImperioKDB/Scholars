@@ -97,7 +97,7 @@ export async function POST(request: Request) {
 
   const { data: scholarship, error: insertError } = await supabase
     .from('scholarships')
-    .insert({ ...scholarshipFields, created_by: guard.userId })
+    .insert({ ...scholarshipFields, created_by: guard.userId, last_verified_at: parsed.data.verified ? new Date().toISOString() : null })
     .select('*')
     .single()
 
