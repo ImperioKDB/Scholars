@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { AuthShell } from "@/components/AuthShell";
 import { FormField, inputClass } from "@/components/FormField";
 import { PasswordField } from "@/components/PasswordField";
+import { AuthConfirmation } from "@/components/AuthConfirmation";
 import { validatePasswordStrength } from "@/lib/auth/password";
 import { normalizeEmail } from "@/lib/auth/email";
 
@@ -16,42 +17,6 @@ import { normalizeEmail } from "@/lib/auth/email";
 function appBase(): string {
   if (typeof window === "undefined") return process.env.NEXT_PUBLIC_APP_URL || "";
   return process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
-}
-
-function CheckEmailScreen({ email, onResend }: { email: string; onResend: () => Promise<void> }) {
-  const [resending, setResending] = useState(false);
-  const [resent, setResent] = useState(false);
-  async function handleResend() {
-    setResending(true);
-    setResent(false);
-    await onResend();
-    setResending(false);
-    setResent(true);
-  }
-  return (
-    <AuthShell heading="Check your email" sub="One more step before you can sign in.">
-      <div className="rounded-xl border border-hairline bg-navy-50 p-5 mb-6">
-        <p className="text-sm text-ink">
-          We sent a confirmation link to <span className="font-medium">{email}</span>. Click it to
-          activate your account, then come back and log in.
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={handleResend}
-        disabled={resending}
-        className="w-full rounded-lg border border-hairline bg-white py-2.5 text-sm font-medium text-ink hover:bg-navy-50 transition-colors disabled:opacity-60"
-      >
-        {resending ? "Sending…" : resent ? "Sent again ✓" : "Resend confirmation email"}
-      </button>
-      <p className="text-sm text-navy-light mt-8 text-center">
-        Already confirmed?{" "}
-        <Link href="/login" className="text-navy font-medium hover:underline">
-          Log in
-        </Link>
-      </p>
-    </AuthShell>
-  );
 }
 
 export default function SignupPage() {
@@ -103,7 +68,13 @@ export default function SignupPage() {
     });
     setLoading(false);
     if (signUpError) {
-      setError(signUpError.message);
+      if (signUpError.code === "user_already_registered") {
+        setError("An account with this email already exists. Try logging in or resetting your password.");
+      } else if (signUpError.code === "over_email_send_rate_limit") {
+        setError("We have sent too many emails to this address. Please wait a few minutes and try again.");
+      } else {
+        setError("We couldn't create your account. Check your details and try again.");
+      }
       return;
     }
     if (data.session) {
@@ -122,12 +93,13 @@ export default function SignupPage() {
     });
   }
 
-  async function handleResend() {
-    await supabase.auth.resend({ type: "signup", email: cleanEmail });
+  async function handleResend(): Promise<string | null> {
+    const { error: resendError } = await supabase.auth.resend({ type: "signup", email: cleanEmail });
+    return resendError ? "We couldn't resend the link right now. Please try again shortly." : null;
   }
 
   if (awaitingConfirmation) {
-    return <CheckEmailScreen email={cleanEmail} onResend={handleResend} />;
+    return <AuthConfirmation email={cleanEmail} onResend={handleResend} />;
   }
 
   return (
@@ -135,6 +107,7 @@ export default function SignupPage() {
       heading="Create your account"
       sub="Start discovering scholarships in minutes."
     >
+      {error && <p role="alert" className="text-sm text-rose bg-rose-light rounded-lg px-3.5 py-2.5 mb-5">{error}</p>}
       <form onSubmit={handleSubmit} noValidate>
         <FormField label="Full name" id="signup-full-name">
           <input
@@ -161,7 +134,7 @@ export default function SignupPage() {
         <FormField
           label="Password"
           id="signup-password"
-          error={error ?? undefined}
+          error={error?.startsWith("Password") ? error : undefined}
           hint="At least 8 characters, with an uppercase letter, a lowercase letter, and a number."
         >
           <PasswordField

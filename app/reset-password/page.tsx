@@ -100,6 +100,7 @@ export default function ResetPasswordPage() {
         <button
           type="submit"
           disabled={loading}
+          aria-busy={loading}
           className="w-full rounded-lg bg-navy text-white font-medium py-3 mt-2 hover:bg-navy-light transition-colors disabled:opacity-60"
         >
           {loading ? "Sending\u2026" : "Send reset link"}

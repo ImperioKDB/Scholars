@@ -8,6 +8,7 @@ import { FormField, inputClass } from "@/components/FormField";
 import { PasswordField } from "@/components/PasswordField";
 import { normalizeEmail } from "@/lib/auth/email";
 import { Skeleton } from "@/components/Skeleton";
+import { AuthConfirmation } from "@/components/AuthConfirmation";
 
 // AUTH SECURITY AUDIT (brute-force brake, client side): progressive
 // lockout stored in localStorage. UX-level only -- the real brakes are
@@ -63,6 +64,7 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(searchParams.get("error"));
+  const [confirmationEmail, setConfirmationEmail] = useState<string | null>(null);
   const cleanEmail = normalizeEmail(email);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -81,10 +83,19 @@ function LoginForm() {
     });
     setLoading(false);
     if (signInError) {
+      if (signInError.code === "email_not_confirmed" || signInError.message.toLowerCase().includes("email not confirmed")) {
+        const { error: resendError } = await supabase.auth.resend({ type: "signup", email: cleanEmail });
+        if (resendError) {
+          setError("Your email is not confirmed yet, and we couldn't resend the link. Try again shortly or check your inbox for the original link.");
+        } else {
+          setConfirmationEmail(cleanEmail);
+        }
+        return;
+      }
       const count = lock.count + 1;
       const until = count >= 5 ? Date.now() + Math.min(30_000 * 2 ** (count - 5), 300_000) : 0;
       writeLock({ count, until });
-      setError("That email and password don't match an account.");
+      setError("That password didn’t work. Check it and try again, or use Forgot password.");
       return;
     }
     clearLock();
@@ -99,6 +110,15 @@ function LoginForm() {
       provider: "google",
       options: { redirectTo: `${appBase()}/auth/callback?next=/dashboard` },
     });
+  }
+
+  async function handleResendConfirmation(): Promise<string | null> {
+    const { error: resendError } = await supabase.auth.resend({ type: "signup", email: confirmationEmail ?? "" });
+    return resendError ? "We couldn't resend the link right now. Please try again shortly." : null;
+  }
+
+  if (confirmationEmail) {
+    return <AuthConfirmation email={confirmationEmail} onResend={handleResendConfirmation} />;
   }
 
   return (
