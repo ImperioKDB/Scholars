@@ -53,24 +53,43 @@ export default async function LandingPage() {
   return (
     <div className="min-h-screen">
       <header className="border-b border-hairline">
-        <div className="mx-auto max-w-6xl px-6 py-5 flex items-center justify-between">
-          <Logo className="text-navy" />
-          <nav className="hidden md:flex items-center gap-8 text-sm text-navy-light">
-            <Link href="#how-it-works" className="hover:text-navy">How it works</Link>
-            <Link href="/login" className="hover:text-navy">Log in</Link>
-          </nav>
-          <div className="flex items-center gap-3">
-            <nav className="md:hidden flex items-center gap-3 text-xs text-navy-light" aria-label="Primary navigation">
+        <div className="mx-auto max-w-6xl px-5 sm:px-6 py-4 md:py-5">
+          <div className="flex items-center justify-between gap-4">
+            <Logo className="text-navy" />
+            <nav className="hidden md:flex items-center gap-8 text-sm text-navy-light" aria-label="Primary navigation">
               <Link href="#how-it-works" className="hover:text-navy">How it works</Link>
               <Link href="/login" className="hover:text-navy">Log in</Link>
+              <Link
+                href="/signup"
+                className="rounded-seal bg-navy text-white text-sm font-medium px-5 py-2.5 hover:bg-navy-light transition-colors"
+              >
+                Get started
+              </Link>
             </nav>
-            <Link
-            href="/signup"
-            className="rounded-seal bg-navy text-white text-sm font-medium px-5 py-2.5 hover:bg-navy-light transition-colors"
-            >
-              Get started
-            </Link>
+            <div className="md:hidden flex items-center gap-2" aria-label="Account actions">
+              <Link
+                href="/login"
+                className="inline-flex min-h-11 items-center rounded-lg border border-hairline bg-white px-3.5 text-sm font-medium text-navy hover:border-navy/40 hover:bg-navy-50 transition-colors"
+              >
+                Log in
+              </Link>
+              <Link
+                href="/signup"
+                className="inline-flex min-h-11 items-center rounded-seal bg-navy text-white text-sm font-medium px-3.5 hover:bg-navy-light transition-colors"
+              >
+                Get started
+              </Link>
+            </div>
           </div>
+          <nav className="md:hidden mt-3 border-t border-hairline pt-2" aria-label="Page navigation">
+            <Link
+              href="#how-it-works"
+              className="flex min-h-11 items-center justify-between rounded-lg px-2 text-sm font-medium text-navy-light hover:bg-navy-50 hover:text-navy transition-colors"
+            >
+              <span>How it works</span>
+              <span aria-hidden="true" className="text-emerald">↓</span>
+            </Link>
+          </nav>
         </div>
       </header>
       <main>

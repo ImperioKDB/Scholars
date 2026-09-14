@@ -40,7 +40,6 @@ const MOBILE_TABS = [
   { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
   { href: "/applications", label: "Applications", Icon: ApplicationsIcon },
   { href: "/achievements", label: "Achievements", Icon: AchievementsIcon },
-  { href: "#more", label: "More", Icon: MenuIcon },
 ];
 export function Sidebar({
   fullName,
@@ -239,21 +238,14 @@ useEffect(() => {
           "translate-y-0",
         ].join(" ")}
       >
-        <div className="grid grid-cols-4">
+        <div className="grid grid-cols-3">
           {MOBILE_TABS.map(({ href, label, Icon }) => {
             const active = pathname === href;
             return (
               <Link
                 key={href}
                 href={href}
-                onClick={(event) => {
-                  if (href === "#more") {
-                    event.preventDefault();
-                    setMobileOpen(true);
-                    return;
-                  }
-                  setMobileOpen(false);
-                }}
+                onClick={() => setMobileOpen(false)}
                 aria-current={active ? "page" : undefined}
                 className={[
                   "flex flex-col items-center justify-center gap-1 min-h-[56px] py-2 text-[11px] font-medium",
