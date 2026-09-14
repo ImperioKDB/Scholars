@@ -14,6 +14,7 @@ export const metadata: Metadata = {
 
 type Scholarship = {
   id: string;
+  slug: string;
   title: string;
   provider_name: string;
   amount: string | null;
@@ -32,7 +33,7 @@ export default async function ScholarshipsInNigeriaPage() {
   const supabase = createPublicClient();
   const { data } = await supabase
     .from("scholarships")
-    .select("id, title, provider_name, amount, deadline, discipline")
+    .select("id, slug, title, provider_name, amount, deadline, discipline")
     .eq("verified", true)
     .in("level", ["undergrad", "both"])
     .order("deadline", { ascending: true })
@@ -64,14 +65,14 @@ export default async function ScholarshipsInNigeriaPage() {
                 <article key={scholarship.id} className="rounded-2xl border border-hairline bg-white p-5 shadow-card">
                   <p className="text-xs font-medium text-navy-light">{scholarship.provider_name}</p>
                   <h3 className="mt-2 font-display text-xl font-semibold leading-snug text-navy">
-                    <Link href={`/s/${scholarship.id}`} className="hover:underline">{scholarship.title}</Link>
+                    <Link href={`/scholarship/${scholarship.slug}`} className="hover:underline">{scholarship.title}</Link>
                   </h3>
                   <div className="mt-4 flex flex-wrap gap-2 text-xs">
                     {scholarship.amount && <span className="rounded-full bg-emerald-light px-2.5 py-1 font-mono text-emerald">{scholarship.amount}</span>}
                     <span className="rounded-full bg-rose-light px-2.5 py-1 text-rose">Deadline {formatDeadline(scholarship.deadline)}</span>
                     {scholarship.discipline && <span className="rounded-full bg-navy-50 px-2.5 py-1 text-navy-light">{scholarship.discipline}</span>}
                   </div>
-                  <Link href={`/s/${scholarship.id}`} className="mt-5 inline-block text-sm font-medium text-navy underline">View scholarship details</Link>
+                  <Link href={`/scholarship/${scholarship.slug}`} className="mt-5 inline-block text-sm font-medium text-navy underline">View scholarship details</Link>
                 </article>
               ))}
             </div>
@@ -82,7 +83,7 @@ export default async function ScholarshipsInNigeriaPage() {
           <p className="mt-3 text-sm leading-6 text-navy-light">Create one free profile to compare your course, institution, location, academic results, and other eligibility details with the requirements attached to each verified listing.</p>
           <Link href="/signup" className="mt-5 inline-block rounded-seal bg-navy px-5 py-3 text-sm font-medium text-white hover:bg-navy-light">Create your free profile</Link>
         </section>
-        <SeoJsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: "Undergraduate scholarships in Nigeria", url: `${base}/scholarships-in-nigeria`, mainEntity: { "@type": "ItemList", numberOfItems: scholarships.length, itemListElement: scholarships.map((item, index) => ({ "@type": "ListItem", position: index + 1, name: item.title, url: `${base}/s/${item.id}` })) } }} />
+        <SeoJsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: "Undergraduate scholarships in Nigeria", url: `${base}/scholarships-in-nigeria`, mainEntity: { "@type": "ItemList", numberOfItems: scholarships.length, itemListElement: scholarships.map((item, index) => ({ "@type": "ListItem", position: index + 1, name: item.title, url: `${base}/scholarship/${item.slug}` })) } }} />
       </div>
     </main>
   );

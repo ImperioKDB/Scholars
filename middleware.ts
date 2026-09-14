@@ -32,7 +32,12 @@ function adminMfaRequired(): boolean {
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
-  if (path.startsWith("/s/") || path.startsWith("/o/")) {
+  if (
+    path.startsWith("/s/") ||
+    path.startsWith("/o/") ||
+    path.startsWith("/scholarship/") ||
+    path.startsWith("/opportunity/")
+  ) {
     const shareResponse = NextResponse.next();
     const ref = request.nextUrl.searchParams.get("ref");
     const alreadyHasRef = request.cookies.get(COOKIE_NAMES.REF)?.value;
@@ -131,6 +136,8 @@ export const config = {
     "/settings/:path*",
     "/s/:path*",
     "/o/:path*",
+    "/scholarship/:path*",
+    "/opportunity/:path*",
     "/login",
     "/signup",
   ],

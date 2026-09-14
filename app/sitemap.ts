@@ -37,26 +37,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [{ data: scholarships }, { data: opportunities }] = await Promise.all([
     supabase
       .from("scholarships")
-      .select("id, updated_at")
+      .select("id, slug, updated_at")
       .eq("verified", true)
       .in("level", ["undergrad", "both"])
       .order("updated_at", { ascending: false })
       .limit(1000),
     supabase
       .from("opportunities")
-      .select("id, updated_at")
+      .select("id, slug, updated_at")
       .eq("verified", true)
       .order("updated_at", { ascending: false })
       .limit(1000),
   ]);
   const shareRoutes: MetadataRoute.Sitemap = (scholarships ?? []).map((row) => ({
-    url: `${base}/s/${row.id}`,
+    url: `${base}/scholarship/${row.slug}`,
     lastModified: new Date(row.updated_at),
     changeFrequency: "weekly",
     priority: 0.8,
   }));
   const opportunityRoutes: MetadataRoute.Sitemap = (opportunities ?? []).map((row) => ({
-    url: `${base}/o/${row.id}`,
+    url: `${base}/opportunity/${row.slug}`,
     lastModified: new Date(row.updated_at),
     changeFrequency: "weekly",
     priority: 0.7,

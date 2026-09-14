@@ -1,0 +1,95 @@
+import { ImageResponse } from "next/og";
+import { createPublicClient } from "@/lib/supabase/public";
+
+// app/scholarship/[slug]/opengraph-image.tsx
+// Auto-wired by Next.js to the og:image / twitter:image meta tags for the
+// sibling app/s/[id]/page.tsx -- no manual <meta> tag needed. This is what
+// actually renders inline inside a WhatsApp/iMessage/Slack link preview,
+// which is the entire point of the share feature: the card has to be
+// recognizable as Scholars, and legible, before anyone taps it.
+//
+// PERF (batch 1): chat clients re-fetch previews aggressively. Revalidate
+// caps OG re-render cost at once per hour. If this file convention ever
+// ignores the segment config, behavior simply falls back to today's
+// per-request rendering -- nothing breaks either way.
+export const revalidate = 3600;
+
+// COLOR CONSISTENCY: the accent uses the darkened emerald token (#15705A)
+// instead of the old pre-audit #1B8A6B, matching the rest of the app.
+export const runtime = "edge";
+
+export const size = { width: 1200, height: 630 };
+export const contentType = "image/png";
+
+const OG_COLUMNS = "title, provider_name, amount, deadline";
+
+export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const supabase = createPublicClient();
+  const { data: scholarship } = await supabase
+    .from("scholarships")
+    .select(OG_COLUMNS)
+    .eq("slug", slug)
+    .eq("verified", true)
+    .maybeSingle();
+
+  return new ImageResponse(
+    (
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          background: "#0B1E3D",
+          color: "#F7F5EF",
+          padding: "64px 68px",
+          fontFamily: "sans-serif",
+        }}
+      >
+        <div style={{ display: "flex", fontSize: 30, color: "#15705A", fontWeight: 700 }}>
+          Scholars
+        </div>
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", fontSize: 24, color: "#8B93A3", marginBottom: 14 }}>
+            {scholarship?.provider_name ?? "Scholarship opportunity"}
+          </div>
+          <div
+            style={{
+              display: "flex",
+              fontSize: 54,
+              fontWeight: 700,
+              lineHeight: 1.15,
+              maxWidth: 1000,
+            }}
+          >
+            {scholarship?.title ?? "Find scholarships you're eligible for"}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 18, fontSize: 26 }}>
+          {scholarship?.amount && (
+            <div
+              style={{
+                display: "flex",
+                background: "#15705A",
+                color: "#0B1E3D",
+                padding: "10px 24px",
+                borderRadius: 999,
+                fontWeight: 700,
+              }}
+            >
+              {scholarship.amount}
+            </div>
+          )}
+          {scholarship?.deadline && (
+            <div style={{ display: "flex", color: "#C9CDD6", alignItems: "center" }}>
+              Deadline {scholarship.deadline}
+            </div>
+          )}
+        </div>
+      </div>
+    ),
+    { ...size }
+  );
+}

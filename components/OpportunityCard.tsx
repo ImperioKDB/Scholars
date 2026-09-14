@@ -7,6 +7,7 @@ import { saveReturnScroll } from "@/lib/scrollRestore";
 
 export type CardOpportunity = {
   id: string;
+  slug?: string;
   type: "fellowship" | "internship" | "competition" | "mentorship";
   title: string;
   provider_name: string;
@@ -144,6 +145,7 @@ export function OpportunityCard({
           <ShareButton
             variant="icon"
             opportunityId={opportunity.id}
+            opportunitySlug={opportunity.slug}
             title={opportunity.title}
             sharerId={sharerId}
           />

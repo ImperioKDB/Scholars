@@ -10,6 +10,7 @@ import { daysUntil, formatLastClosedLabel, formatOpensLabel } from "@/lib/dates"
 import type { CyclePrediction } from "@/lib/cycles";
 export type CardScholarship = {
   id: string;
+  slug?: string;
   title: string;
   provider_name: string;
   amount: string | null;
@@ -146,7 +147,7 @@ export function ScholarshipCard({
       </div>
       <div className="absolute top-5 right-5 z-10 flex items-center gap-3.5">
         {sharerId && (
-          <ShareButton variant="icon" scholarshipId={scholarship.id} title={scholarship.title} sharerId={sharerId} />
+          <ShareButton variant="icon" scholarshipId={scholarship.id} scholarshipSlug={scholarship.slug} title={scholarship.title} sharerId={sharerId} />
         )}
         <SaveButton saved={saved} pending={pending} onToggle={onToggleSave} />
       </div>

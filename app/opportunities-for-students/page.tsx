@@ -14,6 +14,7 @@ export const metadata: Metadata = {
 
 type Opportunity = {
   id: string;
+  slug: string;
   type: string;
   title: string;
   provider_name: string;
@@ -34,7 +35,7 @@ export default async function OpportunitiesForStudentsPage() {
   const supabase = createPublicClient();
   const { data } = await supabase
     .from("opportunities")
-    .select("id, type, title, provider_name, compensation, deadline, location")
+    .select("id, slug, type, title, provider_name, compensation, deadline, location")
     .eq("verified", true)
     .order("deadline", { ascending: true, nullsFirst: false })
     .limit(50);
@@ -68,20 +69,20 @@ export default async function OpportunitiesForStudentsPage() {
                     {opportunity.location && <span>{opportunity.location}</span>}
                   </div>
                   <h3 className="mt-2 font-display text-xl font-semibold leading-snug text-navy">
-                    <Link href={`/o/${opportunity.id}`} className="hover:underline">{opportunity.title}</Link>
+                    <Link href={`/opportunity/${opportunity.slug}`} className="hover:underline">{opportunity.title}</Link>
                   </h3>
                   <p className="mt-1 text-sm text-navy-light">{opportunity.provider_name}</p>
                   <div className="mt-4 flex flex-wrap gap-2 text-xs">
                     {opportunity.compensation && <span className="rounded-full bg-emerald-light px-2.5 py-1 font-mono text-emerald">{opportunity.compensation}</span>}
                     <span className="rounded-full bg-rose-light px-2.5 py-1 text-rose">Deadline {formatDeadline(opportunity.deadline)}</span>
                   </div>
-                  <Link href={`/o/${opportunity.id}`} className="mt-5 inline-block text-sm font-medium text-navy underline">View opportunity details</Link>
+                  <Link href={`/opportunity/${opportunity.slug}`} className="mt-5 inline-block text-sm font-medium text-navy underline">View opportunity details</Link>
                 </article>
               ))}
             </div>
           )}
         </section>
-        <SeoJsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: "Student fellowships, internships and opportunities", url: `${base}/opportunities-for-students`, mainEntity: { "@type": "ItemList", numberOfItems: opportunities.length, itemListElement: opportunities.map((item, index) => ({ "@type": "ListItem", position: index + 1, name: item.title, url: `${base}/o/${item.id}` })) } }} />
+        <SeoJsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: "Student fellowships, internships and opportunities", url: `${base}/opportunities-for-students`, mainEntity: { "@type": "ItemList", numberOfItems: opportunities.length, itemListElement: opportunities.map((item, index) => ({ "@type": "ListItem", position: index + 1, name: item.title, url: `${base}/opportunity/${item.slug}` })) } }} />
       </div>
     </main>
   );

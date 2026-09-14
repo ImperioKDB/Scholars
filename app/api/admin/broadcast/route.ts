@@ -141,7 +141,7 @@ export async function POST(request: Request) {
   if (parsed.data.scholarship_ids.length > 0) {
     const { data: scholarships, error: schError } = await service
       .from('scholarships')
-      .select('id, title, provider_name, amount, deadline')
+      .select('id, slug, title, provider_name, amount, deadline')
       .eq('verified', true)
       .in('id', parsed.data.scholarship_ids)
     if (schError) {
@@ -155,7 +155,7 @@ export async function POST(request: Request) {
         amount: r.amount,
         deadline: r.deadline,
         kind_label: 'Scholarship',
-        url: `${baseUrl}/scholarships/${r.id}`,
+        url: `${baseUrl}/scholarship/${r.slug}`,
       })
     }
   }
@@ -164,7 +164,7 @@ export async function POST(request: Request) {
   if (parsed.data.opportunity_ids.length > 0) {
     const { data: opportunities, error: oppError } = await service
       .from('opportunities')
-      .select('id, type, title, provider_name, compensation, deadline')
+      .select('id, slug, type, title, provider_name, compensation, deadline')
       .eq('verified', true)
       .in('id', parsed.data.opportunity_ids)
     if (oppError) {
@@ -178,7 +178,7 @@ export async function POST(request: Request) {
         amount: r.compensation,
         deadline: r.deadline,
         kind_label: KIND_LABELS[r.type] ?? 'Opportunity',
-        url: `${baseUrl}/opportunities/${r.id}`,
+        url: `${baseUrl}/opportunity/${r.slug}`,
       })
     }
   }
