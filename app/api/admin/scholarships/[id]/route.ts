@@ -37,7 +37,10 @@ const updateSchema = z
     provider_name: z.string().trim().min(1).max(300).transform(decodeUnicodeEscapes),
     description: z.string().trim().max(5000).transform(decodeUnicodeEscapes).nullable(),
     amount: z.string().trim().max(200).transform(decodeUnicodeEscapes).nullable(),
-    deadline: z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'Invalid date'),
+    deadline: z
+      .string()
+      .nullable()
+      .refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Invalid date'),
     opens_at: z
       .string()
       .nullable()
@@ -48,6 +51,7 @@ const updateSchema = z
       .refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Invalid date'),
     application_url: httpUrlSchema.nullable(),
     how_to_apply: z.string().trim().max(2000).transform(decodeUnicodeEscapes).nullable(),
+    research_notes: z.string().trim().max(4000).transform(decodeUnicodeEscapes).nullable(),
     level: z.enum(['undergrad', 'postgrad', 'both']),
     discipline: z.string().trim().max(200).nullable(),
     verified: z.boolean(),

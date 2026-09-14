@@ -38,7 +38,11 @@ const scholarshipSchema = z.object({
   provider_name: z.string().trim().min(1).max(300).transform(decodeUnicodeEscapes),
   description: z.string().trim().max(5000).transform(decodeUnicodeEscapes).nullable().optional(),
   amount: z.string().trim().max(200).transform(decodeUnicodeEscapes).nullable().optional(),
-  deadline: z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'Invalid date'),
+  deadline: z
+    .string()
+    .nullable()
+    .optional()
+    .refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Invalid date'),
   opens_at: z
     .string()
     .nullable()
@@ -46,6 +50,7 @@ const scholarshipSchema = z.object({
     .refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Invalid date'),
   application_url: httpUrlSchema.nullable().optional(),
   how_to_apply: z.string().trim().max(2000).transform(decodeUnicodeEscapes).nullable().optional(),
+  research_notes: z.string().trim().max(4000).transform(decodeUnicodeEscapes).nullable().optional(),
   level: z.enum(['undergrad', 'postgrad', 'both']).default('both'),
   discipline: z.string().trim().max(200).nullable().optional(),
   verified: z.boolean().default(false),

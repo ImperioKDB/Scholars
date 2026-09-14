@@ -7,7 +7,7 @@ type Row = {
   id: string;
   title: string;
   provider_name: string;
-  deadline: string;
+  deadline: string | null;
   level: "undergrad" | "postgrad" | "both";
   discipline: string | null;
   verified: boolean;
@@ -44,7 +44,12 @@ export default function AdminScholarshipsPage() {
     }
     const { scholarships } = await res.json();
     setRows(
-      [...scholarships].sort((a: Row, b: Row) => (a.deadline < b.deadline ? -1 : 1))
+      [...scholarships].sort((a: Row, b: Row) => {
+        if (!a.deadline && !b.deadline) return 0;
+        if (!a.deadline) return 1;
+        if (!b.deadline) return -1;
+        return a.deadline < b.deadline ? -1 : 1;
+      })
     );
     setLoading(false);
   }
@@ -156,7 +161,7 @@ export default function AdminScholarshipsPage() {
                     <td className="px-5 py-3 text-navy-light capitalize">{s.level}</td>
                     <td className="px-5 py-3 text-navy-light">{s.discipline ?? "Any"}</td>
                     <td className="px-5 py-3 text-navy-light font-mono">{s.scholarship_rules?.length ?? 0}</td>
-                    <td className="px-5 py-3 text-navy-light">{s.deadline}</td>
+                    <td className="px-5 py-3 text-navy-light">{s.deadline ?? "Rolling / not set"}</td>
                     <td className="px-5 py-3">
                       <button
                         onClick={() => toggleVerified(s)}

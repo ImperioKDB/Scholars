@@ -163,6 +163,10 @@ export function parseRuleValue(field: string, operator: RuleOperator, value: unk
 // application_url is empty, since a scholarship can legitimately be saved
 // as a draft (verified: false) before either is known.
 //
+// research_notes: admin-only source, confidence, contradiction, and
+// last-checked notes. This mirrors the live scholarships.research_notes
+// column and must never be included in public select lists.
+//
 // opens_at: date applications open, admin-set, optional. Blank/null means
 // "no restriction" -- treated as already open. Feeds the "Open now" badge
 // (lib/discovery.ts), never the eligibility score. See migration:
@@ -183,7 +187,10 @@ export const scholarshipSchema = z.object({
   provider_name: z.string().min(2, "Provider name is required."),
   description: z.string().optional(),
   amount: z.string().optional(),
-  deadline: z.string().min(1, "Deadline is required."),
+  deadline: z
+    .string()
+    .optional()
+    .refine((v) => !v || !Number.isNaN(Date.parse(v)), "Invalid date"),
   opens_at: z
     .string()
     .optional()
@@ -197,6 +204,7 @@ last_cycle_closed_at: z
     .optional()
     .refine((v) => !v || /^https?:\/\//.test(v), "Must be a full URL starting with http(s)://"),
   how_to_apply: z.string().max(2000, "Keep it under 2000 characters.").optional(),
+  research_notes: z.string().max(4000, "Keep research notes under 4000 characters.").optional(),
   level: z.enum(["undergrad", "both"]),
   discipline: z.string().optional(),
   verified: z.boolean(),
@@ -228,6 +236,7 @@ export const EMPTY_SCHOLARSHIP: ScholarshipFormValues = {
 last_cycle_closed_at: "",
 application_url: "",
   how_to_apply: "",
+  research_notes: "",
   level: "both",
   discipline: "",
   verified: false,

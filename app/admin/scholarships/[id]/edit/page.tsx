@@ -24,7 +24,8 @@ import {
 type AdminScholarship = Omit<
   ScholarshipFormValues,
   | "opens_at"
-| "last_cycle_closed_at"
+  | "last_cycle_closed_at"
+  | "research_notes"
 | "awards_available"
   | "estimated_applicant_pool"
   | "competitiveness_tier"
@@ -33,7 +34,8 @@ type AdminScholarship = Omit<
 > & {
   id: string;
   opens_at: string | null;
-last_cycle_closed_at: string | null;
+  last_cycle_closed_at: string | null;
+  research_notes: string | null;
 awards_available: number | null;
   estimated_applicant_pool: number | null;
   competitiveness_tier: "low" | "medium" | "high" | "very_high" | null;
@@ -82,11 +84,12 @@ export default function EditScholarshipPage() {
         provider_name: scholarship.provider_name,
         description: scholarship.description ?? "",
         amount: scholarship.amount ?? "",
-        deadline: scholarship.deadline,
+        deadline: scholarship.deadline ?? "",
         opens_at: scholarship.opens_at ?? "",
 last_cycle_closed_at: scholarship.last_cycle_closed_at ?? "",
 application_url: scholarship.application_url ?? "",
         how_to_apply: scholarship.how_to_apply ?? "",
+        research_notes: scholarship.research_notes ?? "",
         level: scholarship.level,
         discipline: scholarship.discipline ?? "",
         verified: scholarship.verified,
@@ -141,11 +144,12 @@ application_url: scholarship.application_url ?? "",
         provider_name: parsed.data.provider_name,
         description: parsed.data.description || null,
         amount: parsed.data.amount || null,
-        deadline: parsed.data.deadline,
+        deadline: parsed.data.deadline || null,
         opens_at: parsed.data.opens_at || null,
 last_cycle_closed_at: parsed.data.last_cycle_closed_at || null,
 application_url: parsed.data.application_url || null,
         how_to_apply: parsed.data.how_to_apply || null,
+        research_notes: parsed.data.research_notes || null,
         level: parsed.data.level,
         discipline: parsed.data.discipline || null,
         verified: parsed.data.verified,

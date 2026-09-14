@@ -26,6 +26,7 @@ export function ScholarshipFields({
   const closedCyclical =
     values.verified &&
     Boolean(values.deadline) &&
+    values.deadline &&
     values.deadline < todayIso &&
     !values.last_cycle_closed_at?.trim() &&
     !values.opens_at?.trim();
@@ -57,7 +58,7 @@ export function ScholarshipFields({
           placeholder="e.g. \u20a6300,000 + Mentorship"
         />
       </FormField>
-      <FormField label="Deadline" error={errors.deadline}>
+      <FormField label="Deadline" error={errors.deadline} hint="Leave blank for rolling applications or when no current deadline has been confirmed. Never enter a guessed date.">
         <input
           className={inputClass}
           type="date"
@@ -158,6 +159,20 @@ export function ScholarshipFields({
             value={values.description ?? ""}
             onChange={(e) => onChange("description", e.target.value)}
             placeholder="A short summary of what this scholarship covers and who it's for."
+          />
+        </FormField>
+      </div>
+      <div className="md:col-span-2">
+        <FormField
+          label="Research notes (admin-only)"
+          error={errors.research_notes}
+          hint="Record source URLs, date checked, confidence, contradictions, and anything that still needs follow-up. Never shown to students."
+        >
+          <textarea
+            className={textareaClass}
+            value={values.research_notes ?? ""}
+            onChange={(e) => onChange("research_notes", e.target.value)}
+            placeholder="Checked 2026-09-14 via the provider's official page and application portal. Confidence: high. Current cycle closes 30 Sep 2026. No unresolved contradictions."
           />
         </FormField>
       </div>
