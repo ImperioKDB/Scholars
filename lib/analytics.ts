@@ -8,7 +8,15 @@
 // app/api/events/route.ts and the events_event_whitelist check constraint
 // in migration 0019. The DB constraint is the backstop if they drift.
 export type EventName =
+  | "onboarding_step_viewed"
   | "provisional_matches_viewed"
+  | "match_viewed"
+  | "scholarship_saved"
+  | "application_started"
+  | "provider_clicked"
+  | "application_status_changed"
+  | "draft_generated"
+  | "draft_confirmed"
   | "gap_nudge_clicked"
   | "whatsapp_opt_in"
   | "whatsapp_opt_out";

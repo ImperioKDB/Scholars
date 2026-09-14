@@ -39,6 +39,7 @@ import { buildDraftSummary, buildStatementPrompt, generateStatement } from '@/li
 import { evaluateScholarship } from '@/lib/matching/engine'
 import { toMatchableProfile, type MatchableProfileSource } from '@/lib/matching/profileMapper'
 import { isUuid } from '@/lib/validate'
+import { trackServerEvent } from '@/lib/analytics-server'
 
 const PROFILE_COLUMNS =
   'full_name, discipline, gpa, nationality, gender, financial_need, career_goals, date_of_birth, state_of_origin, lga_of_origin, year_of_study, institution_name, institution_type, jamb_score, waec_credit_count, has_english_maths_credit, disability_status, has_valid_id, has_transcript, has_recommendation_letter, has_personal_statement, has_lga_certificate, profile_completeness'
@@ -194,6 +195,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     return dbErrorResponse('applications/[id]/draft', updateError)
   }
 
+  trackServerEvent(supabase, user.id, 'draft_generated', { application_id: id })
   return NextResponse.json({ draft: updated })
 }
 
@@ -253,5 +255,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return dbErrorResponse('applications/[id]/draft', error)
   }
 
+  if (parsed.data.confirm === true) {
+    trackServerEvent(supabase, user.id, 'draft_confirmed', { application_id: id })
+  }
   return NextResponse.json({ draft: data })
 }

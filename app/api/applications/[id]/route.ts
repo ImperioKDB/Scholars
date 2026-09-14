@@ -28,6 +28,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { isUuid } from '@/lib/validate'
+import { trackServerEvent } from '@/lib/analytics-server'
 
 const STATUS_VALUES = ['in_progress', 'submitted', 'accepted', 'rejected'] as const
 
@@ -81,6 +82,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return dbErrorResponse('applications/[id]', error)
   }
 
+  if (parsed.data.status !== undefined) {
+    trackServerEvent(supabase, user.id, 'application_status_changed', {
+      application_id: id,
+      status: parsed.data.status,
+    })
+  }
   return NextResponse.json({ application: data })
 }
 

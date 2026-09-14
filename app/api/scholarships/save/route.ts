@@ -21,6 +21,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/ratelimit";
+import { trackServerEvent } from '@/lib/analytics-server'
 
 const saveSchema = z.object({
   scholarship_id: z.string().uuid(),
@@ -121,6 +122,9 @@ export async function POST(request: Request) {
     }
     return dbErrorResponse('scholarships/save', error);
   }
+  trackServerEvent(supabase, user.id, 'scholarship_saved', {
+    scholarship_id: parsed.data.scholarship_id,
+  })
   return NextResponse.json({ saved: data }, { status: 201 });
 }
 

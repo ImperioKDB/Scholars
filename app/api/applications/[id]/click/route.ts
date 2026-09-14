@@ -13,6 +13,7 @@ import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { isUuid } from '@/lib/validate'
+import { trackServerEvent } from '@/lib/analytics-server'
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -42,5 +43,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Application not found' }, { status: 404 })
   }
 
+  trackServerEvent(supabase, user.id, 'provider_clicked', { application_id: id })
   return NextResponse.json({ message: 'Recorded' })
 }
