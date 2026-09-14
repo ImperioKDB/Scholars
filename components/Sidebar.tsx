@@ -9,7 +9,7 @@
 // All icons live in components/icons.tsx so the two shells share one set
 // without redefining component names in this scope.
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -18,6 +18,7 @@ import { FeedbackModal } from "@/components/FeedbackWidget";
 import { levelForXp } from "@/lib/xp/level";
 import { initialsFor } from "@/lib/text/initials";
 import { usePresenceHeartbeat } from "@/lib/presence";
+import { useOverlayAccessibility } from "@/lib/useOverlayAccessibility";
 import {
   DashboardIcon,
   ApplicationsIcon,
@@ -39,8 +40,8 @@ const MOBILE_TABS = [
   { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
   { href: "/applications", label: "Applications", Icon: ApplicationsIcon },
   { href: "/achievements", label: "Achievements", Icon: AchievementsIcon },
+  { href: "#more", label: "More", Icon: MenuIcon },
 ];
-const BAR_HIDE_MS = 2500;
 export function Sidebar({
   fullName,
   isAdmin,
@@ -61,21 +62,8 @@ export function Sidebar({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const [barVisible, setBarVisible] = useState(false);
-  const barHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    function reveal() {
-      setBarVisible(true);
-      if (barHideTimer.current) clearTimeout(barHideTimer.current);
-      barHideTimer.current = setTimeout(() => setBarVisible(false), BAR_HIDE_MS);
-    }
-    reveal();
-    document.addEventListener("pointerdown", reveal);
-    return () => {
-      document.removeEventListener("pointerdown", reveal);
-      if (barHideTimer.current) clearTimeout(barHideTimer.current);
-    };
-  }, []);
+  const closeMobileMenu = useCallback(() => setMobileOpen(false), []);
+  const drawerRef = useOverlayAccessibility(mobileOpen, closeMobileMenu);
 
   // PRESENCE HEARTBEAT: update profiles.last_seen_at on mount and every
 // 60 seconds while the app is open. Powers the Active/Idle/Offline
@@ -209,7 +197,7 @@ useEffect(() => {
         {accountBlock}
       </aside>
       <header className="md:hidden fixed top-0 inset-x-0 z-40 h-14 bg-white border-b border-hairline flex items-center gap-3 px-4">
-        <button type="button" onClick={() => setMobileOpen(true)} aria-label="Open menu" className="text-navy p-1.5 -ml-1.5">
+        <button type="button" onClick={() => setMobileOpen(true)} aria-expanded={mobileOpen} aria-controls="student-mobile-menu" aria-label="Open menu" className="text-navy p-1.5 -ml-1.5">
           <MenuIcon />
         </button>
         <Logo className="text-navy" />
@@ -219,9 +207,15 @@ useEffect(() => {
           "md:hidden fixed inset-0 z-50 transition-opacity duration-200",
           mobileOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
         ].join(" ")}
+        aria-hidden={!mobileOpen}
       >
         <div className="absolute inset-0 bg-navy/40" onClick={() => setMobileOpen(false)} aria-hidden="true" />
         <div
+          ref={drawerRef}
+          id="student-mobile-menu"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Student navigation"
           className={[
             "absolute inset-y-0 left-0 w-72 max-w-[80%] bg-white flex flex-col transition-transform duration-200",
             mobileOpen ? "translate-x-0" : "-translate-x-full",
@@ -242,17 +236,24 @@ useEffect(() => {
         className={[
           "md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-hairline pb-[env(safe-area-inset-bottom)]",
           "transition-transform duration-300 motion-reduce:transition-none",
-          barVisible ? "translate-y-0" : "translate-y-full",
+          "translate-y-0",
         ].join(" ")}
       >
-        <div className="grid grid-cols-3">
+        <div className="grid grid-cols-4">
           {MOBILE_TABS.map(({ href, label, Icon }) => {
             const active = pathname === href;
             return (
               <Link
                 key={href}
                 href={href}
-                onClick={() => setMobileOpen(false)}
+                onClick={(event) => {
+                  if (href === "#more") {
+                    event.preventDefault();
+                    setMobileOpen(true);
+                    return;
+                  }
+                  setMobileOpen(false);
+                }}
                 aria-current={active ? "page" : undefined}
                 className={[
                   "flex flex-col items-center justify-center gap-1 min-h-[56px] py-2 text-[11px] font-medium",

@@ -7,6 +7,7 @@ import { AuthShell } from "@/components/AuthShell";
 import { FormField, inputClass } from "@/components/FormField";
 import { PasswordField } from "@/components/PasswordField";
 import { normalizeEmail } from "@/lib/auth/email";
+import { Skeleton } from "@/components/Skeleton";
 
 // AUTH SECURITY AUDIT (brute-force brake, client side): progressive
 // lockout stored in localStorage. UX-level only -- the real brakes are
@@ -108,7 +109,7 @@ function LoginForm() {
         </p>
       )}
       <form onSubmit={handleSubmit} noValidate>
-        <FormField label="Email">
+        <FormField label="Email" id="login-email">
           <input
             className={inputClass}
             type="email"
@@ -119,8 +120,9 @@ function LoginForm() {
             autoComplete="email"
           />
         </FormField>
-        <FormField label="Password">
+        <FormField label="Password" id="login-password">
           <PasswordField
+            id="login-password"
             value={password}
             onChange={setPassword}
             placeholder="Your password"
@@ -135,6 +137,7 @@ function LoginForm() {
         <button
           type="submit"
           disabled={loading}
+          aria-busy={loading}
           className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-navy text-white font-medium py-3 mt-2 hover:bg-navy-light transition-colors disabled:opacity-60"
         >
           {loading && (
@@ -176,7 +179,19 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense
+      fallback={
+        <AuthShell heading="Welcome back" sub="Sign in to see your scholarship matches.">
+          <div aria-busy="true" aria-label="Loading sign-in form" className="space-y-4">
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-11 w-full" />
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-11 w-full" />
+            <Skeleton className="h-12 w-full mt-2" />
+          </div>
+        </AuthShell>
+      }
+    >
       <LoginForm />
     </Suspense>
   );

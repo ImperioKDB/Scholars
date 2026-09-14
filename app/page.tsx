@@ -21,6 +21,7 @@ export const revalidate = 300;
 // public-client pattern as app/s/[id]/page.tsx), and says so honestly if
 // nothing is live yet.
 type LiveScholarship = {
+  id: string;
   title: string;
   provider_name: string;
   amount: string | null;
@@ -33,7 +34,7 @@ async function loadLiveScholarships(): Promise<LiveScholarship[]> {
   const supabase = createPublicClient();
   const { data } = await supabase
     .from("scholarships")
-    .select("title, provider_name, amount, deadline, discipline, level")
+    .select("id, title, provider_name, amount, deadline, discipline, level")
     .eq("verified", true)
     .in("level", ["undergrad", "both"])
     .order("deadline", { ascending: true })
@@ -58,12 +59,18 @@ export default async function LandingPage() {
             <Link href="#how-it-works" className="hover:text-navy">How it works</Link>
             <Link href="/login" className="hover:text-navy">Log in</Link>
           </nav>
-          <Link
+          <div className="flex items-center gap-3">
+            <nav className="md:hidden flex items-center gap-3 text-xs text-navy-light" aria-label="Primary navigation">
+              <Link href="#how-it-works" className="hover:text-navy">How it works</Link>
+              <Link href="/login" className="hover:text-navy">Log in</Link>
+            </nav>
+            <Link
             href="/signup"
             className="rounded-seal bg-navy text-white text-sm font-medium px-5 py-2.5 hover:bg-navy-light transition-colors"
-          >
-            Get started
-          </Link>
+            >
+              Get started
+            </Link>
+          </div>
         </div>
       </header>
       <main>
@@ -112,7 +119,12 @@ export default async function LandingPage() {
               <ul className="space-y-4">
                 {live.map((s) => {
                   return (
-                    <li key={s.title} className="flex items-center gap-4 pb-4 border-b border-hairline last:border-0 last:pb-0">
+                    <li key={s.id} className="border-b border-hairline last:border-0 last:pb-0">
+                      <Link
+                        href={`/s/${s.id}`}
+                        className="flex items-center gap-4 pb-4 rounded-lg focus-visible:ring-2 focus-visible:ring-emerald focus-visible:ring-offset-2 outline-none"
+                        aria-label={`View ${s.title} scholarship details`}
+                      >
                       <ProviderMonogram name={s.provider_name} size={48} />
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-ink text-sm leading-snug">{s.title}</p>
@@ -125,6 +137,7 @@ export default async function LandingPage() {
                           <DeadlineBadge deadline={s.deadline} />
                         </div>
                       </div>
+                      </Link>
                     </li>
                   );
                 })}

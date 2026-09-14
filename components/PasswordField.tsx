@@ -13,18 +13,24 @@ export function PasswordField({
   placeholder = "Enter password",
   autoComplete = "current-password",
   id,
+  "aria-describedby": ariaDescribedBy,
+  "aria-invalid": ariaInvalid,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   autoComplete?: string;
   id?: string;
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean;
 }) {
   const [visible, setVisible] = useState(false);
   return (
     <div className="relative">
       <input
         id={id}
+        aria-describedby={ariaDescribedBy}
+        aria-invalid={ariaInvalid}
         className={inputClass + " pr-11"}
         type={visible ? "text" : "password"}
         required

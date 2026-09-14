@@ -136,7 +136,7 @@ export default function SignupPage() {
       sub="Start discovering scholarships in minutes."
     >
       <form onSubmit={handleSubmit} noValidate>
-        <FormField label="Full name">
+        <FormField label="Full name" id="signup-full-name">
           <input
             className={inputClass}
             type="text"
@@ -147,7 +147,7 @@ export default function SignupPage() {
             autoComplete="name"
           />
         </FormField>
-        <FormField label="Email">
+        <FormField label="Email" id="signup-email">
           <input
             className={inputClass}
             type="email"
@@ -160,10 +160,12 @@ export default function SignupPage() {
         </FormField>
         <FormField
           label="Password"
+          id="signup-password"
           error={error ?? undefined}
           hint="At least 8 characters, with an uppercase letter, a lowercase letter, and a number."
         >
           <PasswordField
+            id="signup-password"
             value={password}
             onChange={setPassword}
             placeholder="At least 8 characters"
@@ -173,6 +175,7 @@ export default function SignupPage() {
         <button
           type="submit"
           disabled={loading}
+          aria-busy={loading}
           className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-navy text-white font-medium py-3 mt-2 hover:bg-navy-light transition-colors disabled:opacity-60"
         >
           {loading && (
@@ -190,8 +193,10 @@ export default function SignupPage() {
         <div className="h-px flex-1 bg-hairline" />
       </div>
       <button
+        type="button"
         onClick={handleGoogle}
         disabled={googleLoading}
+        aria-busy={googleLoading}
         className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-hairline bg-white py-2.5 text-sm font-medium text-ink hover:bg-navy-50 transition-colors disabled:opacity-60"
       >
         {googleLoading && (
