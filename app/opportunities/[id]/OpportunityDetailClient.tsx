@@ -9,6 +9,7 @@ import { fetchWithTimeout } from "@/lib/fetch";
 
 export type OpportunityDetail = {
   id: string;
+  slug?: string;
   type: "fellowship" | "internship" | "competition" | "mentorship";
   title: string;
   provider_name: string;
@@ -154,7 +155,7 @@ export function OpportunityDetailClient({
           >
             {saved ? "Saved \u2713" : "Save"}
           </button>
-          <ShareButton variant="full" opportunityId={opportunity.id} title={opportunity.title} sharerId={sharerId} />
+          <ShareButton variant="full" opportunityId={opportunity.id} opportunitySlug={opportunity.slug} title={opportunity.title} sharerId={sharerId} />
         </div>
       </div>
       {similar.length > 0 && (

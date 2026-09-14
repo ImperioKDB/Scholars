@@ -89,5 +89,6 @@ export async function POST(request: Request) {
   // SHARE PAGES: /o/[id] is ISR (revalidate 300) -- drop its cached render
   // so a new opportunity's share page is live immediately.
   revalidatePath('/o/[id]')
+  revalidatePath('/opportunity/[slug]')
   return NextResponse.json({ opportunity }, { status: 201 })
 }

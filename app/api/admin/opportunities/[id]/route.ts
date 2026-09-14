@@ -77,6 +77,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   // SHARE PAGES: this PATCH flips `verified` (unverify hides the /o/[id]
   // page), so drop the ISR cache for this path too.
   revalidatePath('/o/[id]')
+  revalidatePath('/opportunity/[slug]')
   return NextResponse.json({ opportunity })
 }
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -94,5 +95,6 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     return dbErrorResponse('admin/opportunities/[id]', error)
   }
   revalidatePath('/o/[id]')
+  revalidatePath('/opportunity/[slug]')
   return NextResponse.json({ message: 'Opportunity deleted' })
 }

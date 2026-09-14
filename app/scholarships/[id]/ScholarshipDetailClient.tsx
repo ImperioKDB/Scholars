@@ -15,6 +15,7 @@ import type { CyclePrediction } from "@/lib/cycles";
 
 type ScholarshipDetail = {
   id: string;
+  slug?: string;
   title: string;
   provider_name: string;
   description: string | null;
@@ -253,7 +254,7 @@ export function ScholarshipDetailClient({
               {trackPending ? "Adding\u2026" : "+ Track application"}
             </button>
           )}
-          <ShareButton variant="full" scholarshipId={scholarship.id} title={scholarship.title} sharerId={sharerId} />
+          <ShareButton variant="full" scholarshipId={scholarship.id} scholarshipSlug={scholarship.slug} title={scholarship.title} sharerId={sharerId} />
         </div>
 
         {/* PHASE 4 OUTCOME: rejection redirect on the detail page too.

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useOverlayAccessibility } from "@/lib/useOverlayAccessibility";
 
 // components/FeedbackWidget.tsx
 //
@@ -31,6 +32,7 @@ export function FeedbackModal({ open, onClose }: { open: boolean; onClose: () =>
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const messageRef = useRef<HTMLTextAreaElement>(null);
+  const dialogRef = useOverlayAccessibility(open, onClose);
 
   // Reset per open so a re-open never shows a stale success or error,
   // and pre-fill the reply address lazily from the signed-in account.
@@ -50,12 +52,7 @@ export function FeedbackModal({ open, onClose }: { open: boolean; onClose: () =>
 
   useEffect(() => {
     if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -86,15 +83,16 @@ export function FeedbackModal({ open, onClose }: { open: boolean; onClose: () =>
 
   return (
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-4 bg-navy/40"
       role="dialog"
       aria-modal="true"
-      aria-label="Send feedback to Scholars"
+      aria-labelledby="feedback-title"
     >
       <div className="bg-white rounded-2xl border border-hairline shadow-card p-6 max-w-sm w-full">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
-            <h2 className="font-display text-lg font-semibold text-navy">Send feedback</h2>
+            <h2 id="feedback-title" className="font-display text-lg font-semibold text-navy">Send feedback</h2>
             <p className="text-xs text-navy-light mt-0.5">
               Bugs, ideas, or a scholarship that looks wrong. We read every message.
             </p>
@@ -122,7 +120,9 @@ export function FeedbackModal({ open, onClose }: { open: boolean; onClose: () =>
             <label className="block">
               <span className="block text-sm font-medium text-ink mb-1.5">What is this about?</span>
               <select
-                className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink focus:border-navy outline-none transition-colors"
+                id="feedback-category"
+                aria-label="What is this about?"
+                className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink focus:border-navy focus-visible:ring-2 focus-visible:ring-emerald focus-visible:ring-offset-1 outline-none transition-colors"
                 value={category}
                 onChange={(e) => setCategory(e.target.value as Category)}
                 disabled={submitting}
@@ -138,7 +138,9 @@ export function FeedbackModal({ open, onClose }: { open: boolean; onClose: () =>
               <span className="block text-sm font-medium text-ink mb-1.5">Your message</span>
               <textarea
                 ref={messageRef}
-                className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink resize-y min-h-[120px] focus:border-navy outline-none transition-colors"
+                id="feedback-message"
+                aria-label="Your message"
+                className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink resize-y min-h-[120px] focus:border-navy focus-visible:ring-2 focus-visible:ring-emerald focus-visible:ring-offset-1 outline-none transition-colors"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="What happened, what you expected, and where you saw it."
@@ -152,7 +154,9 @@ export function FeedbackModal({ open, onClose }: { open: boolean; onClose: () =>
               </span>
               <input
                 type="email"
-                className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink focus:border-navy outline-none transition-colors"
+                id="feedback-email"
+                aria-label="Email for a reply (optional)"
+                className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink focus:border-navy focus-visible:ring-2 focus-visible:ring-emerald focus-visible:ring-offset-1 outline-none transition-colors"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@university.edu.ng"
@@ -176,6 +180,7 @@ export function FeedbackModal({ open, onClose }: { open: boolean; onClose: () =>
               <button
                 type="submit"
                 disabled={submitting || message.trim().length < 10}
+                aria-busy={submitting}
                 className="rounded-seal bg-navy text-white text-sm font-medium px-5 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60"
               >
                 {submitting ? "Sending\u2026" : "Send feedback"}

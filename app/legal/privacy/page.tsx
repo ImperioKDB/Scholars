@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Privacy Policy | Scholars",
   description: "What Scholars collects, why it collects it, and the choices you have.",
+  alternates: { canonical: "/legal/privacy" },
 };
 
 // Keep in sync with app/legal/terms/page.tsx. Live support inbox.

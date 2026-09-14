@@ -7,8 +7,8 @@
 //             OpportunityCard
 //
 // Builds a link to the public, unauthenticated share landing page --
-// /s/[id] for scholarships, /o/[id] for opportunities (see
-// app/s/[id]/page.tsx, app/o/[id]/page.tsx) -- tagged with
+// /scholarship/[slug] for scholarships, /opportunity/[slug] for opportunities
+// (see the public catalog routes) -- tagged with
 // ?ref=<sharerId> for referral attribution (middleware.ts +
 // app/auth/callback/route.ts). Prefers the native OS share sheet
 // (navigator.share); falls back to a direct wa.me deep link only when the
@@ -24,12 +24,14 @@
 //
 // BACKWARD COMPATIBLE: existing scholarship callers pass scholarshipId and
 // nothing else. New opportunity callers pass opportunityId instead. When
-// opportunityId is present the button targets /o/[id] and posts
-// { opportunity_id }; otherwise it targets /s/[id] and posts
+// opportunityId is present the button targets /opportunity/[slug] and posts
+// { opportunity_id }; otherwise it targets /scholarship/[slug] and posts
 // { scholarship_id } exactly as before.
 type ShareButtonProps = {
   scholarshipId?: string;
+  scholarshipSlug?: string;
   opportunityId?: string;
+  opportunitySlug?: string;
   title: string;
   sharerId?: string;
   variant?: "full" | "icon";
@@ -53,7 +55,7 @@ async function performShare(url: string, text: string) {
   window.open("https://wa.me/?text=" + encodeURIComponent(text + " " + url), "_blank", "noreferrer");
 }
 
-export function ShareButton({ scholarshipId, opportunityId, title, sharerId, variant = "full" }: ShareButtonProps) {
+export function ShareButton({ scholarshipId, scholarshipSlug, opportunityId, opportunitySlug, title, sharerId, variant = "full" }: ShareButtonProps) {
   const isOpportunity = Boolean(opportunityId);
   const entityId = (opportunityId ?? scholarshipId) as string;
 
@@ -70,7 +72,10 @@ export function ShareButton({ scholarshipId, opportunityId, title, sharerId, var
         ),
       }).catch(() => {});
     }
-    const url = buildShareUrl(isOpportunity ? "/o/" : "/s/", entityId, sharerId);
+    const publicPath = isOpportunity
+      ? `/opportunity/${opportunitySlug ?? entityId}`
+      : `/scholarship/${scholarshipSlug ?? entityId}`;
+    const url = buildShareUrl("", publicPath, sharerId);
     const text = isOpportunity
       ? title + " -- find it on Scholars"
       : title + " -- check if you qualify on Scholars";

@@ -11,6 +11,7 @@ import { initialsFor } from "@/lib/text/initials";
 export const metadata: Metadata = {
   title: "Reviews | Scholars",
   description: "What students say about Scholars, in their own words.",
+  alternates: { canonical: "/reviews" },
 };
 export const revalidate = 300;
 type Review = {
