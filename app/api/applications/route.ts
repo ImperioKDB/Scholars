@@ -37,6 +37,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
+import { trackServerEvent } from '@/lib/analytics-server'
 
 const createSchema = z.object({
   scholarship_id: z.string().uuid(),
@@ -44,7 +45,7 @@ const createSchema = z.object({
 
 const SCHOLARSHIP_COLUMNS =
   'id, title, provider_name, description, amount, deadline, application_url, how_to_apply, level, discipline, verified'
-const APPLICATION_COLUMNS = `id, status, notes, created_at, updated_at, draft_statement, draft_summary, draft_generated_at, draft_confirmed_at, scholarship:scholarships!inner ( ${SCHOLARSHIP_COLUMNS} )`
+const APPLICATION_COLUMNS = `id, status, notes, created_at, updated_at, link_clicked_at, checkin_prompted_at, draft_statement, draft_summary, draft_generated_at, draft_confirmed_at, scholarship:scholarships!inner ( ${SCHOLARSHIP_COLUMNS} )`
 
 export async function GET() {
   const supabase = await createClient()
@@ -112,5 +113,8 @@ export async function POST(request: Request) {
     }
     return dbErrorResponse('applications', error)
   }
+  trackServerEvent(supabase, user.id, 'application_started', {
+    scholarship_id: parsed.data.scholarship_id,
+  })
   return NextResponse.json({ application: data }, { status: 201 })
 }

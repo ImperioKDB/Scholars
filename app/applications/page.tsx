@@ -11,6 +11,8 @@ type ApplicationApiItem = {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  link_clicked_at: string | null;
+  checkin_prompted_at: string | null;
   draft_statement: string | null;
   draft_summary: {
     facts: { label: string; value: string }[];
@@ -41,7 +43,7 @@ const SCHOLARSHIP_COLUMNS =
 // so !inner drops the unjoinable row entirely instead of crashing the
 // render. Same fix applied to app/dashboard/page.tsx,
 // app/api/applications/route.ts, and app/api/applications/[id]/route.ts.
-const APPLICATION_COLUMNS = `id, status, notes, created_at, updated_at, draft_statement, draft_summary, draft_generated_at, draft_confirmed_at, scholarship:scholarships!inner ( ${SCHOLARSHIP_COLUMNS} )`;
+const APPLICATION_COLUMNS = `id, status, notes, created_at, updated_at, link_clicked_at, checkin_prompted_at, draft_statement, draft_summary, draft_generated_at, draft_confirmed_at, scholarship:scholarships!inner ( ${SCHOLARSHIP_COLUMNS} )`;
 
 // Server Component: fetches tracked applications and saved scholarships
 // in parallel and hands them to ApplicationsClient as initial props.

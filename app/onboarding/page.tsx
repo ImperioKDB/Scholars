@@ -38,6 +38,7 @@ import {
   type ProfileForm,
 } from "@/lib/profile";
 import { INSTITUTION_OPTIONS, institutionTypeFor } from "@/lib/data/institutions";
+import { track } from "@/lib/analytics";
 const STEPS = ["Core", "Personal", "Academic", "Documents", "Matching"];
 const DISCIPLINE_COMBO_OPTIONS = DISCIPLINE_OPTIONS.map((d) => ({ value: d, label: d }));
 const ONBOARDING_DRAFT_KEY = "scholars.onboarding.draft.v2";
@@ -125,6 +126,7 @@ function OnboardingForm() {
   const [skipPending, setSkipPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const lastTrackedStep = useRef<number | null>(null);
   const lgaOptions = useMemo(
     () => getLGAsForState(form.state_of_origin).map((l) => ({ value: l, label: l })),
     [form.state_of_origin]
@@ -216,6 +218,11 @@ function OnboardingForm() {
     if (loading) return;
     writeDraft({ form, waecRows, step, manualInstitution, manualDiscipline, matchingAuthorized });
   }, [form, waecRows, step, manualInstitution, manualDiscipline, matchingAuthorized, loading]);
+  useEffect(() => {
+    if (loading || lastTrackedStep.current === step) return;
+    lastTrackedStep.current = step;
+    track("onboarding_step_viewed", { step, label: STEPS[step] ?? "unknown" });
+  }, [loading, step]);
   useEffect(() => {
     if (!dirty || saving) return;
     function handler(e: BeforeUnloadEvent) {

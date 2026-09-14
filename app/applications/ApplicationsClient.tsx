@@ -15,6 +15,7 @@ type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected";
 
 type ApplicationApiItem = Draft & {
   id: string; status: ApplicationStatus; notes: string | null; created_at: string; updated_at: string;
+  link_clicked_at: string | null; checkin_prompted_at: string | null;
   scholarship: CardScholarship;
 };
 
@@ -68,6 +69,24 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
     const c: Record<ApplicationStatus, number> = { in_progress: 0, submitted: 0, accepted: 0, rejected: 0 };
     for (const a of applications) c[a.status] += 1;
     return c;
+  }, [applications]);
+
+  const nextAction = useMemo(() => {
+    const active = applications.find((a) => a.status === "in_progress") ?? applications[0];
+    if (!active) return null;
+    if (active.status === "accepted") {
+      return { title: "Record your award outcome", detail: "Keep your funding journey complete by adding what happened to this application." };
+    }
+    if (active.status === "rejected") {
+      return { title: "Keep your funding search moving", detail: "Review similar open awards in the same discipline after this result." };
+    }
+    if (!active.draft_statement) {
+      return { title: "Prepare your application materials", detail: "Generate a reviewable draft and check the requirements before you apply." };
+    }
+    if (!active.link_clicked_at) {
+      return { title: "Take the next application step", detail: "Your draft is ready. Open the provider page and complete the application there." };
+    }
+    return { title: "Update your application progress", detail: "You opened the provider page. Tell Scholars whether you started or submitted it." };
   }, [applications]);
 
   async function startTracking(scholarshipId: string) {
@@ -165,6 +184,15 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
 
       {actionError && (
         <p className="text-sm text-rose mb-6" role="alert">{actionError}</p>
+      )}
+
+      {nextAction && (
+        <div className="bg-navy text-white rounded-xl p-5 mb-8">
+          <p className="text-xs font-medium uppercase tracking-wide text-white/70 mb-1">Your next best action</p>
+          <h2 className="font-display text-lg font-semibold">{nextAction.title}</h2>
+          <p className="text-sm text-white/80 mt-1 max-w-xl">{nextAction.detail}</p>
+          <p className="text-xs text-white/60 mt-3">Open the relevant application card below to continue.</p>
+        </div>
       )}
 
       {untrackedSaved.length > 0 && (
