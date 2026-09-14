@@ -75,19 +75,23 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
     const active = applications.find((a) => a.status === "in_progress") ?? applications[0];
     if (!active) return null;
     if (active.status === "accepted") {
-      return { title: "Record your award outcome", detail: "Keep your funding journey complete by adding what happened to this application." };
+      return { id: active.id, title: "Review your accepted application", detail: "Keep your funding journey complete by checking the details and status below." };
     }
     if (active.status === "rejected") {
-      return { title: "Keep your funding search moving", detail: "Review similar open awards in the same discipline after this result." };
+      return { id: active.id, title: "Keep your funding search moving", detail: "Review similar open awards in the same discipline after this result." };
     }
     if (!active.draft_statement) {
-      return { title: "Prepare your application materials", detail: "Generate a reviewable draft and check the requirements before you apply." };
+      return { id: active.id, title: "Prepare your application materials", detail: "Generate a reviewable draft and check the requirements before you apply." };
     }
     if (!active.link_clicked_at) {
-      return { title: "Take the next application step", detail: "Your draft is ready. Open the provider page and complete the application there." };
+      return { id: active.id, title: "Take the next application step", detail: "Your draft is ready. Open the provider page and complete the application there." };
     }
-    return { title: "Update your application progress", detail: "You opened the provider page. Tell Scholars whether you started or submitted it." };
+    return { id: active.id, title: "Update your application progress", detail: "You opened the provider page. Tell Scholars whether you started or submitted it." };
   }, [applications]);
+
+  function focusApplication(applicationId: string) {
+    document.getElementById(`application-${applicationId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
 
   async function startTracking(scholarshipId: string) {
     setPendingIds((p) => new Set(p).add(scholarshipId));
@@ -170,9 +174,27 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
       )}
 
       <div className="mb-8">
-        <h1 className="font-display text-2xl font-semibold text-navy">Applications</h1>
-        <p className="text-sm text-navy-light mt-1 mb-6">{applications.length} scholarship{applications.length === 1 ? "" : "s"} you&apos;re tracking.</p>
-        <div className="bg-white rounded-xl border border-hairline p-5"><StatusDonut counts={counts} /></div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-navy-light">Your funding journey</p>
+            <h1 className="font-display text-3xl font-semibold text-navy mt-1">Applications</h1>
+            <p className="text-sm text-navy-light mt-1">One place to prepare, submit, and follow up.</p>
+          </div>
+          <Link href="/discover" className="inline-flex items-center justify-center rounded-seal bg-navy text-white text-sm font-medium px-4 py-2.5 hover:bg-navy-light transition-colors">
+            Find another scholarship <span aria-hidden="true" className="ml-2">&rarr;</span>
+          </Link>
+        </div>
+        <div className="bg-white rounded-2xl border border-hairline p-4 sm:p-5 mt-6 grid gap-5 md:grid-cols-[auto_1fr] md:items-center">
+          <StatusDonut counts={counts} />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {(Object.keys(STATUS_LABELS) as ApplicationStatus[]).map((status) => (
+              <div key={status} className="rounded-xl bg-paper px-3 py-3">
+                <p className="text-xs text-navy-light">{STATUS_LABELS[status]}</p>
+                <p className="font-mono text-xl font-semibold text-navy mt-1">{counts[status]}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {loadError && (
@@ -187,11 +209,15 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
       )}
 
       {nextAction && (
-        <div className="bg-navy text-white rounded-xl p-5 mb-8">
+        <div className="bg-navy text-white rounded-2xl p-5 sm:p-6 mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
           <p className="text-xs font-medium uppercase tracking-wide text-white/70 mb-1">Your next best action</p>
           <h2 className="font-display text-lg font-semibold">{nextAction.title}</h2>
           <p className="text-sm text-white/80 mt-1 max-w-xl">{nextAction.detail}</p>
-          <p className="text-xs text-white/60 mt-3">Open the relevant application card below to continue.</p>
+          </div>
+          <button type="button" onClick={() => focusApplication(nextAction.id)} className="shrink-0 rounded-seal bg-white text-navy text-sm font-medium px-4 py-2.5 hover:bg-navy-50 transition-colors">
+            Continue below <span aria-hidden="true" className="ml-1">&darr;</span>
+          </button>
         </div>
       )}
 
@@ -217,7 +243,13 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
         </div>
       )}
 
-      <h2 className="font-display text-lg font-semibold text-navy mb-5">Tracked applications</h2>
+      <div className="flex items-end justify-between gap-3 mb-4">
+        <div>
+          <h2 className="font-display text-xl font-semibold text-navy">Tracked applications</h2>
+          <p className="text-sm text-navy-light mt-1">Update each one as you move through the provider&apos;s process.</p>
+        </div>
+        <span className="text-xs font-medium text-navy-light whitespace-nowrap">{applications.length} total</span>
+      </div>
       {applications.length === 0 ? (
         <div className="bg-white rounded-xl border border-hairline p-8 text-center">
           <p className="text-sm text-navy-light">Nothing tracked yet. Save a scholarship from your matches, then start tracking it here.</p>
@@ -226,28 +258,35 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {applications.map((a) => {
             return (
-              <div key={a.id} className="relative bg-white rounded-xl border border-hairline p-5 flex gap-4 shadow-card">
+              <div id={`application-${a.id}`} key={a.id} className="relative bg-white rounded-2xl border border-hairline p-4 sm:p-5 shadow-card scroll-mt-6">
                 {flashIds.has(a.id) && <span className="status-flash" aria-hidden="true" />}
-                <ProviderMonogram name={a.scholarship.provider_name} size={52} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-medium text-ink leading-snug">{a.scholarship.title}</p>
-                      <p className="text-xs text-navy-light mt-0.5">{a.scholarship.provider_name}</p>
+                <div className="flex items-start gap-3">
+                  <ProviderMonogram name={a.scholarship.provider_name} size={44} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium text-ink leading-snug">{a.scholarship.title}</p>
+                        <p className="text-xs text-navy-light mt-0.5">{a.scholarship.provider_name}</p>
+                      </div>
+                      <button type="button" onClick={() => stopTracking(a.id)} disabled={pendingIds.has(a.id)} className="shrink-0 text-xs text-navy-light hover:text-rose disabled:opacity-50">Remove</button>
                     </div>
-                    <button type="button" onClick={() => stopTracking(a.id)} disabled={pendingIds.has(a.id)} className="shrink-0 text-xs text-navy-light hover:text-rose disabled:opacity-50">Remove</button>
+                    <div className="flex flex-wrap items-center gap-2 mt-3">
+                      <DeadlineBadge deadline={a.scholarship.deadline} />
+                      <span className={`text-xs font-medium px-2 py-1 rounded-full ${STATUS_TONE[a.status]}`}>{STATUS_LABELS[a.status]}</span>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 mt-3">
-                    <DeadlineBadge deadline={a.scholarship.deadline} />
-                    <span className={`text-xs font-medium px-2 py-1 rounded-full ${STATUS_TONE[a.status]}`}>{STATUS_LABELS[a.status]}</span>
-                  </div>
-                  <label className="block mt-3">
+                </div>
+                <div className="mt-4 rounded-xl border border-hairline bg-paper/50 p-3">
+                  <label className="block">
                     <span className="sr-only">Status</span>
+                    <span className="text-xs font-medium text-navy-light block mb-1.5">Where are you with this application?</span>
                     <select value={a.status} onChange={(e) => updateStatus(a.id, e.target.value as ApplicationStatus)} disabled={pendingIds.has(a.id)}
-                      className="text-sm rounded-lg border border-hairline bg-white px-3 py-2 disabled:opacity-50">
+                      className="w-full text-sm rounded-lg border border-hairline bg-white px-3 py-2.5 disabled:opacity-50">
                       {(Object.keys(STATUS_LABELS) as ApplicationStatus[]).map((s) => (<option key={s} value={s}>{STATUS_LABELS[s]}</option>))}
                     </select>
                   </label>
+                </div>
+                <div className="mt-4">
                   {/* PHASE 4 OUTCOME: a rejection is a dead end today.
                       Point the student at open awards in their discipline so
                       a "no" becomes a next step instead of a stop. */}
@@ -260,9 +299,9 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
                     </Link>
                   )}
                   {a.scholarship.application_url ? (
-                    <button type="button" onClick={() => openApplication(a)} className="inline-block text-xs font-medium text-navy hover:underline mt-3">Open application &rarr;</button>
+                    <button type="button" onClick={() => openApplication(a)} className="inline-flex items-center justify-center rounded-seal bg-navy text-white text-sm font-medium px-4 py-2.5 hover:bg-navy-light transition-colors">Open provider application <span aria-hidden="true" className="ml-2">&rarr;</span></button>
                   ) : a.scholarship.how_to_apply ? (
-                    <p className="text-xs text-navy-light mt-3 leading-relaxed"><span className="font-medium text-ink">How to apply: </span>{a.scholarship.how_to_apply}</p>
+                    <p className="text-sm text-navy-light leading-relaxed"><span className="font-medium text-ink">How to apply: </span>{a.scholarship.how_to_apply}</p>
                   ) : null}
                   <DraftPanel applicationId={a.id} scholarshipTitle={a.scholarship.title}
                     draft={{ draft_statement: a.draft_statement, draft_summary: a.draft_summary, draft_generated_at: a.draft_generated_at, draft_confirmed_at: a.draft_confirmed_at }}
