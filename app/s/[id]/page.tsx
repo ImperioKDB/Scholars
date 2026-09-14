@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { createPublicClient } from "@/lib/supabase/public";
 import { formatVerifiedOn } from "@/lib/dates";
+import { Breadcrumbs, SeoJsonLd } from "@/components/SeoJsonLd";
 // app/s/[id]/page.tsx
 // GET /s/[id] -- public, unauthenticated share landing page for a single
 // verified scholarship. Deliberately outside app/scholarships/** (which
@@ -63,6 +64,13 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       " \u00b7 Deadline " +
       scholarship.deadline +
       ". See if you qualify on Scholars.",
+    alternates: { canonical: `/s/${id}` },
+    openGraph: {
+      title: scholarship.title + " -- Scholars",
+      description: scholarship.provider_name + ". See if you qualify on Scholars.",
+      type: "article",
+      url: `/s/${id}`,
+    },
   };
 }
 function formatDeadline(deadline: string): string {
@@ -82,6 +90,7 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
         <div className="mb-6">
           <Logo className="text-navy" />
         </div>
+        <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Scholarship", href: "/" }, { name: scholarship.title }]} />
         <div className="bg-white rounded-2xl border border-hairline shadow-card p-6">
           <p className="text-xs font-medium text-navy-light mb-1">{scholarship.provider_name}</p>
           <h1 className="font-display text-2xl font-semibold text-navy leading-snug mb-4">
@@ -110,8 +119,18 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
               : "Verified by the Scholars team."}
           </p>
           {scholarship.description && (
-            <p className="text-sm text-ink leading-relaxed mb-5">{scholarship.description}</p>
+            <div className="mb-5">
+              <h2 className="font-display text-lg font-semibold text-navy mb-2">About this scholarship</h2>
+              <p className="text-sm text-ink leading-relaxed">{scholarship.description}</p>
+            </div>
           )}
+          <div className="rounded-xl border border-hairline p-4 mb-5">
+            <h2 className="font-display text-lg font-semibold text-navy mb-2">Who it is for</h2>
+            <p className="text-sm text-navy-light leading-relaxed">
+              This listing is for {scholarship.level === "both" ? "undergraduate and postgraduate" : scholarship.level} students
+              {scholarship.discipline ? ` studying ${scholarship.discipline}` : ""}. Build a free profile to check your full eligibility against the verified requirements.
+            </p>
+          </div>
           <div className="flex items-start gap-3 bg-navy-50 rounded-xl p-4 mb-5">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-navy-light shrink-0 mt-0.5" aria-hidden="true">
               <rect x="4" y="10" width="16" height="10" rx="2" />
@@ -136,6 +155,24 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
             </Link>
           </p>
         </div>
+        <SeoJsonLd
+          data={{
+            "@context": "https://schema.org",
+            "@type": "WebPage",
+            name: scholarship.title,
+            description: scholarship.description ?? `${scholarship.title} from ${scholarship.provider_name}.`,
+            url: `/s/${id}`,
+            dateModified: scholarship.last_verified_at ?? undefined,
+            breadcrumb: {
+              "@type": "BreadcrumbList",
+              itemListElement: [
+                { "@type": "ListItem", position: 1, name: "Home", item: "/" },
+                { "@type": "ListItem", position: 2, name: "Scholarship", item: "/" },
+                { "@type": "ListItem", position: 3, name: scholarship.title, item: `/s/${id}` },
+              ],
+            },
+          }}
+        />
       </div>
     </div>
   );

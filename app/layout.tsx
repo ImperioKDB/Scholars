@@ -20,9 +20,28 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "Scholars | Find scholarships you're actually eligible for",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://scholars.com.ng"),
+  title: {
+    default: "Scholars | Find scholarships you're actually eligible for",
+    template: "%s | Scholars",
+  },
   description:
     "Scholars matches your academic profile with scholarships you can realistically win, and keeps every deadline in one place.",
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: "Scholars",
+    title: "Find scholarships you're actually eligible for",
+    description:
+      "Create one profile and discover verified scholarships for students in Nigeria.",
+    url: "/",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Find scholarships you're actually eligible for",
+    description:
+      "Create one profile and discover verified scholarships for students in Nigeria.",
+  },
 };
 
 export default function RootLayout({

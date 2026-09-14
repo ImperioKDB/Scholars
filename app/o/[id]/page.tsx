@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { createPublicClient } from "@/lib/supabase/public";
+import { Breadcrumbs, SeoJsonLd } from "@/components/SeoJsonLd";
 
 // app/o/[id]/page.tsx
 // GET /o/[id] -- public, unauthenticated share landing page for a single
@@ -77,7 +78,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   if (!opportunity) {
     return { title: "Opportunity not found -- Scholars" };
   }
-  const base = process.env.NEXT_PUBLIC_APP_URL || "https://scholars-eight.vercel.app";
+  const base = process.env.NEXT_PUBLIC_APP_URL || "https://scholars.com.ng";
   const description =
     opportunity.provider_name +
     (opportunity.compensation ? " \u00b7 " + opportunity.compensation : "") +
@@ -86,6 +87,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return {
     title: opportunity.title + " -- Scholars",
     description,
+    alternates: { canonical: `/o/${id}` },
     openGraph: {
       title: opportunity.title + " -- Scholars",
       description,
@@ -121,6 +123,7 @@ export default async function PublicOpportunityPage({ params }: { params: Promis
         <div className="mb-6">
           <Logo className="text-navy" />
         </div>
+        <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Opportunity", href: "/" }, { name: opportunity.title }]} />
         <div className="bg-white rounded-2xl border border-hairline shadow-card p-6">
           <div className="flex items-center gap-2 mb-3">
             <span className={`text-xs font-medium px-2 py-1 rounded-full ${TYPE_TONES[opportunity.type]}`}>
@@ -150,7 +153,18 @@ export default async function PublicOpportunityPage({ params }: { params: Promis
             {opportunity.discipline && <span className="text-xs text-navy-light">&middot; {opportunity.discipline}</span>}
           </div>
           {opportunity.description && (
-            <p className="text-sm text-ink leading-relaxed mb-5">{opportunity.description}</p>
+            <div className="mb-5">
+              <h2 className="font-display text-lg font-semibold text-navy mb-2">About this opportunity</h2>
+              <p className="text-sm text-ink leading-relaxed">{opportunity.description}</p>
+            </div>
+          )}
+          {(opportunity.duration || opportunity.how_to_apply || opportunity.application_url) && (
+            <div className="rounded-xl border border-hairline p-4 mb-5 space-y-2">
+              <h2 className="font-display text-lg font-semibold text-navy">Application details</h2>
+              {opportunity.duration && <p className="text-sm text-navy-light"><span className="font-medium text-navy">Duration:</span> {opportunity.duration}</p>}
+              {opportunity.how_to_apply && <p className="text-sm text-navy-light leading-relaxed">{opportunity.how_to_apply}</p>}
+              {opportunity.application_url && <a href={opportunity.application_url} rel="nofollow" className="inline-block text-sm font-medium text-navy underline">Visit the official application page</a>}
+            </div>
           )}
           <div className="flex items-start gap-3 bg-navy-50 rounded-xl p-4 mb-5">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-navy-light shrink-0 mt-0.5" aria-hidden="true">
@@ -175,6 +189,23 @@ export default async function PublicOpportunityPage({ params }: { params: Promis
             </Link>
           </p>
         </div>
+        <SeoJsonLd
+          data={{
+            "@context": "https://schema.org",
+            "@type": "WebPage",
+            name: opportunity.title,
+            description: opportunity.description ?? `${opportunity.title} from ${opportunity.provider_name}.`,
+            url: `/o/${id}`,
+            breadcrumb: {
+              "@type": "BreadcrumbList",
+              itemListElement: [
+                { "@type": "ListItem", position: 1, name: "Home", item: "/" },
+                { "@type": "ListItem", position: 2, name: "Opportunity", item: "/" },
+                { "@type": "ListItem", position: 3, name: opportunity.title, item: `/o/${id}` },
+              ],
+            },
+          }}
+        />
       </div>
     </div>
   );

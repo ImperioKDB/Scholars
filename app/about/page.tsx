@@ -7,6 +7,7 @@ import { AboutPhotoUploader } from "@/components/AboutPhotoUploader";
 export const metadata: Metadata = {
   title: "About | Scholars",
   description: "Why Scholars exists, how the matching works, and who builds it.",
+  alternates: { canonical: "/about" },
 };
 
 // Fixed object name in the public 'site' bucket (migration 0013). Fixed on

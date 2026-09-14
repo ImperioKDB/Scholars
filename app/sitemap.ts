@@ -17,18 +17,16 @@ const STATIC_PATHS = [
   "/",
   "/about",
   "/reviews",
+  "/scholarships-in-nigeria",
+  "/opportunities-for-students",
   "/legal/privacy",
   "/legal/terms",
-  "/login",
-  "/signup",
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = process.env.NEXT_PUBLIC_APP_URL || "https://scholars-eight.vercel.app";
-  const now = new Date();
+  const base = process.env.NEXT_PUBLIC_APP_URL || "https://scholars.com.ng";
   const staticRoutes: MetadataRoute.Sitemap = STATIC_PATHS.map((path) => ({
     url: base + path,
-    lastModified: now,
     changeFrequency: path === "/" ? "daily" : "monthly",
     priority: path === "/" ? 1.0 : 0.5,
   }));
