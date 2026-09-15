@@ -7,10 +7,6 @@
     {
       "path": "/api/cron/deadline-check",
       "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/notification-worker",
-      "schedule": "0 * * * *"
     }
   ]
 }
