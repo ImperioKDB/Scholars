@@ -50,7 +50,7 @@ function levelLabel(level: LiveScholarship["level"]): string {
 export default async function LandingPage() {
   const live = await loadLiveScholarships();
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen overflow-y-auto scroll-smooth">
       <header className="border-b border-hairline">
         <div className="mx-auto max-w-6xl px-6 py-5 flex items-center justify-between">
           <Logo className="text-navy" />
@@ -68,7 +68,7 @@ export default async function LandingPage() {
       </header>
       <main>
         {/* Hero */}
-        <section className="mx-auto max-w-6xl px-6 pt-16 pb-20 grid md:grid-cols-[1.1fr_0.9fr] gap-14 items-center">
+        <section className="mx-auto max-w-7xl min-h-[calc(100dvh-80px)] px-6 lg:px-10 py-20 md:py-24 grid md:grid-cols-[1.1fr_0.9fr] gap-14 items-center">
           <div>
             <span className="inline-flex items-center gap-2 rounded-full border border-emerald/20 bg-emerald-light px-3.5 py-1.5 text-xs font-medium text-emerald mb-5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald" />
@@ -133,8 +133,8 @@ export default async function LandingPage() {
           </div>
         </section>
         {/* How it works */}
-        <section id="how-it-works" className="border-t border-hairline bg-white">
-          <div className="mx-auto max-w-6xl px-6 py-16">
+        <section id="how-it-works" className="border-t border-hairline bg-white min-h-[65vh] flex items-center">
+          <div className="mx-auto max-w-7xl w-full px-6 lg:px-10 py-20 md:py-24">
             <h2 className="font-display text-2xl font-semibold text-navy mb-10">
               How Scholars works
             </h2>
