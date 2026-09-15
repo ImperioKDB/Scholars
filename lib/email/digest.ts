@@ -20,6 +20,7 @@ import { logError } from '@/lib/logging'
 import { renderNewListingsDigest, type EmailListing } from '@/lib/email/template'
 import { sendEmail } from '@/lib/email/send'
 import { firstName, getAuthEmailsByUserId } from '@/lib/email/authRecipients'
+import { claimNotificationDelivery, markNotificationAccepted, markNotificationRetryable } from '@/lib/email/outbox'
 
 export const DIGEST_WINDOW_DAYS = 7
 export const DIGEST_CAP = 6
@@ -127,15 +128,33 @@ export async function runNewListingDigest(opts: { minIntervalMs?: number } = {})
         ...pendingSch.map((s) => ({ profile_id: p.id, listing_kind: 'scholarship', listing_id: s.id })),
         ...pendingOpp.map((o) => ({ profile_id: p.id, listing_kind: 'opportunity', listing_id: o.id })),
       ]
+      const pendingKey = logInsert.map((item) => `${item.listing_kind}:${item.listing_id}`).join('|')
+      let deliveryId: string | null = null
       try {
+        const delivery = await claimNotificationDelivery(supabase, {
+          profileId: p.id,
+          campaignKey: 'new_listing_digest',
+          scheduleBucket: 'new-listings',
+          dedupeKey: `new_listing_digest:${p.id}:${pendingKey}`,
+          templateVersion: 'new-listing-digest-v1',
+        })
+        if (!delivery) continue
+        deliveryId = delivery.id
         const res = await sendEmail({ to: email, subject, html, text })
         summary.emails_sent += res.sent
         if (res.dry) summary.dry_run = true
-        await supabase.from('announcement_log').insert(logInsert)
+        await markNotificationAccepted(supabase, delivery.id)
+        const { error: announcementError } = await supabase.from('announcement_log').insert(logInsert)
+        if (announcementError) {
+          logError('email/digest', 'announcement_log_write_failed_after_send', { profile: p.id }, announcementError)
+        }
         summary.students_emailed += 1
         summary.listings_announced += logInsert.length
       } catch (err) {
         summary.failed += 1
+        if (deliveryId) {
+          await markNotificationRetryable(supabase, deliveryId, err).catch(() => {})
+        }
         logError('email/digest', 'digest_send_failed', { profile: p.id }, err)
       }
     }
