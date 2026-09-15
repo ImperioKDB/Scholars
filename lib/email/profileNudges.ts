@@ -80,7 +80,7 @@ return hourWAT >= 7 && hourWAT < 20
 // calculate_profile_completeness) are still empty on this row, so the
 // email can say exactly what's missing. financial_need is excluded: it has
 // a default, so the trigger always counts it as filled.
-function missingProfileLabels(p: Record<string, unknown>): string[] {
+export function missingProfileLabels(p: Record<string, unknown>): string[] {
 const checks: [string, boolean][] = [
 ['full name', Boolean(p.full_name)],
 ['field of study', Boolean(p.discipline)],
