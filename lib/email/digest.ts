@@ -19,6 +19,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { logError } from '@/lib/logging'
 import { renderNewListingsDigest, type EmailListing } from '@/lib/email/template'
 import { sendEmail } from '@/lib/email/send'
+import { firstName, getAuthEmailsByUserId } from '@/lib/email/authRecipients'
 
 export const DIGEST_WINDOW_DAYS = 7
 export const DIGEST_CAP = 6
@@ -53,7 +54,7 @@ export async function runNewListingDigest(opts: { minIntervalMs?: number } = {})
     const since = new Date(Date.now() - DIGEST_WINDOW_DAYS * 86400000).toISOString()
     const now = Date.now()
     const [{ data: profiles }, { data: newSch }, { data: newOpp }, { data: logRows }] = await Promise.all([
-      supabase.from('profiles').select('id,email,full_name'),
+      supabase.from('profiles').select('id,full_name'),
       supabase
         .from('scholarships')
         .select('id,title,provider_name,amount,deadline')
@@ -73,6 +74,8 @@ export async function runNewListingDigest(opts: { minIntervalMs?: number } = {})
     const announced = new Set(
       (logRows ?? []).map((r) => `${r.profile_id}:${r.listing_kind}:${r.listing_id}`)
     )
+    const profileRows = (profiles ?? []) as { id: string; full_name: string | null }[]
+    const emailById = await getAuthEmailsByUserId(supabase, profileRows.map((p) => p.id))
     const lastDigestAt = new Map<string, number>()
     for (const r of logRows ?? []) {
       const t = Date.parse(r.created_at)
@@ -81,7 +84,12 @@ export async function runNewListingDigest(opts: { minIntervalMs?: number } = {})
     }
     const schList = (newSch ?? []) as { id: string; title: string; provider_name: string; amount: string | null; deadline: string | null }[]
     const oppList = (newOpp ?? []) as { id: string; type: string; title: string; provider_name: string; compensation: string | null; deadline: string | null }[]
-    for (const p of (profiles ?? []) as { id: string; email: string; full_name: string | null }[]) {
+    for (const p of profileRows) {
+      const email = emailById.get(p.id)
+      if (!email) {
+        logError('email/digest', 'no_email_for_profile', { profile: p.id })
+        continue
+      }
       const last = lastDigestAt.get(p.id)
       if (minIntervalMs > 0 && last && now - last < minIntervalMs) continue
       const pendingSch = schList.filter((s) => !announced.has(`${p.id}:scholarship:${s.id}`))
@@ -110,7 +118,7 @@ export async function runNewListingDigest(opts: { minIntervalMs?: number } = {})
       const shown = items.slice(0, DIGEST_CAP)
       const moreCount = items.length - shown.length
       const { subject, html, text } = renderNewListingsDigest({
-        firstName: p.full_name?.trim().split(/\s+/)[0] || 'there',
+        firstName: firstName(p.full_name),
         items: shown,
         moreCount,
         baseUrl,
@@ -120,7 +128,7 @@ export async function runNewListingDigest(opts: { minIntervalMs?: number } = {})
         ...pendingOpp.map((o) => ({ profile_id: p.id, listing_kind: 'opportunity', listing_id: o.id })),
       ]
       try {
-        const res = await sendEmail({ to: p.email, subject, html, text })
+        const res = await sendEmail({ to: email, subject, html, text })
         summary.emails_sent += res.sent
         if (res.dry) summary.dry_run = true
         await supabase.from('announcement_log').insert(logInsert)

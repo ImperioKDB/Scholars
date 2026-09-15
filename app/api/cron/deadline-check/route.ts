@@ -26,6 +26,7 @@ import { sendEmail } from '@/lib/email/send'
 import { runNewListingDigest } from '@/lib/email/digest'
 import { runProfileNudges, PROFILE_NUDGE_INTERVAL_MS } from '@/lib/email/profileNudges'
 import { renderDeadlineReminder, type EmailListing } from '@/lib/email/template'
+import { firstName, getAuthEmailsByUserId } from '@/lib/email/authRecipients'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 const ROUTE = '/api/cron/deadline-check'
@@ -54,7 +55,7 @@ const [{ data: saved }, { data: existing }] = await Promise.all([
 supabase
 .from('saved_scholarships')
 .select(
-'profile_id, scholarship_id, scholarship:scholarships(id,title,provider_name,amount,deadline,application_url), profile:profiles(id,email,full_name)'
+    'profile_id, scholarship_id, scholarship:scholarships(id,title,provider_name,amount,deadline,application_url), profile:profiles(id,full_name)'
 ),
 supabase.from('notifications').select('profile_id, scholarship_id').eq('type', 'deadline_reminder'),
 ])
@@ -63,12 +64,18 @@ const rows = (saved ?? []) as unknown as {
 profile_id: string
 scholarship_id: string
 scholarship: { id: string; title: string; provider_name: string; amount: string | null; deadline: string | null; application_url: string | null } | null
-profile: { id: string; email: string; full_name: string | null } | null
-}[]
-for (const row of rows) {
-const s = row.scholarship
-const p = row.profile
-if (!s || !p || !s.deadline) continue
+    profile: { id: string; full_name: string | null } | null
+  }[]
+  const emailById = await getAuthEmailsByUserId(supabase, rows.map((row) => row.profile_id))
+  for (const row of rows) {
+    const s = row.scholarship
+    const p = row.profile
+    if (!s || !p || !s.deadline) continue
+    const email = emailById.get(row.profile_id)
+    if (!email) {
+      logWarn(ROUTE, 'reminder_skipped_no_auth_email', { profile: row.profile_id })
+      continue
+    }
 if (s.deadline < todayIso || s.deadline > windowEnd) continue
 const key = `${row.profile_id}:${row.scholarship_id}`
 if (reminded.has(key)) continue
@@ -83,13 +90,13 @@ kind_label: 'Scholarship',
 url: `${baseUrlOf()}/scholarships/${s.id}`,
 }
 const { subject, html, text } = renderDeadlineReminder({
-firstName: p.full_name?.trim().split(/\s+/)[0] || 'there',
+      firstName: firstName(p.full_name),
 item,
 daysLeft,
 baseUrl: baseUrlOf(),
 })
 try {
-const res = await sendEmail({ to: p.email, subject, html, text })
+      const res = await sendEmail({ to: email, subject, html, text })
 summary.emails_sent += res.sent
 if (res.dry) summary.dry_run = true
 await supabase.from('notifications').insert({
