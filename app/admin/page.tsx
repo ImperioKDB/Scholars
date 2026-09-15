@@ -51,6 +51,10 @@ async function getStats() {
     gap_nudge_clicked: 0,
     profile_completed: 0,
     whatsapp_opt_in: 0,
+    onboarding_step_completed: 0,
+    onboarding_abandoned: 0,
+    button_clicked: 0,
+    scholarship_issue_reported: 0,
   };
   const monitoring = {
     pageViews: 0,
@@ -119,6 +123,10 @@ export default async function AdminOverviewPage() {
     { label: "Nudge clicks", value: stats.activation.gap_nudge_clicked },
     { label: "Completed profile", value: stats.activation.profile_completed },
     { label: "WhatsApp opt-ins", value: stats.activation.whatsapp_opt_in },
+    { label: "Onboarding steps completed", value: stats.activation.onboarding_step_completed },
+    { label: "Onboarding abandons", value: stats.activation.onboarding_abandoned },
+    { label: "Tracked actions", value: stats.activation.button_clicked },
+    { label: "Listing reports", value: stats.activation.scholarship_issue_reported },
   ];
   const outcomeCards = [
     { label: "In progress", value: stats.outcome.in_progress },

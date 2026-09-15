@@ -222,7 +222,22 @@ function OnboardingForm() {
     if (loading || lastTrackedStep.current === step) return;
     lastTrackedStep.current = step;
     track("onboarding_step_viewed", { step, label: STEPS[step] ?? "unknown" });
+    void fetch("/api/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ onboarding_step: step, onboarding_last_activity_at: new Date().toISOString() }),
+    }).catch(() => {});
   }, [loading, step]);
+  useEffect(() => {
+    if (!dirty) return;
+    function onVisibilityChange() {
+      if (document.visibilityState === "hidden") {
+        track("onboarding_abandoned", { step, label: STEPS[step] ?? "unknown" });
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [dirty, step]);
   useEffect(() => {
     if (!dirty || saving) return;
     function handler(e: BeforeUnloadEvent) {
@@ -292,6 +307,7 @@ function OnboardingForm() {
       return;
     }
     setError(null);
+    track("onboarding_step_completed", { step, label: STEPS[step] ?? "unknown" });
     setStep((s) => Math.min(s + 1, STEPS.length - 1));
   }
   function goBack() {
