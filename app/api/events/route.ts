@@ -18,6 +18,9 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
 const CLIENT_EVENTS = [
+  'page_viewed',
+  'web_vital',
+  'client_error',
   'onboarding_step_viewed',
   'provisional_matches_viewed',
   'match_viewed',
