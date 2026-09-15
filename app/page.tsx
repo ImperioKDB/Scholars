@@ -68,7 +68,7 @@ export default async function LandingPage() {
       </header>
       <main>
         {/* Hero */}
-        <section className="mx-auto max-w-7xl min-h-[calc(100dvh-80px)] px-6 lg:px-10 py-20 md:py-24 grid md:grid-cols-[1.1fr_0.9fr] gap-14 items-center">
+        <section className="mx-auto max-w-4xl px-6 py-12 md:py-16">
           <div>
             <span className="inline-flex items-center gap-2 rounded-full border border-emerald/20 bg-emerald-light px-3.5 py-1.5 text-xs font-medium text-emerald mb-5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald" />
@@ -100,7 +100,7 @@ export default async function LandingPage() {
               </p>
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-card border border-hairline p-6">
+          <div className="mt-10 max-w-2xl bg-white rounded-2xl shadow-card border border-hairline p-6">
             <p className="font-mono text-xs uppercase tracking-widest text-navy-light mb-4">
               Live on Scholars right now
             </p>
@@ -133,8 +133,8 @@ export default async function LandingPage() {
           </div>
         </section>
         {/* How it works */}
-        <section id="how-it-works" className="border-t border-hairline bg-white min-h-[65vh] flex items-center">
-          <div className="mx-auto max-w-7xl w-full px-6 lg:px-10 py-20 md:py-24">
+        <section id="how-it-works" className="border-t border-hairline bg-white">
+          <div className="mx-auto max-w-4xl px-6 py-14 md:py-16">
             <h2 className="font-display text-2xl font-semibold text-navy mb-10">
               How Scholars works
             </h2>

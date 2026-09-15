@@ -100,7 +100,7 @@ export function HowItWorksRotator() {
     <div>
       <div
         ref={trackRef}
-        className="flex md:grid md:grid-cols-4 gap-6 md:gap-8 overflow-x-auto md:overflow-visible snap-x snap-mandatory scroll-px-6 -mx-6 px-6 md:mx-0 md:px-0 pb-2 md:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="grid grid-cols-1 gap-8"
       >
         {STEPS.map((step, i) => (
           <div
@@ -108,7 +108,7 @@ export function HowItWorksRotator() {
             ref={(el) => {
               cardRefs.current[i] = el;
             }}
-            className="relative shrink-0 w-[82%] sm:w-[60%] md:w-auto snap-start border-t-2 border-navy pt-4 overflow-hidden"
+            className="relative border-t-2 border-navy pt-4 overflow-hidden"
           >
             {/* ghost numeral -- purely typographic, no motion */}
             <span

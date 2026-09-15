@@ -25,8 +25,8 @@ export async function TestimonialsSection() {
   const items = all.slice(0, HOMEPAGE_COUNT);
   const hasMore = all.length > HOMEPAGE_COUNT;
   return (
-    <section className="border-t border-hairline bg-grain min-h-[60vh] flex items-center">
-      <div className="mx-auto max-w-7xl w-full px-6 lg:px-10 py-20 md:py-24">
+    <section className="border-t border-hairline bg-grain">
+      <div className="mx-auto max-w-4xl px-6 py-14 md:py-16">
         <h2 className="font-display text-2xl md:text-3xl font-semibold text-navy mb-8">
           What students say
         </h2>
