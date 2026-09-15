@@ -36,9 +36,9 @@ async function getStats() {
       .not("profile_reminder_last_sent_at", "is", null)
       .order("profile_reminder_last_sent_at", { ascending: false })
       .limit(1),
-    // Activation funnel (Phase 1, migration 0019). Degrades to zeroes
+    // Activation + monitoring events. Degrades to zeroes
     // pre-migration: the select errors and eventRows stays null.
-    supabase.from("events").select("event").gte("created_at", sinceIso),
+    supabase.from("events").select("event, meta").gte("created_at", sinceIso),
     // Push C outcome funnel: what tracked applications turn into. Admin
     // can read all applications via applications_select_admin; students
     // never see this (RLS), and student-facing outcome stats stay gated
@@ -52,9 +52,25 @@ async function getStats() {
     profile_completed: 0,
     whatsapp_opt_in: 0,
   };
+  const monitoring = {
+    pageViews: 0,
+    clientErrors: 0,
+    vitals: {} as Record<string, { total: number; count: number }>,
+  };
   for (const row of eventRows ?? []) {
     if (typeof row.event === "string" && row.event in activation) {
       activation[row.event] += 1;
+    }
+    if (row.event === "page_viewed") monitoring.pageViews += 1;
+    if (row.event === "client_error") monitoring.clientErrors += 1;
+    if (row.event === "web_vital") {
+      const meta = (row.meta ?? {}) as Record<string, unknown>;
+      const name = typeof meta.name === "string" ? meta.name : "unknown";
+      const value = typeof meta.value === "number" ? meta.value : null;
+      if (value !== null) {
+        const current = monitoring.vitals[name] ?? { total: 0, count: 0 };
+        monitoring.vitals[name] = { total: current.total + value, count: current.count + 1 };
+      }
     }
   }
   const outcome: Record<string, number> = {
@@ -83,6 +99,7 @@ async function getStats() {
     lastNudgeAt:
       (lastNudge?.data?.[0]?.profile_reminder_last_sent_at as string | undefined) ?? null,
     activation,
+    monitoring,
     outcome,
     recent: recent ?? [],
   };
@@ -108,6 +125,16 @@ export default async function AdminOverviewPage() {
     { label: "Submitted", value: stats.outcome.submitted },
     { label: "Accepted", value: stats.outcome.accepted },
     { label: "Rejected", value: stats.outcome.rejected },
+  ];
+  const monitoringCards = [
+    { label: "Authenticated page views", value: stats.monitoring.pageViews },
+    { label: "Client errors", value: stats.monitoring.clientErrors },
+    ...["LCP", "INP", "CLS", "TTFB"].map((name) => ({
+      label: `Avg ${name}`,
+      value: stats.monitoring.vitals[name]
+        ? Number((stats.monitoring.vitals[name].total / stats.monitoring.vitals[name].count).toFixed(2))
+        : "—",
+    })),
   ];
   return (
     <div>
@@ -142,6 +169,20 @@ export default async function AdminOverviewPage() {
         </p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {activationCards.map((c) => (
+            <div key={c.label} className="bg-parchment rounded-xl border border-hairline p-4">
+              <p className="font-mono text-2xl font-semibold text-navy">{c.value}</p>
+              <p className="text-xs text-navy-light mt-1">{c.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="bg-white rounded-xl border border-hairline p-5 mb-10">
+        <h2 className="font-display text-lg font-semibold text-navy mb-1">App health, last {ACTIVATION_WINDOW_DAYS} days</h2>
+        <p className="text-sm text-navy-light mb-4">
+          First-party monitoring from authenticated sessions. Web Vitals are reported in milliseconds except CLS; client errors are counted without storing full stack traces or form contents.
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          {monitoringCards.map((c) => (
             <div key={c.label} className="bg-parchment rounded-xl border border-hairline p-4">
               <p className="font-mono text-2xl font-semibold text-navy">{c.value}</p>
               <p className="text-xs text-navy-light mt-1">{c.label}</p>
