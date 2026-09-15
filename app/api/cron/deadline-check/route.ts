@@ -3,7 +3,9 @@
 //
 // Phase 1 - Deadline reminders: one branded email per saved scholarship
 //           whose deadline falls inside DEADLINE_REMINDER_DAYS, deduped by
-//           the notifications table (type 'deadline_reminder').
+//           the notification_deliveries outbox. The legacy notifications
+//           table is still read so the first outbox run does not resend old
+//           reminders.
 // Phase 1b - Profile completion nudges: delegated to
 //           lib/email/profileNudges.ts so the admin manual trigger
 //           (app/api/admin/profile-nudges) runs the exact same logic. The
@@ -32,6 +34,7 @@ export const maxDuration = 300
 const ROUTE = '/api/cron/deadline-check'
 const REMINDER_DAYS = Number(process.env.DEADLINE_REMINDER_DAYS ?? 7)
 const DIGEST_INTERVAL_MS = 2 * 60 * 60 * 1000 // 2 hours
+const OUTBOX_LEASE_MS = 10 * 60 * 1000
 export async function GET(request: Request) {
 const secret = process.env.CRON_SECRET
 const auth = request.headers.get('authorization')
@@ -59,7 +62,7 @@ supabase
 ),
 supabase.from('notifications').select('profile_id, scholarship_id').eq('type', 'deadline_reminder'),
 ])
-const reminded = new Set((existing ?? []).map((r) => `${r.profile_id}:${r.scholarship_id}`))
+    const reminded = new Set((existing ?? []).map((r) => `${r.profile_id}:${r.scholarship_id}`))
 const rows = (saved ?? []) as unknown as {
 profile_id: string
 scholarship_id: string
@@ -76,9 +79,43 @@ scholarship: { id: string; title: string; provider_name: string; amount: string 
       logWarn(ROUTE, 'reminder_skipped_no_auth_email', { profile: row.profile_id })
       continue
     }
-if (s.deadline < todayIso || s.deadline > windowEnd) continue
-const key = `${row.profile_id}:${row.scholarship_id}`
-if (reminded.has(key)) continue
+    if (s.deadline < todayIso || s.deadline > windowEnd) continue
+    const legacyKey = `${row.profile_id}:${row.scholarship_id}`
+    const dedupeKey = `deadline_reminder:${row.profile_id}:${row.scholarship_id}`
+    const { error: intentError } = await supabase.from('notification_deliveries').upsert(
+      {
+        profile_id: row.profile_id,
+        scholarship_id: row.scholarship_id,
+        campaign_key: 'deadline_reminder',
+        channel: 'email',
+        schedule_bucket: 'saved-scholarship-deadline',
+        dedupe_key: dedupeKey,
+        template_version: 'deadline-reminder-v1',
+        status: reminded.has(legacyKey) ? 'accepted' : 'pending',
+        sent_at: reminded.has(legacyKey) ? new Date().toISOString() : null,
+      },
+      { onConflict: 'dedupe_key', ignoreDuplicates: true },
+    )
+    if (intentError) throw intentError
+
+    const now = new Date()
+    const nowIso = now.toISOString()
+    const leaseUntil = new Date(now.getTime() + OUTBOX_LEASE_MS).toISOString()
+    const { data: claim, error: claimError } = await supabase
+      .from('notification_deliveries')
+      .update({
+        status: 'leased',
+        attempts: 1,
+        available_at: nowIso,
+        lease_until: leaseUntil,
+      })
+      .eq('dedupe_key', dedupeKey)
+      .or(`status.eq.pending,status.eq.retryable,and(status.eq.leased,lease_until.lt.${nowIso})`)
+      .lte('available_at', nowIso)
+      .select('id')
+      .maybeSingle()
+    if (claimError) throw claimError
+    if (!claim) continue
 const daysLeft = Math.max(0, Math.round((Date.parse(s.deadline) - Date.parse(todayIso)) / 86400000))
 const item: EmailListing = {
 id: s.id,
@@ -99,15 +136,30 @@ try {
       const res = await sendEmail({ to: email, subject, html, text })
 summary.emails_sent += res.sent
 if (res.dry) summary.dry_run = true
-await supabase.from('notifications').insert({
-profile_id: row.profile_id,
-scholarship_id: row.scholarship_id,
-type: 'deadline_reminder',
-})
-summary.deadline_reminders += 1
-} catch (err) {
-summary.failed += 1
-logError(ROUTE, 'reminder_send_failed', { profile: row.profile_id, scholarship: row.scholarship_id }, err)
+      await supabase
+        .from('notification_deliveries')
+        .update({ status: 'accepted', sent_at: new Date().toISOString(), lease_until: null })
+        .eq('id', claim.id)
+        .eq('status', 'leased')
+      await supabase.from('notifications').insert({
+        profile_id: row.profile_id,
+        scholarship_id: row.scholarship_id,
+        type: 'deadline_reminder',
+      })
+      summary.deadline_reminders += 1
+    } catch (err) {
+      summary.failed += 1
+      await supabase
+        .from('notification_deliveries')
+        .update({
+          status: 'retryable',
+          lease_until: null,
+          available_at: new Date(Date.now() + OUTBOX_LEASE_MS).toISOString(),
+          last_error: { message: err instanceof Error ? err.message : String(err) },
+        })
+        .eq('id', claim.id)
+        .eq('status', 'leased')
+      logError(ROUTE, 'reminder_send_failed', { profile: row.profile_id, scholarship: row.scholarship_id }, err)
 }
 }
 } catch (err) {
