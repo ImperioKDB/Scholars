@@ -42,6 +42,45 @@ function StatTile({ value, label, tone = "navy" }: { value: string | number; lab
     </div>
   );
 }
+function WeeklyFocus({ profileCompleteness, onboardingStep, matches, savedCount, closingSoonCount }: {
+  profileCompleteness: number;
+  onboardingStep: number;
+  matches: MatchApiItem[];
+  savedCount: number;
+  closingSoonCount: number;
+}) {
+  const action = profileCompleteness < 100
+    ? { title: "Finish your profile", detail: `${100 - profileCompleteness}% more detail unlocks more precise matches.`, href: `/onboarding?step=${Math.min(onboardingStep, 4)}`, label: "Resume profile", id: "resume_onboarding" }
+    : savedCount === 0
+    ? { title: "Save your first opportunity", detail: "Keep a shortlist so you can return when deadlines get closer.", href: "#matches", label: "Browse matches", id: "browse_matches" }
+    : closingSoonCount > 0
+    ? { title: "Review closing opportunities", detail: `${closingSoonCount} matched scholarship${closingSoonCount === 1 ? " is" : "s are"} closing within 30 days.`, href: "#deadlines", label: "Check deadlines", id: "review_deadlines" }
+    : { title: "Refresh your shortlist", detail: "Open a new match and decide whether it belongs in your funding plan.", href: "#matches", label: "See matches", id: "refresh_shortlist" };
+  return (
+    <div className="grid gap-4 md:grid-cols-[1.1fr_1fr] mb-10">
+      <div className="rounded-2xl bg-navy text-white p-5 sm:p-6">
+        <p className="text-xs uppercase tracking-[0.16em] text-white/65">Your focus this week</p>
+        <h2 className="font-display text-xl font-semibold mt-2">{action.title}</h2>
+        <p className="text-sm text-white/75 mt-1 max-w-md">{action.detail}</p>
+        <Link href={action.href} onClick={() => track("weekly_focus_actioned", { action: action.id })} className="inline-flex mt-5 rounded-seal bg-white text-navy text-sm font-medium px-4 py-2.5 hover:bg-navy-50 transition-colors">
+          {action.label} <span aria-hidden="true" className="ml-2">&rarr;</span>
+        </Link>
+      </div>
+      <div className="rounded-2xl border border-hairline bg-white p-5 sm:p-6">
+        <p className="text-xs uppercase tracking-[0.16em] text-navy-light">Fresh matches</p>
+        <p className="text-sm text-navy-light mt-1 mb-3">A short list to review now.</p>
+        <div className="space-y-3">
+          {matches.slice(0, 3).map((match) => (
+            <Link key={match.id} href={`/scholarships/${match.id}`} onClick={() => track("weekly_focus_actioned", { action: "open_fresh_match", scholarship_id: match.id })} className="block text-sm font-medium text-ink hover:text-navy truncate">
+              {match.title}<span className="text-navy-light font-normal"> · {match.tier === "excellent" ? "Excellent fit" : "Worth a look"}</span>
+            </Link>
+          ))}
+          {matches.length === 0 && <p className="text-sm text-navy-light">Complete a few profile fields to unlock fresh matches.</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
 function GapNudgeBanner({ gaps }: { gaps: GapNudge[] }) {
   if (gaps.length === 0) return null;
   const top = gaps[0];
@@ -114,7 +153,7 @@ function DeadlineCard({ scholarship, days }: { scholarship: CardScholarship; day
   );
 }
 export function DashboardClient({
-  userId, fullName, initialMatches, initialProfileCompleteness, initialSaved, initialError, gaps, whatsappOptIn,
+  userId, fullName, initialMatches, initialProfileCompleteness, initialSaved, initialError, gaps, whatsappOptIn, onboardingStep,
 }: {
   userId: string;
   fullName: string | null;
@@ -124,6 +163,7 @@ export function DashboardClient({
   initialError: string | null;
   gaps: GapNudge[];
   whatsappOptIn: boolean;
+  onboardingStep: number;
 }) {
   const router = useRouter();
   const [loadError, setLoadError] = useState<string | null>(initialError);
@@ -154,6 +194,13 @@ export function DashboardClient({
       matches: initialMatches.length,
     });
   }, [initialProfileCompleteness, initialMatches.length]);
+  useEffect(() => {
+    track("weekly_focus_viewed", {
+      completeness: initialProfileCompleteness,
+      saved: initialSaved.length,
+      matches: initialMatches.length,
+    });
+  }, [initialProfileCompleteness, initialSaved.length, initialMatches.length]);
   async function refreshSaved() {
     try {
       const res = await fetchWithTimeout("/api/scholarships/save");
@@ -237,6 +284,9 @@ export function DashboardClient({
           <StatTile value={saved.length} label="Saved" />
         </div>
       </div>
+      <div id="matches">
+        <WeeklyFocus profileCompleteness={profileCompleteness} onboardingStep={onboardingStep} matches={matches} savedCount={saved.length} closingSoonCount={closingSoonCount} />
+      </div>
       {loadError && (
         <p className="text-sm text-rose mb-6" role="alert">
           {loadError}{" "}
@@ -244,7 +294,7 @@ export function DashboardClient({
         </p>
       )}
       {upcomingDeadlines.length > 0 && (
-        <div className="mb-10">
+        <div id="deadlines" className="mb-10 scroll-mt-6">
           <h2 className="font-display text-lg font-semibold text-navy mb-3">Upcoming deadlines</h2>
           <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
             {upcomingDeadlines.map((s) => (

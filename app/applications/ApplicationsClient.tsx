@@ -10,6 +10,7 @@ import { DraftPanel, type Draft } from "@/components/DraftPanel";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useAde } from "@/components/ade/AdeProvider";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { track } from "@/lib/analytics";
 
 type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected";
 
@@ -29,6 +30,17 @@ const STATUS_TONE: Record<ApplicationStatus, string> = {
   in_progress: "bg-amber-light text-amber", submitted: "bg-navy-50 text-navy",
   accepted: "bg-emerald-light text-emerald", rejected: "bg-rose-light text-rose",
 };
+
+function readinessFor(application: ApplicationApiItem) {
+  const items = [
+    { label: "Profile match checked", done: true },
+    { label: "Personal statement ready", done: Boolean(application.draft_statement) },
+    { label: "Provider application opened", done: Boolean(application.link_clicked_at) },
+    { label: "Marked as submitted", done: application.status === "submitted" || application.status === "accepted" },
+  ];
+  const score = Math.round((items.filter((item) => item.done).length / items.length) * 100);
+  return { score, items };
+}
 
 export function ApplicationsClient({ initialApplications, initialSaved, initialError }: {
   initialApplications: ApplicationApiItem[]; initialSaved: SavedApiItem[]; initialError: string | null;
@@ -123,6 +135,7 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
         body: JSON.stringify({ status }),
       });
       if (!res.ok) await load();
+      else if (status === "submitted" || status === "accepted" || status === "rejected") track("outcome_recorded", { status });
     } catch {
       setActionError("Couldn't update status. Check your connection and try again.");
       await load();
@@ -286,6 +299,21 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
                     </select>
                   </label>
                 </div>
+                {(() => {
+                  const readiness = readinessFor(a);
+                  return (
+                    <div className="mt-4">
+                      <div className="flex items-center justify-between gap-3 mb-1.5">
+                        <span className="text-xs font-medium text-navy-light">Application readiness</span>
+                        <span className="font-mono text-xs font-semibold text-navy">{readiness.score}%</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-hairline overflow-hidden"><div className="h-full rounded-full bg-emerald transition-all" style={{ width: `${readiness.score}%` }} /></div>
+                      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 mt-2">
+                        {readiness.items.map((item) => <li key={item.label} className={`text-xs ${item.done ? "text-emerald" : "text-navy-light"}`}>{item.done ? "✓" : "○"} {item.label}</li>)}
+                      </ul>
+                    </div>
+                  );
+                })()}
                 <div className="mt-4">
                   {/* PHASE 4 OUTCOME: a rejection is a dead end today.
                       Point the student at open awards in their discipline so

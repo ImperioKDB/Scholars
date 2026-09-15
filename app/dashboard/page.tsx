@@ -79,6 +79,7 @@ export default async function DashboardPage() {
       initialError={loadError}
       gaps={gaps}
       whatsappOptIn={Boolean(profile?.whatsapp_opt_in)}
+      onboardingStep={Number(profile?.onboarding_step ?? 0)}
     />
   );
 }

@@ -13,6 +13,7 @@ import { fetchWithTimeout } from "@/lib/fetch";
 import { useAde } from "@/components/ade/AdeProvider";
 import type { CyclePrediction } from "@/lib/cycles";
 import { track } from "@/lib/analytics";
+import { ReportScholarshipButton } from "@/components/ReportScholarshipButton";
 
 type ScholarshipDetail = {
   id: string;
@@ -284,6 +285,7 @@ export function ScholarshipDetailClient({
         <div>
           <h2 className="font-display text-lg font-semibold text-navy mb-4">Eligibility requirements</h2>
           <RequirementsList requirements={scholarship.requirements} />
+          <ReportScholarshipButton scholarshipId={scholarship.id} />
         </div>
       </div>
 

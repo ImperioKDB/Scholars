@@ -31,6 +31,8 @@ xp_total: number;
 // type stays valid even before the migration is applied to a given DB.
 whatsapp_opt_in?: boolean;
 whatsapp_number?: string | null;
+onboarding_step?: number;
+onboarding_last_activity_at?: string | null;
 };
 export const getCurrentUserAndProfile = cache(async () => {
 const supabase = createClient();

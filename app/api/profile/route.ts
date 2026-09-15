@@ -71,6 +71,8 @@ const profileSchema = z.object({
     .optional(),
   whatsapp_opt_in: z.boolean().optional(),
   whatsapp_number: z.string().trim().max(20).nullable().optional(),
+  onboarding_step: z.number().int().min(0).max(4).optional(),
+  onboarding_last_activity_at: z.string().datetime().nullable().optional(),
 })
 // Fire-and-forget activation event. Analytics failures are swallowed:
 // losing a funnel datapoint is acceptable, failing a profile save is not.
