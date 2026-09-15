@@ -85,6 +85,8 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
   if (!scholarship) {
     notFound();
   }
+  const base = process.env.NEXT_PUBLIC_APP_URL || "https://scholars.com.ng";
+  const publicUrl = `${base}/scholarship/${slug}`;
   return (
     <div className="min-h-screen bg-parchment flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
@@ -162,14 +164,14 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
             "@type": "WebPage",
             name: scholarship.title,
             description: scholarship.description ?? `${scholarship.title} from ${scholarship.provider_name}.`,
-            url: `/scholarship/${slug}`,
+            url: publicUrl,
             dateModified: scholarship.last_verified_at ?? undefined,
             breadcrumb: {
               "@type": "BreadcrumbList",
               itemListElement: [
-                { "@type": "ListItem", position: 1, name: "Home", item: "/" },
-                { "@type": "ListItem", position: 2, name: "Scholarship", item: "/" },
-                { "@type": "ListItem", position: 3, name: scholarship.title, item: `/scholarship/${slug}` },
+                { "@type": "ListItem", position: 1, name: "Home", item: `${base}/` },
+                { "@type": "ListItem", position: 2, name: "Scholarship", item: `${base}/scholarships-in-nigeria` },
+                { "@type": "ListItem", position: 3, name: scholarship.title, item: publicUrl },
               ],
             },
           }}

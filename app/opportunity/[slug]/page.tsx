@@ -118,6 +118,8 @@ export default async function PublicOpportunityPage({ params }: { params: Promis
   if (!opportunity) {
     notFound();
   }
+  const base = process.env.NEXT_PUBLIC_APP_URL || "https://scholars.com.ng";
+  const publicUrl = `${base}/opportunity/${slug}`;
   return (
     <div className="min-h-screen bg-parchment flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
@@ -196,13 +198,13 @@ export default async function PublicOpportunityPage({ params }: { params: Promis
             "@type": "WebPage",
             name: opportunity.title,
             description: opportunity.description ?? `${opportunity.title} from ${opportunity.provider_name}.`,
-            url: `/opportunity/${slug}`,
+            url: publicUrl,
             breadcrumb: {
               "@type": "BreadcrumbList",
               itemListElement: [
-                { "@type": "ListItem", position: 1, name: "Home", item: "/" },
-                { "@type": "ListItem", position: 2, name: "Opportunity", item: "/" },
-                { "@type": "ListItem", position: 3, name: opportunity.title, item: `/opportunity/${slug}` },
+                { "@type": "ListItem", position: 1, name: "Home", item: `${base}/` },
+                { "@type": "ListItem", position: 2, name: "Opportunity", item: `${base}/opportunities-for-students` },
+                { "@type": "ListItem", position: 3, name: opportunity.title, item: publicUrl },
               ],
             },
           }}
