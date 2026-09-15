@@ -1,0 +1,31 @@
+name: Notification worker
+
+on:
+  schedule:
+    # GitHub Actions cron is UTC. The worker is lease-safe, so a delayed or
+    # overlapping invocation cannot claim the same delivery twice.
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: notification-worker
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch retryable notifications
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$CRON_SECRET"
+          curl --fail-with-body --silent --show-error \
+            --retry 2 --retry-delay 5 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "https://scholars-eight.vercel.app/api/cron/notification-worker"
