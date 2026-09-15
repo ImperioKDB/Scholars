@@ -5,7 +5,7 @@ import { Skeleton, SkeletonCard, SkeletonStatTile } from "@/components/Skeleton"
 // (sidebar included), not just the inner content.
 export default function DashboardLoading() {
   return (
-    <div className="min-h-screen bg-parchment">
+    <div className="min-h-screen bg-parchment md:h-screen md:overflow-hidden">
       <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-60 border-r border-hairline bg-white">
         <div className="px-5 py-5 border-b border-hairline">
           <Skeleton className="h-6 w-28" />
@@ -25,8 +25,8 @@ export default function DashboardLoading() {
         <Skeleton className="h-5 w-24" />
       </header>
 
-      <main className="md:pl-60">
-        <div className="mx-auto max-w-5xl px-6 pt-20 pb-10 md:pt-10">
+      <main className="md:pl-60 md:h-screen md:overflow-y-auto md:overscroll-contain">
+        <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-20 pb-10 md:pt-10">
           <Skeleton className="h-8 w-48 mb-2" />
           <Skeleton className="h-4 w-64 mb-6" />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">

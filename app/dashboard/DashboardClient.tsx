@@ -57,7 +57,7 @@ function WeeklyFocus({ profileCompleteness, onboardingStep, matches, savedCount,
     ? { title: "Review closing opportunities", detail: `${closingSoonCount} matched scholarship${closingSoonCount === 1 ? " is" : "s are"} closing within 30 days.`, href: "#deadlines", label: "Check deadlines", id: "review_deadlines" }
     : { title: "Refresh your shortlist", detail: "Open a new match and decide whether it belongs in your funding plan.", href: "#matches", label: "See matches", id: "refresh_shortlist" };
   return (
-    <div className="grid gap-4 md:grid-cols-[1.1fr_1fr] mb-10">
+    <div className="grid grid-cols-1 gap-5 mb-10">
       <div className="rounded-2xl bg-navy text-white p-5 sm:p-6">
         <p className="text-xs uppercase tracking-[0.16em] text-white/65">Your focus this week</p>
         <h2 className="font-display text-xl font-semibold mt-2">{action.title}</h2>
@@ -126,7 +126,7 @@ function DeadlineCard({ scholarship, days }: { scholarship: CardScholarship; day
   }
   return (
     <div className={[
-      "relative shrink-0 w-56 bg-white rounded-xl border border-hairline p-4",
+      "relative w-full bg-white rounded-xl border border-hairline p-4",
       "transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none",
       "active:scale-[0.97]",
       navigating ? "scale-[0.97] opacity-80" : "scale-100 opacity-100",
@@ -277,7 +277,7 @@ export function DashboardClient({
         )}
         <GapNudgeBanner gaps={gaps} />
         <WhatsappOptIn initialOptIn={whatsappOptIn} />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
           <StatTile value={openMatches.length} label="Open now" />
           <StatTile value={comingSoon.length} label="Coming soon" tone={comingSoon.length > 0 ? "amber" : "navy"} />
           <StatTile value={closingSoonCount} label="Closing within 30 days" tone={closingSoonCount > 0 ? "amber" : "navy"} />
@@ -296,7 +296,7 @@ export function DashboardClient({
       {upcomingDeadlines.length > 0 && (
         <div id="deadlines" className="mb-10 scroll-mt-6">
           <h2 className="font-display text-lg font-semibold text-navy mb-3">Upcoming deadlines</h2>
-          <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+          <div className="space-y-3 max-w-3xl">
             {upcomingDeadlines.map((s) => (
               <DeadlineCard key={s.id} scholarship={s} days={daysUntil(s.deadline) as number} />
             ))}
@@ -322,7 +322,7 @@ export function DashboardClient({
           </p>
         </div>
       ) : (
-        <div key={tab} className="grid md:grid-cols-2 gap-4 mb-12">
+        <div key={tab} className="grid grid-cols-1 gap-4 mb-12">
           {filteredMatches.map((m, i) => {
             const met = m.requirements.filter((r) => r.status === "met").length;
             const total = m.requirements.filter((r) => r.status !== "unverifiable").length;
@@ -340,7 +340,7 @@ export function DashboardClient({
         <div className="mb-12">
           <h2 className="font-display text-lg font-semibold text-navy mb-1">Coming soon</h2>
           <p className="text-sm text-navy-light mb-4">Verified scholarships that aren&apos;t accepting applications right now. Save one to keep it on your radar while you get ready.</p>
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4">
             {comingSoon.map((m) => {
               const met = m.requirements.filter((r) => r.status === "met").length;
               const total = m.requirements.filter((r) => r.status !== "unverifiable").length;
@@ -359,7 +359,7 @@ export function DashboardClient({
           <p className="text-sm text-navy-light">Save scholarships from your matches above to track their deadlines here.</p>
         </div>
       ) : (
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 max-w-4xl">
           {saved.map((s) => (
             <ScholarshipCard key={s.scholarship.id} scholarship={s.scholarship} saved pending={pendingIds.has(s.scholarship.id)} onToggleSave={() => toggleSave(s.scholarship.id)} sharerId={userId} />
           ))}
