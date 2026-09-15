@@ -12,6 +12,7 @@ import { RequirementsList, type Requirement } from "@/components/RequirementsLis
 import { fetchWithTimeout } from "@/lib/fetch";
 import { useAde } from "@/components/ade/AdeProvider";
 import type { CyclePrediction } from "@/lib/cycles";
+import { track } from "@/lib/analytics";
 
 type ScholarshipDetail = {
   id: string;
@@ -93,6 +94,11 @@ export function ScholarshipDetailClient({
 
   useEffect(() => {
     window.scrollTo(0, 0);
+    track("match_viewed", {
+      scholarship_id: scholarship.id,
+      score: scholarship.score,
+      tier: scholarship.tier,
+    });
   }, []);
 
   async function toggleSave() {

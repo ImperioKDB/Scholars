@@ -3,6 +3,7 @@ import { Fraunces, Manrope } from "next/font/google";
 import { AdeProvider } from "@/components/ade/AdeProvider";
 import { AuthRescue } from "@/components/AuthRescue";
 import { CookieConsent } from "@/components/CookieConsent";
+import { Monitoring } from "@/components/Monitoring";
 import "./globals.css";
 import "./motion.css";
 
@@ -57,6 +58,7 @@ export default function RootLayout({
             No-op everywhere else. */}
         <AuthRescue />
         <AdeProvider>{children}</AdeProvider>
+        <Monitoring />
         {/* Essential-only cookie consent banner. Mounted outside
             AdeProvider so it renders even on public routes where Ade
             self-gates off (landing, /s/[id], /legal). Consent is stored
