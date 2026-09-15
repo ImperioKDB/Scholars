@@ -258,3 +258,32 @@ const text = [
 ].join("\n");
 return { subject, html: shell(baseUrl, subject, body), text };
 }
+
+export function renderReengagementNudge(args: {
+firstName: string;
+nextAction: string;
+clickUrl: string;
+baseUrl: string;
+}): { subject: string; html: string; text: string } {
+const { firstName, nextAction, clickUrl, baseUrl } = args;
+const subject = "A useful next step is waiting in Scholars";
+const body = `<h1 style="margin:0 0 6px 0;font-family:${DISPLAY};font-size:22px;line-height:28px;color:${NAVY};">Hi ${esc(firstName)},</h1>
+<p style="margin:0 0 16px 0;font-family:${SANS};font-size:14px;line-height:22px;color:${INK};">${esc(nextAction)}.</p>
+<p style="margin:0 0 16px 0;font-family:${SANS};font-size:14px;line-height:22px;color:${INK};">Scholars keeps your opportunities and application progress in one place, so you can take the next step when you are ready.</p>
+${ctaHtml(clickUrl, "Continue in Scholars")}
+<p style="margin:14px 0 0 0;font-family:${SANS};font-size:12px;line-height:18px;color:${MUTED};">You can update your communication preferences in your account settings.</p>`;
+const text = [
+`Hi ${firstName},`,
+"",
+`${nextAction}.`,
+"",
+"Scholars keeps your opportunities and application progress in one place, so you can take the next step when you are ready.",
+"",
+`Continue in Scholars: ${clickUrl}`,
+"",
+`Manage your preferences: ${baseUrl}/settings`,
+"",
+"- Ade, from Scholars",
+].join("\n");
+return { subject, html: shell(baseUrl, subject, body), text };
+}
