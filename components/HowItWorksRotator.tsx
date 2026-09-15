@@ -121,7 +121,6 @@ export function HowItWorksRotator() {
               <span className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-light text-emerald shrink-0">
                 <step.Icon />
               </span>
-              <p className="font-mono text-xs text-emerald">0{i + 1}</p>
             </div>
             <h3 className="relative font-display text-lg font-semibold text-navy mb-2">{step.name}</h3>
             <p className="relative text-sm text-navy-light leading-relaxed">{step.detail}</p>
