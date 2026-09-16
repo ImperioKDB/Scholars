@@ -72,9 +72,15 @@ export function ShareButton({ scholarshipId, scholarshipSlug, opportunityId, opp
         ),
       }).catch(() => {});
     }
+    // Cached match cards can come from before canonical slugs were added.
+    // Route those legacy scholarship shares through /s/[id], which resolves
+    // the UUID and permanently redirects to the canonical slug. Linking
+    // /scholarship/[id] directly produces a 404 and no OG card.
     const publicPath = isOpportunity
       ? `/opportunity/${opportunitySlug ?? entityId}`
-      : `/scholarship/${scholarshipSlug ?? entityId}`;
+      : scholarshipSlug
+      ? `/scholarship/${scholarshipSlug}`
+      : `/s/${entityId}`;
     const url = buildShareUrl("", publicPath, sharerId);
     const text = isOpportunity
       ? title + " -- find it on Scholars"

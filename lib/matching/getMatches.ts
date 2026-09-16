@@ -12,7 +12,7 @@ import type { MatchableProfile, ScholarshipMatch, ScholarshipRule, ScholarshipRo
 // scholarship on every dashboard load was pure payload weight. The detail
 // page fetches its own copy via SCHOLARSHIP_DETAIL_COLUMNS.
 const SCHOLARSHIP_LIST_COLUMNS =
-  "id, title, provider_name, amount, deadline, opens_at, last_cycle_closed_at, application_url, how_to_apply, level, discipline, verified, awards_available, estimated_applicant_pool, competitiveness_tier, historical_acceptance_rate";
+  "id, slug, title, provider_name, amount, deadline, opens_at, last_cycle_closed_at, application_url, how_to_apply, level, discipline, verified, awards_available, estimated_applicant_pool, competitiveness_tier, historical_acceptance_rate";
 const SCHOLARSHIP_DETAIL_COLUMNS = SCHOLARSHIP_LIST_COLUMNS + ", description, last_verified_at";
 
 type CachedMatchPayload = {

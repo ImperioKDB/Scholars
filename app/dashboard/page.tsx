@@ -30,7 +30,7 @@ export default async function DashboardPage() {
         // row entirely instead, matching the pattern already used in
         // app/api/cron/deadline-check/route.ts.
         `id, saved_at,
-         scholarship:scholarships!inner ( id, title, provider_name, description, amount, deadline, opens_at, application_url, level, discipline, verified )`
+         scholarship:scholarships!inner ( id, slug, title, provider_name, description, amount, deadline, opens_at, application_url, level, discipline, verified )`
       )
       .eq("profile_id", user.id)
       .order("saved_at", { ascending: false }),
