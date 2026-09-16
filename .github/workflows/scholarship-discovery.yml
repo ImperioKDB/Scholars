@@ -1,0 +1,30 @@
+name: Scholarship discovery
+
+# Manual-first until the source adapters and review queue have been observed.
+# Enable a schedule only after an administrator turns on specific sources in Supabase.
+on:
+  workflow_dispatch: {}
+  # schedule:
+  #   - cron: '0 6,18 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scholarship-discovery
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run the conservative discovery collector
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          DISCOVERY_API_URL: ${{ vars.APP_URL || 'https://scholars.com.ng' }}
+        run: |
+          set -euo pipefail
+          test -n "$CRON_SECRET"
+          python3 scripts/discovery_collector.py

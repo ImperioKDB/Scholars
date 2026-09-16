@@ -31,6 +31,18 @@ function authorized(request: Request): boolean {
   return Boolean(expected && request.headers.get('authorization') === `Bearer ${expected}`)
 }
 
+export async function GET(request: Request) {
+  if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const service = createServiceClient()
+  const { data, error } = await service
+    .from('discovery_sources')
+    .select('id,name,base_url,source_type,trust_tier,enabled,crawl_policy')
+    .eq('enabled', true)
+    .limit(50)
+  if (error) return NextResponse.json({ error: 'Could not load discovery sources' }, { status: 500 })
+  return NextResponse.json({ sources: data ?? [] })
+}
+
 export async function POST(request: Request) {
   if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const limited = await checkRateLimit(request, { route: 'github-scholarship-discovery', limit: 10 })
