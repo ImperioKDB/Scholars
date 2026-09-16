@@ -14,7 +14,9 @@
 import { Redis } from "@upstash/redis";
 
 const MATCH_CACHE_TTL_SECONDS = 600; // 10 minutes
+const CATALOG_CACHE_TTL_SECONDS = 60; // keep admin edits visible quickly
 const KEY_PREFIX = "scholars:matches:";
+const CATALOG_KEY = "scholars:catalog:v1";
 
 let redis: Redis | null = null;
 
@@ -41,6 +43,26 @@ export async function setCachedMatches(userId: string, payload: unknown): Promis
     await client.set(KEY_PREFIX + userId, payload, { ex: MATCH_CACHE_TTL_SECONDS });
   } catch {
     // fail open: a cache write failure must never break the dashboard
+  }
+}
+
+export async function getCachedCatalog(): Promise<unknown | null> {
+  const client = getRedis();
+  if (!client) return null;
+  try {
+    return await client.get(CATALOG_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export async function setCachedCatalog(payload: unknown): Promise<void> {
+  const client = getRedis();
+  if (!client) return;
+  try {
+    await client.set(CATALOG_KEY, payload, { ex: CATALOG_CACHE_TTL_SECONDS });
+  } catch {
+    // Catalog caching is an optimization; never block matching on Redis.
   }
 }
 

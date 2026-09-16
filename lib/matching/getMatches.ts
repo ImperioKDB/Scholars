@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserAndProfile } from "@/lib/supabase/currentUser";
 import { rankScholarships, evaluateScholarship } from "./engine";
 import { toMatchableProfile } from "./profileMapper";
-import { getCachedMatches, setCachedMatches } from "./matchCache";
+import { getCachedCatalog, getCachedMatches, setCachedCatalog, setCachedMatches } from "./matchCache";
 import { predictNextCycle, type CycleEvent } from "../cycles";
 import { logError } from "@/lib/logging";
 import type { MatchableProfile, ScholarshipMatch, ScholarshipRule, ScholarshipRow } from "./types";
@@ -18,6 +18,10 @@ const SCHOLARSHIP_DETAIL_COLUMNS = SCHOLARSHIP_LIST_COLUMNS + ", description, la
 type CachedMatchPayload = {
   matches: ScholarshipMatch[];
   profileCompleteness: number;
+};
+type CachedCatalogPayload = {
+  scholarships: ScholarshipRow[];
+  rules: ScholarshipRule[];
 };
 
 // Phase 2: attach a predicted next cycle window to each match from
@@ -74,8 +78,20 @@ export async function getMatchesForCurrentUser(): Promise<{
 
   const profile: MatchableProfile = toMatchableProfile(profileRow);
   const supabase = createClient();
-  const [{ data: scholarships, error: scholarshipsError }, { data: rules, error: rulesError }] =
-    await Promise.all([
+  const cachedCatalog = await getCachedCatalog();
+  const catalog =
+    cachedCatalog &&
+    typeof cachedCatalog === "object" &&
+    Array.isArray((cachedCatalog as CachedCatalogPayload).scholarships) &&
+    Array.isArray((cachedCatalog as CachedCatalogPayload).rules)
+      ? (cachedCatalog as CachedCatalogPayload)
+      : null;
+  let scholarships: ScholarshipRow[] | null = catalog?.scholarships ?? null;
+  let rules: ScholarshipRule[] | null = catalog?.rules ?? null;
+  let scholarshipsError: { code?: string; details?: string; hint?: string } | null = null;
+  let rulesError: { code?: string; details?: string; hint?: string } | null = null;
+  if (!catalog) {
+    const [scholarshipsResult, rulesResult] = await Promise.all([
       supabase
         .from("scholarships")
         .select(SCHOLARSHIP_LIST_COLUMNS)
@@ -83,6 +99,14 @@ export async function getMatchesForCurrentUser(): Promise<{
         .in("level", ["undergrad", "both"]),
       supabase.from("scholarship_rules").select("id, scholarship_id, field, operator, value"),
     ]);
+    scholarships = (scholarshipsResult.data ?? null) as unknown as ScholarshipRow[] | null;
+    rules = (rulesResult.data ?? null) as unknown as ScholarshipRule[] | null;
+    scholarshipsError = scholarshipsResult.error;
+    rulesError = rulesResult.error;
+    if (!scholarshipsError && !rulesError && scholarships && rules) {
+      void setCachedCatalog({ scholarships, rules });
+    }
+  }
 
   // HARDENING: previously fetch_failed swallowed the underlying PostgREST
   // error, so schema drift (missing column, missing table) surfaced as a
@@ -107,7 +131,7 @@ export async function getMatchesForCurrentUser(): Promise<{
     return { matches: [], profileCompleteness: profile.profile_completeness, error: "fetch_failed" };
   }
 
-  const rows = ((scholarships ?? []) as unknown as ScholarshipRow[]).map((s) => ({
+  const rows = (scholarships ?? []).map((s) => ({
     ...s,
     description: null as string | null,
   }));
@@ -121,7 +145,7 @@ export async function getMatchesForCurrentUser(): Promise<{
   const ranked = rankScholarships(profile, rows, rulesByScholarship);
   const matches = await attachCyclePredictions(supabase, ranked);
 
-  await setCachedMatches(user.id, {
+  void setCachedMatches(user.id, {
     matches,
     profileCompleteness: profile.profile_completeness,
   });
