@@ -1,0 +1,34 @@
+[
+  {
+    "name": "Federal Ministry of Education Scholarship Portal",
+    "base_url": "https://scholarship.education.gov.ng/",
+    "source_type": "official",
+    "trust_tier": "primary",
+    "enabled": false,
+    "crawl_policy": "manual-review-first"
+  },
+  {
+    "name": "PTDF Scholarship Portal",
+    "base_url": "https://scholarship.ptdf.gov.ng/",
+    "source_type": "provider",
+    "trust_tier": "primary",
+    "enabled": false,
+    "crawl_policy": "manual-review-first"
+  },
+  {
+    "name": "MTN Nigeria Scholarships",
+    "base_url": "https://www.mtn.ng/scholarships/",
+    "source_type": "provider",
+    "trust_tier": "primary",
+    "enabled": false,
+    "crawl_policy": "manual-review-first"
+  },
+  {
+    "name": "ScholarshipAir Nigeria",
+    "base_url": "https://www.scholarshipair.com/",
+    "source_type": "secondary",
+    "trust_tier": "review",
+    "enabled": false,
+    "crawl_policy": "manual-review-first"
+  }
+]
