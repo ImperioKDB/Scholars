@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { getAuthEmailsByUserId, firstName } from '@/lib/email/authRecipients'
 import { sendEmail } from '@/lib/email/send'
-import { renderNewListingsDigest, renderProfileNudge, type EmailListing } from '@/lib/email/template'
+import { renderNewListingsDigest, renderProfileNudge, renderReengagementNudge, type EmailListing } from '@/lib/email/template'
 import { missingProfileLabels } from '@/lib/email/profileNudges'
 import { logError, logWarn } from '@/lib/logging'
 
@@ -82,6 +82,8 @@ export async function GET(request: Request) {
           })
         } else if (candidate.campaign_key === 'new_listing_digest') {
           rendered = await renderDigestFromKey(supabase, candidate.dedupe_key, profile.full_name, baseUrl)
+        } else if (candidate.campaign_key === 'reengagement_treatment') {
+          rendered = await renderTreatmentFromKey(supabase, candidate.dedupe_key, profile.full_name, baseUrl)
         } else {
           throw new Error(`Unsupported campaign: ${candidate.campaign_key}`)
         }
@@ -120,6 +122,29 @@ export async function GET(request: Request) {
 
   logWarn(ROUTE, 'worker_complete', summary)
   return NextResponse.json(summary)
+}
+
+async function renderTreatmentFromKey(
+  supabase: ReturnType<typeof createServiceClient>,
+  dedupeKey: string,
+  fullName: string | null,
+  baseUrl: string,
+): Promise<{ subject: string; html: string; text: string }> {
+  const [, , assignmentId] = dedupeKey.split(':')
+  if (!assignmentId) throw new Error(`Invalid re-engagement delivery key: ${dedupeKey}`)
+  const { data: assignment, error } = await supabase
+    .from('reengagement_assignments')
+    .select('id,deep_link,next_action')
+    .eq('id', assignmentId)
+    .maybeSingle()
+  if (error) throw error
+  if (!assignment) throw new Error(`Assignment not found: ${assignmentId}`)
+  return renderReengagementNudge({
+    firstName: firstName(fullName),
+    nextAction: assignment.next_action,
+    clickUrl: `${baseUrl}/api/reengagement/click/${assignment.id}`,
+    baseUrl,
+  })
 }
 
 async function renderDigestFromKey(
