@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 type Source = { id: string; name: string; base_url: string; source_type: string; trust_tier: string; enabled: boolean; crawl_policy: string; last_crawled_at: string | null }
-type Candidate = { id: string; source_id: string; source_url: string; application_url: string | null; title: string; provider_name: string; description: string | null; amount: string | null; deadline: string | null; level: string; discipline: string | null; eligibility_notes: string | null; evidence_excerpt: string; fetched_at: string; confidence: number | null; status: string; rejection_reason: string | null; reviewed_at: string | null; created_at: string }
+type Candidate = { id: string; source_id: string; source_url: string; application_url: string | null; title: string; provider_name: string; description: string | null; amount: string | null; deadline: string | null; level: string; discipline: string | null; eligibility_notes: string | null; evidence_excerpt: string; fetched_at: string; confidence: number | null; status: string; rejection_reason: string | null; reviewed_at: string | null; duplicate_of: string | null; duplicate_score: number | null; duplicate_reason: string | null; created_at: string }
 
 function formatDate(value: string | null) { return value ? new Date(value).toLocaleDateString() : '—' }
 function confidenceLabel(value: number | null) { return value === null ? 'Unscored' : `${Math.round(value * 100)}% confidence` }
