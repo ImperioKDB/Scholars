@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   if (!guard.ok) return guard.response
   const [{ data: sources, error: sourcesError }, { data: candidates, error: candidatesError }] = await Promise.all([
     supabase.from('discovery_sources').select('id,name,base_url,source_type,trust_tier,enabled,crawl_policy,last_crawled_at').order('name').limit(50),
-    supabase.from('scholarship_discovery_candidates').select('id,source_id,source_url,application_url,title,provider_name,description,amount,deadline,level,discipline,eligibility_notes,evidence_excerpt,fetched_at,confidence,status,rejection_reason,reviewed_at,published_scholarship_id,published_at,duplicate_of,duplicate_score,duplicate_reason,verification_status,verification_http_status,last_verified_at,created_at').order('created_at', { ascending: false }).limit(100),
+    supabase.from('scholarship_discovery_candidates').select('id,source_id,source_url,application_url,title,provider_name,description,amount,deadline,level,discipline,eligibility_notes,evidence_excerpt,fetched_at,confidence,status,rejection_reason,reviewed_at,published_scholarship_id,published_at,duplicate_of,duplicate_score,duplicate_reason,verification_status,verification_http_status,last_verified_at,quality_status,quality_score,quality_issues,quality_scored_at,created_at').order('created_at', { ascending: false }).limit(100),
   ])
   if (sourcesError || candidatesError) return NextResponse.json({ error: 'Could not load discovery data' }, { status: 500 })
   return NextResponse.json({ sources: sources ?? [], candidates: candidates ?? [] })
@@ -34,9 +34,10 @@ export async function PATCH(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: 'Invalid discovery update' }, { status: 400 })
   const { candidate_id: candidateId, status, rejection_reason: rejectionReason } = parsed.data
   if (status === 'published') {
-    const { data: candidate, error: candidateError } = await supabase.from('scholarship_discovery_candidates').select('id,status,published_scholarship_id,title,provider_name,description,amount,deadline,application_url,level,discipline,eligibility_notes,evidence_excerpt,source_url').eq('id', candidateId).single()
+    const { data: candidate, error: candidateError } = await supabase.from('scholarship_discovery_candidates').select('id,status,quality_status,published_scholarship_id,title,provider_name,description,amount,deadline,application_url,level,discipline,eligibility_notes,evidence_excerpt,source_url').eq('id', candidateId).single()
     if (candidateError || !candidate) return NextResponse.json({ error: 'Candidate not found' }, { status: 404 })
     if (candidate.status !== 'approved') return NextResponse.json({ error: 'Only approved candidates can be published' }, { status: 409 })
+    if (candidate.quality_status !== 'ready') return NextResponse.json({ error: 'Candidate must pass quality scoring before publication' }, { status: 409 })
     if (candidate.published_scholarship_id) return NextResponse.json({ error: 'Candidate is already published', scholarship_id: candidate.published_scholarship_id }, { status: 409 })
     const level = candidate.level === 'undergraduate' ? 'undergrad' : candidate.level === 'postgraduate' ? 'postgrad' : 'both'
     const { data: scholarship, error: scholarshipError } = await supabase.from('scholarships').insert({ title: candidate.title, provider_name: candidate.provider_name, description: candidate.description, amount: candidate.amount, deadline: candidate.deadline, application_url: candidate.application_url, level, discipline: candidate.discipline, verified: false, created_by: guard.userId, research_notes: `Discovery evidence:\n${candidate.evidence_excerpt}\n\nSource: ${candidate.source_url}\n${candidate.eligibility_notes ?? ''}` }).select('id').single()
