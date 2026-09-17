@@ -85,7 +85,7 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
   if (!scholarship) {
     notFound();
   }
-  const base = process.env.NEXT_PUBLIC_APP_URL || "https://scholars.com.ng";
+  const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
   const publicUrl = `${base}/scholarship/${slug}`;
   return (
     <div className="min-h-screen bg-parchment flex items-center justify-center px-4 py-10">

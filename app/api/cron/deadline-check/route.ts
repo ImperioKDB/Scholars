@@ -144,5 +144,5 @@ logWarn(ROUTE, 'run_complete', summary)
 return NextResponse.json(summary)
 }
 function baseUrlOf(): string {
-return process.env.NEXT_PUBLIC_APP_URL || 'https://scholars-eight.vercel.app'
+return process.env.NEXT_PUBLIC_APP_URL || 'https://www.scholars.com.ng'
 }

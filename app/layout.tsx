@@ -21,7 +21,7 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://scholars.com.ng"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng"),
   title: {
     default: "Scholars | Find scholarships you're actually eligible for",
     template: "%s | Scholars",

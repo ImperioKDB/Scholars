@@ -41,7 +41,7 @@ export type DigestSummary = {
 export async function runNewListingDigest(opts: { minIntervalMs?: number } = {}): Promise<DigestSummary> {
   const minIntervalMs = opts.minIntervalMs ?? 0
   const supabase = createServiceClient()
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://scholars-eight.vercel.app'
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.scholars.com.ng'
   const summary: DigestSummary = {
     students_emailed: 0,
     emails_sent: 0,

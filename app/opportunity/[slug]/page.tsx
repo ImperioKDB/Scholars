@@ -79,7 +79,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   if (!opportunity) {
     return { title: "Opportunity not found -- Scholars" };
   }
-  const base = process.env.NEXT_PUBLIC_APP_URL || "https://scholars.com.ng";
+  const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
   const description =
     opportunity.provider_name +
     (opportunity.compensation ? " \u00b7 " + opportunity.compensation : "") +
@@ -92,14 +92,14 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     openGraph: {
       title: opportunity.title + " -- Scholars",
       description,
-      images: [`${base}/o/${slug}/opengraph-image`],
+      images: [`${base}/opportunity/${slug}/opengraph-image`],
       type: "website",
     },
     twitter: {
       card: "summary_large_image",
       title: opportunity.title + " -- Scholars",
       description,
-      images: [`${base}/o/${slug}/opengraph-image`],
+      images: [`${base}/opportunity/${slug}/opengraph-image`],
     },
   };
 }
@@ -118,7 +118,7 @@ export default async function PublicOpportunityPage({ params }: { params: Promis
   if (!opportunity) {
     notFound();
   }
-  const base = process.env.NEXT_PUBLIC_APP_URL || "https://scholars.com.ng";
+  const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
   const publicUrl = `${base}/opportunity/${slug}`;
   return (
     <div className="min-h-screen bg-parchment flex items-center justify-center px-4 py-10">

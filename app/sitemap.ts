@@ -24,7 +24,7 @@ const STATIC_PATHS = [
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = process.env.NEXT_PUBLIC_APP_URL || "https://scholars.com.ng";
+  const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
   const staticRoutes: MetadataRoute.Sitemap = STATIC_PATHS.map((path) => ({
     url: base + path,
     changeFrequency: path === "/" ? "daily" : "monthly",

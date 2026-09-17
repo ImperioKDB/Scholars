@@ -42,7 +42,7 @@ const bodySchema = z.object({
 )
 
 function baseUrlOf(): string {
-  return process.env.NEXT_PUBLIC_APP_URL || 'https://scholars-eight.vercel.app'
+  return process.env.NEXT_PUBLIC_APP_URL || 'https://www.scholars.com.ng'
 }
 
 const KIND_LABELS: Record<string, string> = {
