@@ -17,8 +17,7 @@ async function getStats() {
     { count: incompleteProfiles },
     lastLog,
     lastNudge,
-    { data: eventRows },
-    { data: appRows },
+    { data: metricsSummary },
   ] = await Promise.all([
     supabase.from("scholarships").select("*", { count: "exact", head: true }),
     supabase.from("scholarships").select("*", { count: "exact", head: true }).eq("verified", true),
@@ -36,54 +35,43 @@ async function getStats() {
       .not("profile_reminder_last_sent_at", "is", null)
       .order("profile_reminder_last_sent_at", { ascending: false })
       .limit(1),
-    // Activation + monitoring events. Degrades to zeroes
-    // pre-migration: the select errors and eventRows stays null.
-    supabase.from("events").select("event, meta").gte("created_at", sinceIso),
-    // Push C outcome funnel: what tracked applications turn into. Admin
-    // can read all applications via applications_select_admin; students
-    // never see this (RLS), and student-facing outcome stats stay gated
-    // behind a future k-anonymity aggregate.
-    supabase.from("applications").select("status"),
+    // Aggregate inside Postgres instead of serializing every event and
+    // application row into this server component on every admin visit.
+    supabase.rpc("get_admin_metrics_summary", { p_since: sinceIso }),
   ]);
+  const summary = (metricsSummary ?? {}) as {
+    activation?: Record<string, number>;
+    monitoring?: {
+      pageViews?: number;
+      clientErrors?: number;
+      vitals?: Record<string, { total: number; count: number }>;
+    };
+    outcome?: Record<string, number>;
+  };
   const activation: Record<string, number> = {
     profile_created: 0,
     provisional_matches_viewed: 0,
     gap_nudge_clicked: 0,
     profile_completed: 0,
     whatsapp_opt_in: 0,
+    onboarding_step_completed: 0,
+    onboarding_abandoned: 0,
+    button_clicked: 0,
+    scholarship_issue_reported: 0,
   };
+  Object.assign(activation, summary.activation ?? {});
   const monitoring = {
-    pageViews: 0,
-    clientErrors: 0,
-    vitals: {} as Record<string, { total: number; count: number }>,
+    pageViews: summary.monitoring?.pageViews ?? 0,
+    clientErrors: summary.monitoring?.clientErrors ?? 0,
+    vitals: summary.monitoring?.vitals ?? {},
   };
-  for (const row of eventRows ?? []) {
-    if (typeof row.event === "string" && row.event in activation) {
-      activation[row.event] += 1;
-    }
-    if (row.event === "page_viewed") monitoring.pageViews += 1;
-    if (row.event === "client_error") monitoring.clientErrors += 1;
-    if (row.event === "web_vital") {
-      const meta = (row.meta ?? {}) as Record<string, unknown>;
-      const name = typeof meta.name === "string" ? meta.name : "unknown";
-      const value = typeof meta.value === "number" ? meta.value : null;
-      if (value !== null) {
-        const current = monitoring.vitals[name] ?? { total: 0, count: 0 };
-        monitoring.vitals[name] = { total: current.total + value, count: current.count + 1 };
-      }
-    }
-  }
   const outcome: Record<string, number> = {
     in_progress: 0,
     submitted: 0,
     accepted: 0,
     rejected: 0,
   };
-  for (const row of appRows ?? []) {
-    if (typeof row.status === "string" && row.status in outcome) {
-      outcome[row.status] += 1;
-    }
-  }
+  Object.assign(outcome, summary.outcome ?? {});
   const { data: recent } = await supabase
     .from("scholarships")
     .select("id, title, provider_name, deadline, verified, level")
@@ -119,6 +107,10 @@ export default async function AdminOverviewPage() {
     { label: "Nudge clicks", value: stats.activation.gap_nudge_clicked },
     { label: "Completed profile", value: stats.activation.profile_completed },
     { label: "WhatsApp opt-ins", value: stats.activation.whatsapp_opt_in },
+    { label: "Onboarding steps completed", value: stats.activation.onboarding_step_completed },
+    { label: "Onboarding abandons", value: stats.activation.onboarding_abandoned },
+    { label: "Tracked actions", value: stats.activation.button_clicked },
+    { label: "Listing reports", value: stats.activation.scholarship_issue_reported },
   ];
   const outcomeCards = [
     { label: "In progress", value: stats.outcome.in_progress },

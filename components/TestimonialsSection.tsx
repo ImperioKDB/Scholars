@@ -26,7 +26,7 @@ export async function TestimonialsSection() {
   const hasMore = all.length > HOMEPAGE_COUNT;
   return (
     <section className="border-t border-hairline bg-grain">
-      <div className="mx-auto max-w-6xl px-6 py-16">
+      <div className="mx-auto max-w-4xl px-6 py-14 md:py-16">
         <h2 className="font-display text-2xl md:text-3xl font-semibold text-navy mb-8">
           What students say
         </h2>

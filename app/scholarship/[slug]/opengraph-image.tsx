@@ -26,12 +26,9 @@ const OG_COLUMNS = "title, provider_name, amount, deadline";
 export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const supabase = createPublicClient();
-  const { data: scholarship } = await supabase
-    .from("scholarships")
-    .select(OG_COLUMNS)
-    .eq("slug", slug)
-    .eq("verified", true)
-    .maybeSingle();
+  const isLegacyId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
+  const query = supabase.from("scholarships").select(OG_COLUMNS).eq("verified", true);
+  const { data: scholarship } = await (isLegacyId ? query.eq("id", slug) : query.eq("slug", slug)).maybeSingle();
 
   return new ImageResponse(
     (

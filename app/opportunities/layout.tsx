@@ -10,9 +10,9 @@ export default async function OpportunitiesLayout({ children }: { children: Reac
   const avatarUrl = profile?.avatar_url ?? null;
 
   return (
-    <div className="min-h-screen bg-parchment">
+    <div className="min-h-screen bg-parchment md:h-screen md:overflow-hidden">
       <Sidebar fullName={fullName} isAdmin={isAdmin} profileCompleteness={profileCompleteness} xpTotal={xpTotal} avatarUrl={avatarUrl} />
-      <main id="main" className="md:pl-60">
+      <main id="main" className="md:pl-60 md:h-screen md:overflow-y-auto md:overscroll-contain">
         <div className="mx-auto max-w-5xl px-6 pt-20 pb-24 md:pt-10 md:pb-10">{children}</div>
       </main>
     </div>

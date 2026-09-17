@@ -50,6 +50,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { logError } from '@/lib/logging'
 import { renderProfileNudge } from '@/lib/email/template'
 import { sendEmail } from '@/lib/email/send'
+import { claimNotificationDelivery, markNotificationAccepted, markNotificationRetryable } from '@/lib/email/outbox'
 export const PROFILE_NUDGE_INTERVAL_MS =
 Number(process.env.PROFILE_REMINDER_INTERVAL_DAYS ?? 2) * 86400000
 export const PROFILE_NUDGE_MAX_SENDS = Number(process.env.PROFILE_REMINDER_MAX_SENDS ?? 5)
@@ -79,7 +80,7 @@ return hourWAT >= 7 && hourWAT < 20
 // calculate_profile_completeness) are still empty on this row, so the
 // email can say exactly what's missing. financial_need is excluded: it has
 // a default, so the trigger always counts it as filled.
-function missingProfileLabels(p: Record<string, unknown>): string[] {
+export function missingProfileLabels(p: Record<string, unknown>): string[] {
 const checks: [string, boolean][] = [
 ['full name', Boolean(p.full_name)],
 ['field of study', Boolean(p.discipline)],
@@ -205,6 +206,23 @@ if (!email) {
 logError('email/profile-nudges', 'no_email_for_profile', { profile: p.id })
 continue
 }
+const nextReminderNumber = (p.profile_reminder_count ?? 0) + 1
+let delivery: { id: string } | null = null
+try {
+delivery = await claimNotificationDelivery(supabase, {
+profileId: p.id,
+campaignKey: 'profile_nudge',
+scheduleBucket: `reminder-${nextReminderNumber}`,
+dedupeKey: `profile_nudge:${p.id}:${nextReminderNumber}`,
+templateVersion: 'profile-nudge-v1',
+})
+} catch (err) {
+summary.failed += 1
+noteError(err)
+logError('email/profile-nudges', 'outbox_claim_failed', { profile: p.id }, err)
+continue
+}
+if (!delivery) continue
 const { subject, html, text } = renderProfileNudge({
 firstName: p.full_name?.trim().split(/\s+/)[0] || 'there',
 completeness: p.profile_completeness,
@@ -215,6 +233,7 @@ try {
 const res = await sendEmail({ to: email, subject, html, text })
 summary.emails_sent += res.sent
 if (res.dry) summary.dry_run = true
+await markNotificationAccepted(supabase, delivery.id)
 const { error: stateError } = await supabase
 .from('profiles')
 .update({
@@ -230,6 +249,9 @@ summary.students_emailed += 1
 } catch (err) {
 summary.failed += 1
 noteError(err)
+await markNotificationRetryable(supabase, delivery.id, err).catch((outboxError) => {
+logError('email/profile-nudges', 'outbox_retry_state_failed', { profile: p.id }, outboxError)
+})
 logError('email/profile-nudges', 'send_failed', { profile: p.id, email }, err)
 }
 }
