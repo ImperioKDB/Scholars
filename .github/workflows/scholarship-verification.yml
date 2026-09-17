@@ -1,0 +1,42 @@
+name: Scholarship source verification
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '15 */6 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scholarship-verification
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Load candidates needing verification
+        id: candidates
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ vars.APP_URL || 'https://scholars.com.ng' }}
+        run: |
+          set -euo pipefail
+          test -n "$CRON_SECRET"
+          response=$(curl --fail-with-body --silent --show-error --max-time 30 -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/integrations/github/scholarship-verification")
+          ids=$(echo "$response" | jq -c '.candidate_ids')
+          echo "candidate_ids=$ids" >> "$GITHUB_OUTPUT"
+      - name: Verify source URLs
+        if: steps.candidates.outputs.candidate_ids != '[]'
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ vars.APP_URL || 'https://scholars.com.ng' }}
+          CANDIDATE_IDS: ${{ steps.candidates.outputs.candidate_ids }}
+        run: |
+          set -euo pipefail
+          payload=$(jq -cn --argjson ids "$CANDIDATE_IDS" '{candidate_ids: $ids}')
+          curl --fail-with-body --silent --show-error --max-time 120 \
+            -X POST -H "Authorization: Bearer $CRON_SECRET" -H 'Content-Type: application/json' \
+            --data "$payload" "$APP_URL/api/integrations/github/scholarship-verification"
