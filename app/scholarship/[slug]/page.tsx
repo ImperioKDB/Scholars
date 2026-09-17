@@ -43,9 +43,12 @@ type PublicScholarship = {
 };
 async function loadScholarship(slug: string): Promise<PublicScholarship | null> {
   const supabase = createPublicClient();
-  const isLegacyId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
-  const query = supabase.from("scholarships").select(PUBLIC_COLUMNS).eq("verified", true);
-  const { data } = await (isLegacyId ? query.eq("id", slug) : query.eq("slug", slug)).maybeSingle();
+  const { data } = await supabase
+    .from("scholarships")
+    .select(PUBLIC_COLUMNS)
+    .eq("slug", slug)
+    .eq("verified", true)
+    .maybeSingle();
   return data as PublicScholarship | null;
 }
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
@@ -54,32 +57,20 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   if (!scholarship) {
     return { title: "Scholarship not found -- Scholars" };
   }
-  const base = process.env.NEXT_PUBLIC_APP_URL || "https://scholars.com.ng";
-  const canonicalSlug = scholarship.slug;
-  const canonicalUrl = `${base}/scholarship/${canonicalSlug}`;
-  const imageUrl = `${canonicalUrl}/opengraph-image`;
-  const description =
-    scholarship.provider_name +
-    (scholarship.amount ? " · " + scholarship.amount : "") +
-    " · Deadline " +
-    scholarship.deadline +
-    ". See if you qualify on Scholars.";
   return {
     title: scholarship.title + " -- Scholars",
-    description,
-    alternates: { canonical: `/scholarship/${canonicalSlug}` },
+    description:
+      scholarship.provider_name +
+      (scholarship.amount ? " \u00b7 " + scholarship.amount : "") +
+      " \u00b7 Deadline " +
+      scholarship.deadline +
+      ". See if you qualify on Scholars.",
+    alternates: { canonical: `/scholarship/${slug}` },
     openGraph: {
       title: scholarship.title + " -- Scholars",
-      description,
+      description: scholarship.provider_name + ". See if you qualify on Scholars.",
       type: "article",
-      url: canonicalUrl,
-      images: [{ url: imageUrl, width: 1200, height: 630, alt: scholarship.title }],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title: scholarship.title + " -- Scholars",
-      description,
-      images: [{ url: imageUrl, width: 1200, height: 630, alt: scholarship.title }],
+      url: `/scholarship/${slug}`,
     },
   };
 }
@@ -94,8 +85,8 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
   if (!scholarship) {
     notFound();
   }
-  const base = process.env.NEXT_PUBLIC_APP_URL || "https://scholars.com.ng";
-  const publicUrl = `${base}/scholarship/${scholarship.slug}`;
+  const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
+  const publicUrl = `${base}/scholarship/${slug}`;
   return (
     <div className="min-h-screen bg-parchment flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">

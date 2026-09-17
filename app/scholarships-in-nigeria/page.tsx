@@ -39,7 +39,7 @@ export default async function ScholarshipsInNigeriaPage() {
     .order("deadline", { ascending: true })
     .limit(50);
   const scholarships = (data ?? []) as Scholarship[];
-  const base = process.env.NEXT_PUBLIC_APP_URL || "https://scholars.com.ng";
+  const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
 
   return (
     <main className="min-h-screen bg-parchment px-4 py-10 md:py-16">

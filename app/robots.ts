@@ -7,7 +7,7 @@ import type { MetadataRoute } from "next";
 // authenticated or internal is disallowed so search engines never surface
 // dashboard, admin, or API URLs.
 export default function robots(): MetadataRoute.Robots {
-  const base = process.env.NEXT_PUBLIC_APP_URL || "https://scholars.com.ng";
+  const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
   return {
     rules: [
       {

@@ -135,7 +135,7 @@ const minIntervalMs = opts.minIntervalMs ?? PROFILE_NUDGE_INTERVAL_MS
 const enforceSendWindow = opts.enforceSendWindow ?? false
 const ignoreCap = opts.ignoreCap ?? false
 const supabase = createServiceClient()
-const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://scholars-eight.vercel.app'
+const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.scholars.com.ng'
 const summary: ProfileNudgeSummary = {
 students_emailed: 0,
 emails_sent: 0,
