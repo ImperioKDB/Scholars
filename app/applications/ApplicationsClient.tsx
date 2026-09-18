@@ -12,7 +12,7 @@ import { useAde } from "@/components/ade/AdeProvider";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { track } from "@/lib/analytics";
 
-type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected";
+type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected" | "not_applied";
 
 type ApplicationApiItem = Draft & {
   id: string; status: ApplicationStatus; notes: string | null; created_at: string; updated_at: string;
@@ -23,12 +23,12 @@ type ApplicationApiItem = Draft & {
 type SavedApiItem = { id: string; saved_at: string; scholarship: CardScholarship };
 
 const STATUS_LABELS: Record<ApplicationStatus, string> = {
-  in_progress: "In progress", submitted: "Submitted", accepted: "Accepted", rejected: "Rejected",
+  in_progress: "In progress", submitted: "Submitted", accepted: "Accepted", rejected: "Rejected", not_applied: "Didn't apply",
 };
 
 const STATUS_TONE: Record<ApplicationStatus, string> = {
   in_progress: "bg-amber-light text-amber", submitted: "bg-navy-50 text-navy",
-  accepted: "bg-emerald-light text-emerald", rejected: "bg-rose-light text-rose",
+  accepted: "bg-emerald-light text-emerald", rejected: "bg-rose-light text-rose", not_applied: "bg-paper text-navy-light",
 };
 
 function readinessFor(application: ApplicationApiItem) {
@@ -78,7 +78,7 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
   const untrackedSaved = useMemo(() => saved.filter((s) => !trackedScholarshipIds.has(s.scholarship.id)), [saved, trackedScholarshipIds]);
 
   const counts = useMemo(() => {
-    const c: Record<ApplicationStatus, number> = { in_progress: 0, submitted: 0, accepted: 0, rejected: 0 };
+    const c: Record<ApplicationStatus, number> = { in_progress: 0, submitted: 0, accepted: 0, rejected: 0, not_applied: 0 };
     for (const a of applications) c[a.status] += 1;
     return c;
   }, [applications]);
@@ -199,7 +199,7 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
         </div>
         <div className="bg-white rounded-2xl border border-hairline p-4 sm:p-5 mt-6 grid gap-5 md:grid-cols-[auto_1fr] md:items-center">
           <StatusDonut counts={counts} />
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
             {(Object.keys(STATUS_LABELS) as ApplicationStatus[]).map((status) => (
               <div key={status} className="rounded-xl bg-paper px-3 py-3">
                 <p className="text-xs text-navy-light">{STATUS_LABELS[status]}</p>

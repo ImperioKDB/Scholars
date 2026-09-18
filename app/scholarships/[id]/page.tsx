@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ScholarshipDetailClient, type SimilarScholarship } from "./ScholarshipDetailClient";
 import { isUuid } from "@/lib/validate";
 
-type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected";
+type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected" | "not_applied";
 
 const SIMILAR_COLUMNS = "id, title, provider_name, amount, deadline, level, discipline";
 

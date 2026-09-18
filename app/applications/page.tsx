@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ApplicationsClient } from "./ApplicationsClient";
 import type { CardScholarship } from "@/components/ScholarshipCard";
 
-type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected";
+type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected" | "not_applied";
 
 type ApplicationApiItem = {
   id: string;

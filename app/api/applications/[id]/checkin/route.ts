@@ -4,7 +4,7 @@
 // Answers or snoozes Ade's (the mascot) check-in question for one
 // application.
 //   { action: "answer", status } -- sets the real application status
-//     (submitted/accepted/rejected/in_progress) and stamps
+//     (submitted/accepted/rejected/in_progress/not_applied) and stamps
 //     checkin_prompted_at so the same question doesn't resurface.
 //   { action: "snooze" } -- suppresses this application's check-in for 3
 //     days without changing its status. "Ask me later," not "never."
@@ -22,7 +22,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { isUuid } from '@/lib/validate'
 
-const STATUS_VALUES = ['in_progress', 'submitted', 'accepted', 'rejected'] as const
+const STATUS_VALUES = ['in_progress', 'submitted', 'accepted', 'rejected', 'not_applied'] as const
 const SNOOZE_DAYS = 3
 const NOT_OPEN_SNOOZE_DAYS = 14
 

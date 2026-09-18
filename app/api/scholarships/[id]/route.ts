@@ -17,7 +17,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getMatchForScholarship } from '@/lib/matching/getMatches'
 import { isUuid } from '@/lib/validate'
 
-type ApplicationStatus = 'in_progress' | 'submitted' | 'accepted' | 'rejected'
+type ApplicationStatus = 'in_progress' | 'submitted' | 'accepted' | 'rejected' | 'not_applied'
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

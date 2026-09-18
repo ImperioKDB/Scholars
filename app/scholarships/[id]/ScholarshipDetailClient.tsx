@@ -49,7 +49,7 @@ export type SimilarScholarship = {
   discipline: string | null;
 };
 
-type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected";
+type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected" | "not_applied";
 
 const TIER_LABELS: Record<ScholarshipDetail["tier"], string> = {
   excellent: "Excellent fit",
@@ -63,6 +63,7 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
   submitted: "Submitted",
   accepted: "Accepted",
   rejected: "Rejected",
+  not_applied: "Didn't apply",
 };
 
 export function ScholarshipDetailClient({

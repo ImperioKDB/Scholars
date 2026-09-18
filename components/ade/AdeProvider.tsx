@@ -56,11 +56,12 @@ const TIER_CONFETTI: Record<string, string[]> = {
   gold: ["#966216", "#15705A", "#0B1E3D"],
 };
 
-const STATUS_OPTIONS: { value: "submitted" | "accepted" | "rejected" | "in_progress"; label: string }[] = [
+const STATUS_OPTIONS: { value: "submitted" | "accepted" | "rejected" | "in_progress" | "not_applied"; label: string }[] = [
   { value: "submitted", label: "I submitted it" },
   { value: "accepted", label: "I got it" },
   { value: "rejected", label: "It did not work out" },
   { value: "in_progress", label: "Still working on it" },
+  { value: "not_applied", label: "I didn’t apply" },
 ];
 
 type AdeContextValue = {
@@ -281,6 +282,11 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  function closePanel() {
+    setOpen(false);
+    if (applyIntercept) setApplyIntercept(null);
+  }
+
   const contextValue: AdeContextValue = { poll, confirmApply, interceptApply };
 
   return (
@@ -288,9 +294,31 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
       {children}
       {confettiColors && <Confetti colors={confettiColors} />}
       {isActive && (
-        <div className="fixed bottom-24 md:bottom-6 right-4 md:right-6 z-[95] flex flex-col items-end gap-3">
+        <>
           {open && (
-            <div className="bg-white rounded-2xl border border-hairline shadow-card p-5 w-[19rem] max-w-[calc(100vw-2rem)]">
+            <button
+              type="button"
+              aria-label="Close Ade panel"
+              onClick={closePanel}
+              className="fixed inset-0 z-[94] cursor-default bg-transparent"
+            />
+          )}
+          <div className="fixed bottom-24 md:bottom-6 right-4 md:right-6 z-[95] flex flex-col items-end gap-3">
+          {open && (
+            <div
+              role="dialog"
+              aria-label="Ade assistant"
+              onClick={(event) => event.stopPropagation()}
+              className="ade-panel-pop-in relative bg-white rounded-2xl border border-hairline shadow-card p-5 w-[19rem] max-w-[calc(100vw-2rem)]"
+            >
+              <button
+                type="button"
+                aria-label="Close Ade panel"
+                onClick={closePanel}
+                className="absolute top-3 right-3 w-7 h-7 rounded-full text-navy-light hover:bg-navy-50 hover:text-navy flex items-center justify-center text-lg leading-none"
+              >
+                <span aria-hidden="true">&times;</span>
+              </button>
               {applyIntercept ? (
                 <>
                   <p className="font-display text-base font-semibold text-navy mb-1">Ade says hi</p>
@@ -426,7 +454,8 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
               <span className="absolute top-0.5 right-0.5 w-3 h-3 rounded-full bg-rose border-2 border-white" aria-hidden="true" />
             )}
           </button>
-        </div>
+          </div>
+        </>
       )}
     </AdeContext.Provider>
   );

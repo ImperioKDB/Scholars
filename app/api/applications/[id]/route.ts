@@ -30,7 +30,7 @@ import { createClient } from '@/lib/supabase/server'
 import { isUuid } from '@/lib/validate'
 import { trackServerEvent } from '@/lib/analytics-server'
 
-const STATUS_VALUES = ['in_progress', 'submitted', 'accepted', 'rejected'] as const
+const STATUS_VALUES = ['in_progress', 'submitted', 'accepted', 'rejected', 'not_applied'] as const
 
 const updateSchema = z
   .object({

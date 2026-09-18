@@ -12,6 +12,7 @@ type StatusCounts = {
   submitted: number;
   accepted: number;
   rejected: number;
+  not_applied: number;
 };
 
 const SEGMENTS: { key: keyof StatusCounts; color: string; label: string }[] = [
@@ -19,10 +20,11 @@ const SEGMENTS: { key: keyof StatusCounts; color: string; label: string }[] = [
   { key: "submitted", color: "#0B1E3D", label: "Submitted" },
   { key: "accepted", color: "#15705A", label: "Accepted" },
   { key: "rejected", color: "#A63A35", label: "Rejected" },
+  { key: "not_applied", color: "#6B7280", label: "Didn't apply" },
 ];
 
 export function StatusDonut({ counts }: { counts: StatusCounts }) {
-  const total = counts.in_progress + counts.submitted + counts.accepted + counts.rejected;
+  const total = counts.in_progress + counts.submitted + counts.accepted + counts.rejected + counts.not_applied;
   const r = 15.5;
   const c = 2 * Math.PI * r;
   let cumulative = 0;
@@ -40,7 +42,7 @@ export function StatusDonut({ counts }: { counts: StatusCounts }) {
   // AUDIT FIX (batch 5): screen readers used to get raw SVG circles with
   // no meaning. role="img" + a spoken summary replaces that; the visible
   // legend still renders for sighted users.
-  const ariaSummary = `Application status: ${counts.in_progress} in progress, ${counts.submitted} submitted, ${counts.accepted} accepted, ${counts.rejected} rejected, ${total} total`;
+  const ariaSummary = `Application status: ${counts.in_progress} in progress, ${counts.submitted} submitted, ${counts.accepted} accepted, ${counts.rejected} rejected, ${counts.not_applied} didn't apply, ${total} total`;
   return (
     <div className="flex items-center gap-6 flex-wrap" role="img" aria-label={ariaSummary}>
       <div className="relative shrink-0" style={{ width: 96, height: 96 }}>
