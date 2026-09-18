@@ -7,7 +7,7 @@
 // show no button at all. Expanded cards always show "Show less".
 //
 // Mobile stays a horizontal scroll-snap carousel with a filled segment
-// track; desktop renders a static three-column grid.
+// track; desktop renders one clean row of up to four cards.
 // Initials come from the shared lib/text/initials.ts (local copy removed).
 "use client";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -79,7 +79,7 @@ export function TestimonialsRotator({ items }: { items: TestimonialItem[] }) {
     <div>
       <div
         ref={trackRef}
-        className="flex md:grid md:grid-cols-3 gap-6 md:gap-8 overflow-x-auto md:overflow-visible snap-x snap-mandatory scroll-px-6 -mx-6 px-6 md:mx-0 md:px-0 pb-2 md:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex md:grid md:grid-cols-4 gap-6 md:gap-5 overflow-x-auto md:overflow-visible snap-x snap-mandatory scroll-px-6 -mx-6 px-6 md:mx-0 md:px-0 pb-2 md:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {items.map((t, i) => {
           const expanded = expandedId === t.id;
