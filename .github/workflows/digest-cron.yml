@@ -25,13 +25,13 @@ jobs:
       - name: Trigger Scholars deadline-check digest
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          APP_URL: ${{ vars.APP_URL || 'https://scholars.com.ng' }}
+          APP_URL: ${{ vars.APP_URL || 'https://www.scholars.com.ng' }}
         run: |
           if [ -z "$CRON_SECRET" ]; then
             echo "::error::CRON_SECRET repo secret is not set. Add it in Settings -> Secrets and variables -> Actions."
             exit 1
           fi
-          code=$(curl -s -o /tmp/digest.json -w "%{http_code}" \
+          code=$(curl --location -s -o /tmp/digest.json -w "%{http_code}" \
             --max-time 300 \
             -H "Authorization: Bearer $CRON_SECRET" \
             "$APP_URL/api/cron/deadline-check")
