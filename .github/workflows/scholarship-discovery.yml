@@ -30,7 +30,7 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           DISCOVERY_API_URL: ${{ vars.APP_URL || 'https://scholars.com.ng' }}
-          DRY_RUN: ${{ inputs.dry_run || true }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
           test -n "$CRON_SECRET"
