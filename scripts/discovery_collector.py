@@ -13,6 +13,7 @@ import json
 import os
 import re
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -135,6 +136,25 @@ def collect_source(source: dict) -> list[dict]:
     return candidates
 
 
+def post_candidates(url: str, payload: bytes, secret: str) -> str:
+    current_url = url
+    for _ in range(4):
+        post = urllib.request.Request(
+            current_url,
+            data=payload,
+            headers={"Authorization": f"Bearer {secret}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(post, timeout=45) as response:
+                return response.read().decode()
+        except urllib.error.HTTPError as exc:
+            if exc.code not in {301, 302, 307, 308} or not exc.headers.get("Location"):
+                raise
+            current_url = urllib.parse.urljoin(current_url, exc.headers["Location"])
+    raise RuntimeError("Too many redirects while submitting discovery candidates")
+
+
 def main() -> int:
     api = os.environ["DISCOVERY_API_URL"].rstrip("/")
     secret = os.environ["CRON_SECRET"]
@@ -154,9 +174,7 @@ def main() -> int:
         print(json.dumps(result | {"action": "not_ingested", "preview": list(unique.values())[:3]}))
         return 0
     payload = json.dumps({"candidates": list(unique.values())}).encode()
-    post = urllib.request.Request(f"{api}/api/integrations/github/scholarship-discovery", data=payload, headers={"Authorization": f"Bearer {secret}", "Content-Type": "application/json"}, method="POST")
-    with urllib.request.urlopen(post, timeout=45) as response:
-        print(response.read().decode())
+    print(post_candidates(f"{api}/api/integrations/github/scholarship-discovery", payload, secret))
     return 0
 
 
