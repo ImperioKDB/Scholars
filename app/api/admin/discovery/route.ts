@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   const guard = await assertAdmin(supabase)
   if (!guard.ok) return guard.response
   const [{ data: sources, error: sourcesError }, { data: candidates, error: candidatesError }] = await Promise.all([
-    supabase.from('discovery_sources').select('id,name,base_url,source_type,trust_tier,enabled,crawl_policy,last_crawled_at').order('name').limit(50),
+    supabase.from('discovery_sources').select('id,name,base_url,source_type,trust_tier,enabled,pilot_enabled,crawl_policy,last_crawled_at').order('name').limit(50),
     supabase.from('scholarship_discovery_candidates').select('id,source_id,source_url,application_url,title,provider_name,description,amount,deadline,level,discipline,eligibility_notes,evidence_excerpt,fetched_at,confidence,status,rejection_reason,reviewed_at,published_scholarship_id,published_at,duplicate_of,duplicate_score,duplicate_reason,verification_status,verification_http_status,last_verified_at,quality_status,quality_score,quality_issues,quality_scored_at,eligibility_review_status,eligibility_verdict,eligibility_confidence,eligibility_report,eligibility_reviewed_at,eligibility_review_error,created_at').order('created_at', { ascending: false }).limit(100),
   ])
   if (sourcesError || candidatesError) return NextResponse.json({ error: 'Could not load discovery data' }, { status: 500 })
