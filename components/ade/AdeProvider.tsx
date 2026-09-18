@@ -111,6 +111,8 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
   const [confettiColors, setConfettiColors] = useState<string[] | null>(null);
   const lastKeyRef = useRef<string | null>(null);
   const confettiShownRef = useRef<Set<string>>(new Set());
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   const poll = useCallback(async () => {
     if (!isActive) return;
@@ -152,6 +154,21 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [isActive, poll]);
+
+  // Do not depend on a transparent backdrop winning the stacking context.
+  // Capture the pointer event at document level so taps on links, cards, and
+  // other positioned page content also dismiss the panel.
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as Node | null;
+      if (target && !panelRef.current?.contains(target) && !triggerRef.current?.contains(target)) {
+        closePanel();
+      }
+    }
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [open]);
 
   function openExternal(url: string) {
     window.open(url, "_blank", "noopener,noreferrer");
@@ -306,6 +323,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
           <div className="fixed bottom-24 md:bottom-6 right-4 md:right-6 z-[95] flex flex-col items-end gap-3">
           {open && (
             <div
+              ref={panelRef}
               role="dialog"
               aria-label="Ade assistant"
               onClick={(event) => event.stopPropagation()}
@@ -441,6 +459,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
             </div>
           )}
           <button
+            ref={triggerRef}
             type="button"
             onClick={openPanel}
             aria-label={open ? "Close Ade" : "Open Ade"}
