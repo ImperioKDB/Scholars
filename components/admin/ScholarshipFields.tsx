@@ -55,7 +55,7 @@ export function ScholarshipFields({
           className={inputClass}
           value={values.amount ?? ""}
           onChange={(e) => onChange("amount", e.target.value)}
-          placeholder="e.g. \u20a6300,000 + Mentorship"
+          placeholder="e.g. ₦300,000 + Mentorship"
         />
       </FormField>
       <FormField label="Deadline" error={errors.deadline} hint="Leave blank for rolling applications or when no current deadline has been confirmed. Never enter a guessed date.">

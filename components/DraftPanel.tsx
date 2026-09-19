@@ -196,7 +196,7 @@ export function DraftPanel({
         </button>
         {generating && (
           <p className="mt-2 text-xs text-navy-light" role="status" aria-live="polite">
-            Ade is preparing a draft from your application details\u2026
+            Ade is preparing a draft from your application details…
           </p>
         )}
         {error && (
