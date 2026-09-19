@@ -51,8 +51,8 @@ export default async function LandingPage() {
   const live = await loadLiveScholarships();
   return (
     <div className="min-h-screen overflow-y-auto scroll-smooth">
-      <header className="border-b border-hairline">
-        <div className="mx-auto max-w-6xl px-6 py-5 flex items-center justify-between">
+      <header className="border-b border-hairline bg-parchment/95 backdrop-blur-sm">
+        <div className="mx-auto max-w-6xl px-5 py-4 sm:px-6 sm:py-5 flex items-center justify-between">
           <Logo className="text-navy" />
           <nav className="hidden md:flex items-center gap-8 text-sm text-navy-light">
             <Link href="#how-it-works" className="hover:text-navy">How it works</Link>
@@ -60,7 +60,7 @@ export default async function LandingPage() {
           </nav>
           <Link
             href="/signup"
-            className="rounded-seal bg-navy text-white text-sm font-medium px-5 py-2.5 hover:bg-navy-light transition-colors"
+            className="inline-flex min-h-[44px] items-center rounded-seal bg-navy text-white text-sm font-medium px-5 hover:bg-navy-light transition-colors"
           >
             Get started
           </Link>
@@ -68,13 +68,13 @@ export default async function LandingPage() {
       </header>
       <main>
         {/* Hero */}
-        <section className="mx-auto max-w-4xl px-6 py-12 md:py-16">
+        <section className="mx-auto max-w-4xl px-5 py-10 sm:px-6 sm:py-14 md:py-16">
           <div>
             <span className="inline-flex items-center gap-2 rounded-full border border-emerald/20 bg-emerald-light px-3.5 py-1.5 text-xs font-medium text-emerald mb-5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald" />
               Eligibility-matched, not keyword-matched
             </span>
-            <h1 className="font-display text-[2.75rem] leading-[1.08] md:text-6xl md:leading-[1.05] font-semibold text-navy text-balance">
+            <h1 className="font-display text-[2.75rem] leading-[1.08] sm:text-5xl md:text-6xl md:leading-[1.05] font-semibold text-navy text-balance">
               Apply to the scholarships you can actually win.
             </h1>
             <p className="mt-6 text-lg text-navy-light max-w-md">
@@ -85,7 +85,7 @@ export default async function LandingPage() {
             <div className="mt-8">
               <Link
                 href="/signup"
-                className="inline-flex items-center gap-2 rounded-seal bg-navy text-white font-medium px-6 py-3.5 hover:bg-navy-light transition-colors"
+                className="inline-flex min-h-[48px] items-center gap-2 rounded-seal bg-navy text-white font-medium px-6 hover:bg-navy-light transition-colors"
               >
                 See your matches
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -100,7 +100,7 @@ export default async function LandingPage() {
               </p>
             </div>
           </div>
-          <div className="mt-10 max-w-2xl bg-white rounded-2xl shadow-card border border-hairline p-6">
+          <div className="mt-10 max-w-2xl bg-white rounded-2xl shadow-card border border-hairline p-5 sm:p-6">
             <p className="font-mono text-xs uppercase tracking-widest text-navy-light mb-4">
               Live on Scholars right now
             </p>

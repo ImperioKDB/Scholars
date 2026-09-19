@@ -139,16 +139,17 @@ useEffect(() => {
   const navList = (
     <nav className="flex flex-col gap-1">
       {navItems.map(({ href, label, Icon }) => {
-        const active = pathname === href;
+        const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`));
         return (
           <Link
             key={href}
             href={href}
             onClick={() => setMobileOpen(false)}
             className={[
-              "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+              "flex min-h-[44px] items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
               active ? "bg-navy text-white" : "text-navy-light hover:bg-navy-50 hover:text-navy",
             ].join(" ")}
+            aria-current={active ? "page" : undefined}
           >
             <Icon />
             {label}
@@ -195,8 +196,8 @@ useEffect(() => {
         <div className="flex-1 px-3 py-4">{navList}</div>
         {accountBlock}
       </aside>
-      <header className="md:hidden fixed top-0 inset-x-0 z-40 h-14 bg-white border-b border-hairline flex items-center gap-3 px-4">
-        <button type="button" onClick={() => setMobileOpen(true)} aria-expanded={mobileOpen} aria-controls="student-mobile-menu" aria-label="Open menu" className="text-navy p-1.5 -ml-1.5">
+      <header className="md:hidden fixed top-0 inset-x-0 z-40 h-16 bg-white/95 backdrop-blur-sm border-b border-hairline flex items-center gap-3 px-4">
+        <button type="button" onClick={() => setMobileOpen(true)} aria-expanded={mobileOpen} aria-controls="student-mobile-menu" aria-label="Open menu" className="text-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl -ml-1.5 hover:bg-navy-50">
           <MenuIcon />
         </button>
         <Logo className="text-navy" />
@@ -216,13 +217,13 @@ useEffect(() => {
           aria-modal="true"
           aria-label="Student navigation"
           className={[
-            "absolute inset-y-0 left-0 w-72 max-w-[80%] bg-white flex flex-col transition-transform duration-200",
+            "absolute inset-y-0 left-0 w-80 max-w-[88%] bg-white flex flex-col shadow-card transition-transform duration-200",
             mobileOpen ? "translate-x-0" : "-translate-x-full",
           ].join(" ")}
         >
           <div className="px-5 py-5 border-b border-hairline flex items-center justify-between">
             <Logo className="text-navy" />
-            <button type="button" onClick={() => setMobileOpen(false)} aria-label="Close menu" className="text-navy p-1.5">
+            <button type="button" onClick={() => setMobileOpen(false)} aria-label="Close menu" className="text-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl hover:bg-navy-50">
               <CloseIcon />
             </button>
           </div>

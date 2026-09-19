@@ -5,9 +5,11 @@
 @layer base {
   html {
     background-color: #F7F5EF;
+    scroll-behavior: smooth;
   }
   body {
     color: #10151F;
+    line-height: 1.5;
     font-feature-settings: "ss01" on;
   }
   /* COLOR CONSISTENCY: selection + focus ring use the darkened emerald
@@ -20,6 +22,24 @@
   :focus-visible {
     outline: 2px solid #15705A;
     outline-offset: 2px;
+  }
+
+  /* Keep controls comfortable on phones and prevent iOS Safari from zooming
+     focused fields. Components can still opt into a smaller control when the
+     context genuinely calls for it. */
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  @media (min-width: 640px) {
+    input,
+    select,
+    textarea {
+      font-size: 0.875rem;
+    }
   }
 }
 

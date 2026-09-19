@@ -140,11 +140,11 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
         <p className="text-sm text-navy-light mt-1 mb-6">
           Every verified listing on Scholars. Your personalized matches live on the dashboard; this is the full catalog.
         </p>
-        <div className="bg-white rounded-xl border border-hairline p-4">
+        <div className="bg-white rounded-2xl border border-hairline p-4 sm:p-5 shadow-[0_1px_2px_rgba(11,30,61,0.03)]">
           <label className="block mb-3">
             <span className="sr-only">Search by scholarship name or provider</span>
             <input
-              className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-navy-light/50 focus:border-navy outline-none transition-colors"
+              className="w-full min-h-[48px] rounded-xl border border-hairline bg-white px-3.5 text-sm text-ink placeholder:text-navy-light/50 focus:border-navy outline-none transition-colors"
               type="search"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
@@ -153,7 +153,7 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
           </label>
           <div className="flex flex-wrap gap-2">
             <select
-              className="text-sm rounded-lg border border-hairline bg-white px-3 py-2"
+              className="min-h-[44px] text-sm rounded-xl border border-hairline bg-white px-3"
               value={level}
               onChange={(e) => setLevel(e.target.value)}
               aria-label="Filter by level"
@@ -163,7 +163,7 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
               ))}
             </select>
             <input
-              className="text-sm rounded-lg border border-hairline bg-white px-3 py-2 w-full sm:w-72 placeholder:text-navy-light/50 focus:border-navy outline-none transition-colors"
+              className="min-h-[44px] text-sm rounded-xl border border-hairline bg-white px-3 w-full sm:w-72 placeholder:text-navy-light/50 focus:border-navy outline-none transition-colors"
               type="text"
               value={discipline}
               onChange={(e) => setDiscipline(e.target.value)}
@@ -180,7 +180,7 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
         </p>
       )}
       {!loading && items.length === 0 && !loadError ? (
-        <div className="bg-white rounded-xl border border-hairline p-8 text-center">
+        <div className="bg-white rounded-2xl border border-hairline p-8 text-center shadow-[0_1px_2px_rgba(11,30,61,0.03)]">
           <p className="text-sm text-navy-light">No scholarships match that search. Try fewer filters or a different keyword.</p>
         </div>
       ) : (

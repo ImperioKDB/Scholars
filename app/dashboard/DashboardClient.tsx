@@ -36,7 +36,7 @@ function timeGreeting() {
 function StatTile({ value, label, tone = "navy" }: { value: string | number; label: string; tone?: "navy" | "amber" | "emerald" }) {
   const toneClass = tone === "amber" ? "text-amber" : tone === "emerald" ? "text-emerald" : "text-navy";
   return (
-    <div className="bg-white rounded-xl border border-hairline p-4">
+    <div className="bg-white rounded-2xl border border-hairline p-4 shadow-[0_1px_2px_rgba(11,30,61,0.03)] min-h-[92px] flex flex-col justify-center">
       <p className={`font-mono text-2xl font-semibold ${toneClass}`}>{value}</p>
       <p className="text-xs text-navy-light mt-1">{label}</p>
     </div>
@@ -261,10 +261,10 @@ export function DashboardClient({
   return (
     <div>
       <div className="mb-8">
-        <h1 className="font-display text-2xl font-semibold text-navy">{timeGreeting()}{firstName ? `, ${firstName}` : ""}</h1>
+        <h1 className="font-display text-3xl leading-tight font-semibold text-navy">{timeGreeting()}{firstName ? `, ${firstName}` : ""}</h1>
         <p className="text-sm text-navy-light mt-1 mb-6">{openMatches.length} open scholarship{openMatches.length === 1 ? "" : "s"} you can apply to now.</p>
         {profileCompleteness < 100 && (
-          <div className="bg-white rounded-xl border border-hairline p-5 mb-6">
+          <div className="bg-white rounded-2xl border border-hairline p-5 mb-6 shadow-[0_1px_2px_rgba(11,30,61,0.03)]">
             <div className="flex items-center justify-between mb-2 gap-3">
               <p className="text-sm font-medium text-ink">Your profile is {profileCompleteness}% complete</p>
               <Link href="/onboarding" className="text-sm font-medium text-navy hover:underline shrink-0">Finish it &rarr;</Link>
@@ -303,7 +303,7 @@ export function DashboardClient({
           </div>
         </div>
       )}
-      <div className="flex items-center gap-2 mb-5 flex-wrap">
+      <div className="flex items-center gap-2 mb-5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
         {TABS.map((t) => (
           <button key={t.value} type="button" onClick={() => setTab(t.value)}
             className={"inline-flex min-h-[44px] items-center rounded-full px-4 text-sm font-medium transition-colors " + (tab === t.value ? "bg-navy text-white" : "text-navy-light hover:bg-navy-50")}>

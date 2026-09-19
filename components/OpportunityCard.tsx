@@ -81,8 +81,7 @@ function SaveButton({
       aria-label={saved ? "Remove from saved opportunities" : "Save opportunity"}
       aria-pressed={saved}
       className={[
-        "relative shrink-0 rounded-full p-1.5 bg-white/90 backdrop-blur-sm transition-colors disabled:opacity-50",
-        "after:absolute after:-inset-[7px] after:rounded-full after:content-['']",
+        "relative z-10 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-white/90 backdrop-blur-sm transition-colors disabled:opacity-50",
         saved ? "text-emerald" : "text-navy-light hover:text-navy",
       ].join(" ")}
     >
@@ -111,7 +110,7 @@ export function OpportunityCard({
     // so every part of the card navigates to the detail page, not just the
     // inner content. Save/Share sit at z-10 above the overlay so they stay
     // independently clickable. Press feedback scales the whole card.
-    <div className="relative bg-white rounded-xl border border-hairline p-5 flex flex-col gap-4 sm:flex-row shadow-card focus-within:ring-2 focus-within:ring-emerald focus-within:ring-offset-2 focus-within:ring-offset-parchment transition-transform duration-150 motion-reduce:transition-none has-[a:active]:scale-[0.99] motion-reduce:has-[a:active]:scale-100">
+    <div className="group relative bg-white rounded-2xl border border-hairline p-5 flex flex-col gap-4 sm:flex-row shadow-card focus-within:ring-2 focus-within:ring-emerald focus-within:ring-offset-2 focus-within:ring-offset-parchment transition-[transform,box-shadow,border-color] duration-150 hover:border-navy/20 hover:shadow-md motion-reduce:transition-none has-[a:active]:scale-[0.99] motion-reduce:has-[a:active]:scale-100">
       <Link
         href={`/opportunities/${opportunity.id}`}
         onClick={saveReturnScroll}
