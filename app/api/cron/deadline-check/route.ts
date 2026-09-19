@@ -27,6 +27,7 @@ import { logError, logWarn } from '@/lib/logging'
 import { sendEmail } from '@/lib/email/send'
 import { runNewListingDigest } from '@/lib/email/digest'
 import { runProfileNudges, PROFILE_NUDGE_INTERVAL_MS } from '@/lib/email/profileNudges'
+import { queueProfileNudges } from '@/lib/email/profileNudgesQueue'
 import { renderDeadlineReminder, type EmailListing } from '@/lib/email/template'
 import { firstName, getAuthEmailsByUserId } from '@/lib/email/authRecipients'
 export const dynamic = 'force-dynamic'
@@ -167,14 +168,16 @@ summary.failed += 1
 logError(ROUTE, 'phase1_failed', undefined, err)
 }
 // ---------- Phase 1b: profile completion nudges (shared implementation) ----------
-const nudges = await runProfileNudges({
+const nudgeOptions = {
 minIntervalMs: PROFILE_NUDGE_INTERVAL_MS,
 enforceSendWindow: true,
-})
-summary.profile_nudges = nudges.students_emailed
-summary.emails_sent += nudges.emails_sent
+}
+const nudges = process.env.PROFILE_NUDGES_USE_INNGEST === 'true'
+? await queueProfileNudges(nudgeOptions)
+: await runProfileNudges(nudgeOptions)
+summary.profile_nudges = 'students_queued' in nudges ? nudges.students_queued : nudges.students_emailed
+summary.emails_sent += 'emails_sent' in nudges ? nudges.emails_sent : 0
 summary.failed += nudges.failed
-if (nudges.dry_run) summary.dry_run = true
 if (nudges.skipped_missing_columns) {
 logWarn(ROUTE, 'profile_nudge_skipped_missing_columns', {
 hint: 'apply migration 0018_add_profile_reminder_tracking.sql',

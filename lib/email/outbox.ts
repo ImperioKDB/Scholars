@@ -16,10 +16,10 @@ type ClaimedDelivery = {
   dedupeKey: string
 }
 
-export async function claimNotificationDelivery(
+export async function ensureNotificationDelivery(
   supabase: SupabaseClient,
   input: DeliveryInput,
-): Promise<ClaimedDelivery | null> {
+): Promise<{ id: string; status: string } | null> {
   const { error: insertError } = await supabase
     .from('notification_deliveries')
     .upsert(
@@ -37,40 +37,37 @@ export async function claimNotificationDelivery(
     )
   if (insertError) throw insertError
 
-  const now = new Date()
-  const nowIso = now.toISOString()
-  const leaseUntil = new Date(now.getTime() + LEASE_MS).toISOString()
-  const { data: existing, error: readError } = await supabase
+  const { data, error } = await supabase
     .from('notification_deliveries')
-    .select('id,attempts,status,lease_until')
+    .select('id,status')
     .eq('dedupe_key', input.dedupeKey)
     .maybeSingle()
-  if (readError) throw readError
-  if (!existing) return null
+  if (error) throw error
+  return data ? { id: data.id as string, status: data.status as string } : null
+}
 
-  const retryable = existing.status === 'retryable'
-  const pending = existing.status === 'pending'
-  const expiredLease =
-    existing.status === 'leased' &&
-    existing.lease_until != null &&
-    existing.lease_until < nowIso
-  if (!pending && !retryable && !expiredLease) return null
+export async function claimNotificationDelivery(
+  supabase: SupabaseClient,
+  input: DeliveryInput,
+): Promise<ClaimedDelivery | null> {
+  const delivery = await ensureNotificationDelivery(supabase, input)
+  if (!delivery) return null
+  return claimNotificationDeliveryById(supabase, delivery.id, input.dedupeKey)
+}
 
-  const { data: claimed, error: claimError } = await supabase
-    .from('notification_deliveries')
-    .update({
-      status: 'leased',
-      attempts: (existing.attempts ?? 0) + 1,
-      available_at: nowIso,
-      lease_until: leaseUntil,
-    })
-    .eq('id', existing.id)
-    .or(`status.eq.pending,status.eq.retryable,and(status.eq.leased,lease_until.lt.${nowIso})`)
-    .lte('available_at', nowIso)
-    .select('id')
-    .maybeSingle()
-  if (claimError) throw claimError
-  return claimed ? { id: claimed.id, dedupeKey: input.dedupeKey } : null
+export async function claimNotificationDeliveryById(
+  supabase: SupabaseClient,
+  deliveryId: string,
+  dedupeKey = deliveryId,
+): Promise<ClaimedDelivery | null> {
+  const leaseUntil = new Date(Date.now() + LEASE_MS).toISOString()
+  const { data, error } = await supabase.rpc('claim_notification_delivery', {
+    p_delivery_id: deliveryId,
+    p_lease_until: leaseUntil,
+  })
+  if (error) throw error
+  const claimed = Array.isArray(data) ? data[0] : data
+  return claimed?.id ? { id: claimed.id as string, dedupeKey: (claimed.dedupe_key as string | undefined) ?? dedupeKey } : null
 }
 
 export async function markNotificationAccepted(

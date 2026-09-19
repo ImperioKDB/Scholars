@@ -24,6 +24,7 @@ import { createClient } from '@/lib/supabase/server'
 import { assertAdmin } from '@/lib/admin/guard'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { runProfileNudges, PROFILE_NUDGE_INTERVAL_MS } from '@/lib/email/profileNudges'
+import { queueProfileNudges } from '@/lib/email/profileNudgesQueue'
 export const maxDuration = 300
 const bodySchema = z.object({ force: z.boolean().optional().default(false) })
 export async function POST(request: Request) {
@@ -41,10 +42,12 @@ return NextResponse.json(
 )
 }
 const force = parsed.data.force
-const summary = await runProfileNudges(
+const options =
 force
 ? { minIntervalMs: 0, enforceSendWindow: false, ignoreCap: true }
 : { minIntervalMs: PROFILE_NUDGE_INTERVAL_MS, enforceSendWindow: false }
-)
+const summary = process.env.PROFILE_NUDGES_USE_INNGEST === 'true'
+? await queueProfileNudges(options)
+: await runProfileNudges(options)
 return NextResponse.json({ summary: { ...summary, forced: force } })
 }
