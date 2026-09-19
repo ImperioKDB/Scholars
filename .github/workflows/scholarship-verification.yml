@@ -21,18 +21,18 @@ jobs:
         id: candidates
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          APP_URL: ${{ vars.APP_URL || 'https://scholars.com.ng' }}
+          APP_URL: ${{ vars.APP_URL || 'https://www.scholars.com.ng' }}
         run: |
           set -euo pipefail
           test -n "$CRON_SECRET"
-          response=$(curl --fail-with-body --silent --show-error --max-time 30 -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/integrations/github/scholarship-verification")
+          response=$(curl --fail-with-body --silent --show-error --location --max-time 30 -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/integrations/github/scholarship-verification")
           ids=$(echo "$response" | jq -c '.candidate_ids')
           echo "candidate_ids=$ids" >> "$GITHUB_OUTPUT"
       - name: Verify source URLs
         if: steps.candidates.outputs.candidate_ids != '[]'
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          APP_URL: ${{ vars.APP_URL || 'https://scholars.com.ng' }}
+          APP_URL: ${{ vars.APP_URL || 'https://www.scholars.com.ng' }}
           CANDIDATE_IDS: ${{ steps.candidates.outputs.candidate_ids }}
         run: |
           set -euo pipefail

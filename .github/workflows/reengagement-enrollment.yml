@@ -34,7 +34,7 @@ jobs:
       - name: Enroll treatment assignments into Scholars outbox
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          APP_URL: ${{ vars.APP_URL || 'https://scholars.com.ng' }}
+          APP_URL: ${{ vars.APP_URL || 'https://www.scholars.com.ng' }}
           EXPERIMENT_ID: ${{ inputs.experiment_id }}
           REQUEST_ID: ${{ inputs.request_id }}
         run: |
