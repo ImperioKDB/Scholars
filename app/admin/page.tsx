@@ -13,6 +13,7 @@ async function getStats() {
     { count: totalScholarships },
     { count: verifiedScholarships },
     { count: totalProfiles },
+    { count: recentProfiles },
     { count: totalSaved },
     { count: incompleteProfiles },
     lastLog,
@@ -22,6 +23,10 @@ async function getStats() {
     supabase.from("scholarships").select("*", { count: "exact", head: true }),
     supabase.from("scholarships").select("*", { count: "exact", head: true }).eq("verified", true),
     supabase.from("profiles").select("*", { count: "exact", head: true }),
+    supabase
+      .from("profiles")
+      .select("*", { count: "exact", head: true })
+      .gte("created_at", sinceIso),
     supabase.from("saved_scholarships").select("*", { count: "exact", head: true }),
     supabase.from("profiles").select("*", { count: "exact", head: true }).lt("profile_completeness", 100),
     supabase
@@ -72,6 +77,11 @@ async function getStats() {
     rejected: 0,
   };
   Object.assign(outcome, summary.outcome ?? {});
+  // Profile creation is a durable row-level fact. Do not depend on the
+  // append-only analytics event, which can be absent for profiles created
+  // before activation tracking was deployed or if a fire-and-forget event
+  // write was interrupted after the profile save succeeded.
+  activation.profile_created = recentProfiles ?? 0;
   const { data: recent } = await supabase
     .from("scholarships")
     .select("id, title, provider_name, deadline, verified, level")
