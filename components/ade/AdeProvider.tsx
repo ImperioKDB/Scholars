@@ -163,6 +163,11 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
     function onPointerDown(event: PointerEvent) {
       const target = event.target as Node | null;
       if (target && !panelRef.current?.contains(target) && !triggerRef.current?.contains(target)) {
+        // Dismissing the modal must consume the same pointer gesture. Without
+        // this, a tap on the empty space over a scholarship card closes Ade
+        // and then continues to the card's stretched link underneath.
+        event.preventDefault();
+        event.stopPropagation();
         closePanel();
       }
     }
@@ -387,7 +392,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                       setApplyIntercept(null);
                       setOpen(false);
                     }}
-                    className="text-xs font-medium text-navy-light hover:text-navy mt-3 disabled:opacity-60"
+                    className="inline-flex min-h-[40px] items-center rounded-seal border border-hairline bg-white px-3.5 text-sm font-medium text-navy-light hover:border-navy/30 hover:bg-navy-50 mt-3 disabled:opacity-60"
                   >
                     Not now
                   </button>
@@ -413,12 +418,12 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                         </button>
                       ))}
                     </div>
-                    <div className="flex items-center gap-4 mt-3">
+                    <div className="flex flex-wrap items-center gap-2 mt-3">
                       <button
                         type="button"
                         disabled={busy}
                         onClick={() => answerCheckin(prompt.applicationId, { action: "not_open_yet" })}
-                        className="text-xs font-medium text-navy-light hover:text-navy disabled:opacity-60"
+                        className="inline-flex min-h-[40px] items-center rounded-seal border border-hairline bg-white px-3 text-sm font-medium text-navy-light hover:border-navy/30 hover:bg-navy-50 disabled:opacity-60"
                       >
                         Portal not open yet
                       </button>
@@ -426,7 +431,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                         type="button"
                         disabled={busy}
                         onClick={() => answerCheckin(prompt.applicationId, { action: "snooze" })}
-                        className="text-xs font-medium text-navy-light hover:text-navy disabled:opacity-60"
+                        className="inline-flex min-h-[40px] items-center rounded-seal border border-hairline bg-white px-3 text-sm font-medium text-navy-light hover:border-navy/30 hover:bg-navy-50 disabled:opacity-60"
                       >
                         Ask me later
                       </button>

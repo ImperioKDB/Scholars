@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useAde } from "@/components/ade/AdeProvider";
+import { Spinner } from "@/components/ScholarshipCard";
 import { fetchWithTimeout } from "@/lib/fetch";
 
 // components/DraftPanel.tsx
@@ -187,10 +188,17 @@ export function DraftPanel({
           type="button"
           onClick={generate}
           disabled={generating}
-          className="text-xs font-medium text-white bg-navy rounded-full px-3 py-1.5 hover:bg-navy-light transition-colors disabled:opacity-50"
+          aria-busy={generating}
+          className="inline-flex min-h-[44px] items-center gap-2 text-sm font-medium text-white bg-navy rounded-seal px-4 hover:bg-navy-light transition-colors disabled:opacity-60"
         >
+          {generating && <Spinner className="h-4 w-4" />}
           {generating ? "Drafting\u2026" : "Generate application draft"}
         </button>
+        {generating && (
+          <p className="mt-2 text-xs text-navy-light" role="status" aria-live="polite">
+            Ade is preparing a draft from your application details\u2026
+          </p>
+        )}
         {error && (
           <p className="text-xs text-rose mt-2" role="alert">
             {error}
@@ -266,8 +274,10 @@ export function DraftPanel({
               type="button"
               onClick={() => save(true)}
               disabled={saving || overLimit}
-              className="text-xs font-medium text-white bg-emerald rounded-full px-3 py-1.5 hover:opacity-90 transition-opacity disabled:opacity-50"
+              aria-busy={saving}
+              className="inline-flex min-h-[44px] items-center gap-2 text-sm font-medium text-white bg-emerald rounded-seal px-4 hover:opacity-90 transition-opacity disabled:opacity-50"
             >
+              {saving && <Spinner className="h-4 w-4" />}
               {confirmed && !dirty ? "Confirmed \u2713" : "Confirm & use this draft"}
             </button>
             {dirty && (
@@ -275,18 +285,18 @@ export function DraftPanel({
                 type="button"
                 onClick={() => save(false)}
                 disabled={saving || overLimit}
-                className="text-xs font-medium text-navy-light hover:text-navy disabled:opacity-50"
+                className="inline-flex min-h-[44px] items-center rounded-seal border border-hairline bg-white px-3.5 text-sm font-medium text-navy hover:border-navy/30 hover:bg-navy-50 disabled:opacity-50"
               >
                 Save edits
               </button>
             )}
-            <button type="button" onClick={copyAll} className="text-xs font-medium text-navy-light hover:text-navy">
+            <button type="button" onClick={copyAll} className="inline-flex min-h-[44px] items-center rounded-seal border border-hairline bg-white px-3.5 text-sm font-medium text-navy hover:border-navy/30 hover:bg-navy-50">
               {copied ? "Copied!" : "Copy statement + summary"}
             </button>
             <button
               type="button"
               onClick={downloadPacket}
-              className="text-xs font-medium text-navy-light hover:text-navy"
+              className="inline-flex min-h-[44px] items-center rounded-seal border border-navy/25 bg-navy-50 px-3.5 text-sm font-medium text-navy hover:border-navy/50 hover:bg-navy-50"
             >
               Download packet (.txt)
             </button>
@@ -294,15 +304,17 @@ export function DraftPanel({
               type="button"
               onClick={generate}
               disabled={generating}
-              className="text-xs font-medium text-navy-light hover:text-navy disabled:opacity-50"
+              aria-busy={generating}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-seal border border-hairline bg-white px-3.5 text-sm font-medium text-navy hover:border-navy/30 hover:bg-navy-50 disabled:opacity-50"
             >
+              {generating && <Spinner className="h-4 w-4" />}
               {generating ? "Regenerating\u2026" : "Regenerate"}
             </button>
             {applicationUrl && (
               <button
                 type="button"
                 onClick={openRealApplication}
-                className="text-xs font-medium text-navy hover:underline ml-auto"
+                className="inline-flex min-h-[44px] items-center rounded-seal border border-navy bg-white px-3.5 text-sm font-medium text-navy hover:bg-navy-50 ml-auto"
               >
                 Open real application &rarr;
               </button>
