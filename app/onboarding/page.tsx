@@ -127,6 +127,8 @@ function OnboardingForm() {
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const lastTrackedStep = useRef<number | null>(null);
+  const completedSteps = useRef(new Set<number>());
+  const terminalEventTracked = useRef(false);
   const lgaOptions = useMemo(
     () => getLGAsForState(form.state_of_origin).map((l) => ({ value: l, label: l })),
     [form.state_of_origin]
@@ -229,15 +231,21 @@ function OnboardingForm() {
     }).catch(() => {});
   }, [loading, step]);
   useEffect(() => {
-    if (!dirty) return;
-    function onVisibilityChange() {
-      if (document.visibilityState === "hidden") {
-        track("onboarding_abandoned", { step, label: STEPS[step] ?? "unknown" });
-      }
+    if (!dirty || saving) return;
+    function onPageHide(event: PageTransitionEvent) {
+      // pagehide represents navigation/close more accurately than
+      // visibilitychange, which also fires for ordinary tab switching.
+      if (event.persisted || terminalEventTracked.current) return;
+      terminalEventTracked.current = true;
+      track("onboarding_abandoned", {
+        step,
+        label: STEPS[step] ?? "unknown",
+        reason: "page_hide",
+      });
     }
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, [dirty, step]);
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, [dirty, saving, step]);
   useEffect(() => {
     if (!dirty || saving) return;
     function handler(e: BeforeUnloadEvent) {
@@ -307,12 +315,30 @@ function OnboardingForm() {
       return;
     }
     setError(null);
-    track("onboarding_step_completed", { step, label: STEPS[step] ?? "unknown" });
+    trackStepCompletion(step, "continue");
     setStep((s) => Math.min(s + 1, STEPS.length - 1));
   }
   function goBack() {
     setError(null);
     setStep((s) => Math.max(s - 1, 0));
+  }
+  function trackStepCompletion(completedStep: number, path: "continue" | "provisional_matches" | "finish") {
+    if (completedSteps.current.has(completedStep)) return;
+    completedSteps.current.add(completedStep);
+    track("onboarding_step_completed", {
+      step: completedStep,
+      label: STEPS[completedStep] ?? "unknown",
+      path,
+    });
+  }
+  function trackSkip() {
+    if (terminalEventTracked.current) return;
+    terminalEventTracked.current = true;
+    track("onboarding_abandoned", {
+      step,
+      label: STEPS[step] ?? "unknown",
+      reason: "skip",
+    });
   }
   async function saveProfileAndGoDashboard() {
     if (!matchingAuthorized) {
@@ -337,6 +363,8 @@ function OnboardingForm() {
       setError("Couldn't save your profile. Please try again.");
       return;
     }
+    trackStepCompletion(0, "provisional_matches");
+    terminalEventTracked.current = true;
     setDirty(false);
     clearDraft();
     router.push("/dashboard");
@@ -376,6 +404,8 @@ function OnboardingForm() {
       setError("Your profile saved, but your WAEC results didn't. You can retry from this page.");
       return;
     }
+    trackStepCompletion(STEPS.length - 1, "finish");
+    terminalEventTracked.current = true;
     setDirty(false);
     clearDraft();
     router.push("/dashboard");
@@ -392,6 +422,7 @@ function OnboardingForm() {
       setError(null);
       return;
     }
+    trackSkip();
     setSkipPending(true);
     try {
       await fetch("/api/profile", {
@@ -403,6 +434,7 @@ function OnboardingForm() {
     } catch {
       // Skip must always work even if the save fails -- navigate anyway.
     }
+    setDirty(false);
     router.push("/dashboard");
     router.refresh();
   }

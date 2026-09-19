@@ -18,8 +18,9 @@
 // events into public.events (migration 0019): profile_created on the
 // first-ever save, and profile_completed when completeness crosses to 100.
 // Server-side because only the server reliably knows the before/after
-// state. Event writes are fire-and-forget: analytics must never fail a
-// profile save.
+// state. Event writes are awaited but fail-open: analytics must never fail a
+// profile save, while awaiting gives serverless runtimes time to commit the
+// event before the response completes.
 //
 // Undergrad-only pivot: academic_level is gone. Added the eligibility fields
 // most Nigerian scholarships actually gate on (state/LGA of origin, DOB,
@@ -74,17 +75,19 @@ const profileSchema = z.object({
   onboarding_step: z.number().int().min(0).max(4).optional(),
   onboarding_last_activity_at: z.string().datetime().nullable().optional(),
 })
-// Fire-and-forget activation event. Analytics failures are swallowed:
-// losing a funnel datapoint is acceptable, failing a profile save is not.
-function recordEvent(
+// Best-effort activation event. The write is awaited so serverless runtimes
+// do not terminate before it commits, but every failure is swallowed: losing
+// a funnel datapoint is acceptable, failing a profile save is not.
+async function recordEvent(
   supabase: Awaited<ReturnType<typeof createClient>>,
   profileId: string,
   event: string
 ) {
-  supabase
-    .from('events')
-    .insert({ profile_id: profileId, event })
-    .then(() => {});
+  try {
+    await supabase.from('events').insert({ profile_id: profileId, event })
+  } catch {
+    // Analytics must never block or fail a profile save.
+  }
 }
 export async function GET() {
   const supabase = await createClient()
@@ -141,12 +144,12 @@ export async function POST(request: Request) {
     return dbErrorResponse('profile', error)
   }
   if (!existing) {
-    recordEvent(supabase, user.id, 'profile_created')
+    await recordEvent(supabase, user.id, 'profile_created')
   } else if (
     (existing.profile_completeness ?? 0) < 100 &&
     (profile?.profile_completeness ?? 0) === 100
   ) {
-    recordEvent(supabase, user.id, 'profile_completed')
+    await recordEvent(supabase, user.id, 'profile_completed')
   }
   // PERF (batch 1): profile fields drive match evaluation, so the cached
   // matches payload must be dropped the moment they change. Fail-open:
