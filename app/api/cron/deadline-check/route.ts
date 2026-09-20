@@ -28,6 +28,7 @@ import { sendEmail } from '@/lib/email/send'
 import { runNewListingDigest } from '@/lib/email/digest'
 import { runProfileNudges, PROFILE_NUDGE_INTERVAL_MS } from '@/lib/email/profileNudges'
 import { queueProfileNudges } from '@/lib/email/profileNudgesQueue'
+import { queueDeadlineReminder } from '@/lib/email/deadlineRemindersQueue'
 import { renderDeadlineReminder, type EmailListing } from '@/lib/email/template'
 import { firstName, getAuthEmailsByUserId } from '@/lib/email/authRecipients'
 export const dynamic = 'force-dynamic'
@@ -83,6 +84,20 @@ scholarship: { id: string; title: string; provider_name: string; amount: string 
     if (s.deadline < todayIso || s.deadline > windowEnd) continue
     const legacyKey = `${row.profile_id}:${row.scholarship_id}`
     const dedupeKey = `deadline_reminder:${row.profile_id}:${row.scholarship_id}`
+    if (process.env.DEADLINE_REMINDERS_USE_INNGEST === 'true') {
+      try {
+        const queued = await queueDeadlineReminder(supabase, {
+          profileId: row.profile_id,
+          scholarshipId: row.scholarship_id,
+          alreadyReminded: reminded.has(legacyKey),
+        })
+        if (queued === 'queued') summary.deadline_reminders += 1
+      } catch (err) {
+        summary.failed += 1
+        logError(ROUTE, 'deadline_reminder_enqueue_failed', { profile: row.profile_id, scholarship: row.scholarship_id }, err)
+      }
+      continue
+    }
     const { error: intentError } = await supabase.from('notification_deliveries').upsert(
       {
         profile_id: row.profile_id,
