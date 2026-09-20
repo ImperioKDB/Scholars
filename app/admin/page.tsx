@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { SendDigestButton } from "@/components/admin/SendDigestButton";
 import { SendProfileNudgesButton } from "@/components/admin/SendProfileNudgesButton";
+import { SendTestProfileNudgeButton } from "@/components/admin/SendTestProfileNudgeButton";
 // Activation funnel window for the scoreboard below. 30 days matches how
 // often you actually look at this page and how long a signup cohort stays
 // relevant during an application cycle.
@@ -229,6 +230,14 @@ export default async function AdminOverviewPage() {
           both guards and emails every incomplete profile right now, for one-off campaigns only.
         </p>
         <SendProfileNudgesButton lastNudgeAt={stats.lastNudgeAt} />
+      </div>
+      <div className="bg-white rounded-xl border border-hairline p-5 mb-10">
+        <h2 className="font-display text-lg font-semibold text-navy mb-1">Inngest delivery test</h2>
+        <p className="text-sm text-navy-light mb-4">
+          Sends one profile-nudge test email to the approved admin address through the production
+          Inngest worker. This action is restricted to admins and cannot target another address.
+        </p>
+        <SendTestProfileNudgeButton />
       </div>
       <div className="bg-white rounded-xl border border-hairline overflow-hidden">
         <div className="px-5 py-4 border-b border-hairline flex items-center justify-between">
