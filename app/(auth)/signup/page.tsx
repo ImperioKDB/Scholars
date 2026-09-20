@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AuthShell } from "@/components/AuthShell";
 import { FormField, inputClass } from "@/components/FormField";
+import { StatusMessage } from "@/components/StatusMessage";
 import { PasswordField } from "@/components/PasswordField";
 import { AuthConfirmation } from "@/components/AuthConfirmation";
 import { validatePasswordStrength } from "@/lib/auth/password";
@@ -107,7 +108,7 @@ export default function SignupPage() {
       heading="Create your account"
       sub="Start discovering scholarships in minutes."
     >
-      {error && <p role="alert" className="text-sm text-rose bg-rose-light rounded-lg px-3.5 py-2.5 mb-5">{error}</p>}
+      {error && <StatusMessage tone="error" className="mb-5">{error}</StatusMessage>}
       <form onSubmit={handleSubmit} noValidate>
         <FormField label="Full name" id="signup-full-name">
           <input

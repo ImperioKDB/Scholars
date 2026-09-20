@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AuthShell } from "@/components/AuthShell";
+import { StatusMessage } from "@/components/StatusMessage";
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -54,9 +55,9 @@ export function AuthConfirmation({
         </p>
       </div>
       {status && (
-        <p className={status.startsWith("A new") ? "text-sm text-emerald mb-4" : "text-sm text-rose mb-4"} role="alert">
+        <StatusMessage tone={status.startsWith("A new") ? "success" : "error"} className="mb-4">
           {status}
-        </p>
+        </StatusMessage>
       )}
       <button
         type="button"

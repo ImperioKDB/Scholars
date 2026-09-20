@@ -1,4 +1,5 @@
 "use client";
+import { StatusMessage } from "@/components/StatusMessage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -288,10 +289,10 @@ export function DashboardClient({
         <WeeklyFocus profileCompleteness={profileCompleteness} onboardingStep={onboardingStep} matches={matches} savedCount={saved.length} closingSoonCount={closingSoonCount} />
       </div>
       {loadError && (
-        <p className="text-sm text-rose mb-6" role="alert">
+        <StatusMessage tone="error" className="mb-6">
           {loadError}{" "}
           <button type="button" onClick={() => { setLoadError(null); router.refresh(); }} className="font-medium underline">Try again</button>
-        </p>
+        </StatusMessage>
       )}
       {upcomingDeadlines.length > 0 && (
         <div id="deadlines" className="mb-10 scroll-mt-6">

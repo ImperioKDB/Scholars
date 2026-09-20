@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AuthShell } from "@/components/AuthShell";
 import { FormField, inputClass } from "@/components/FormField";
+import { StatusMessage } from "@/components/StatusMessage";
 import { PasswordField } from "@/components/PasswordField";
 import { normalizeEmail } from "@/lib/auth/email";
 import { Skeleton } from "@/components/Skeleton";
@@ -123,11 +124,7 @@ function LoginForm() {
 
   return (
     <AuthShell heading="Welcome back" sub="Log in to see your latest matches.">
-      {error && (
-        <p className="text-sm text-rose bg-rose-light rounded-lg px-3.5 py-2.5 mb-5" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <StatusMessage tone="error" className="mb-5">{error}</StatusMessage>}
       <form onSubmit={handleSubmit} noValidate>
         <FormField label="Email" id="login-email">
           <input

@@ -1,4 +1,5 @@
 "use client";
+import { StatusMessage } from "@/components/StatusMessage";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -211,15 +212,13 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
       </div>
 
       {loadError && (
-        <p className="text-sm text-rose mb-6" role="alert">
+        <StatusMessage tone="error" className="mb-6">
           {loadError}{" "}
           <button type="button" onClick={() => { setLoadError(null); router.refresh(); }} className="font-medium underline">Try again</button>
-        </p>
+        </StatusMessage>
       )}
 
-      {actionError && (
-        <p className="text-sm text-rose mb-6" role="alert">{actionError}</p>
-      )}
+      {actionError && <StatusMessage tone="error" className="mb-6">{actionError}</StatusMessage>}
 
       {nextAction && (
         <div className="bg-navy text-white rounded-2xl p-5 sm:p-6 mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

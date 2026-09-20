@@ -17,6 +17,7 @@
 // Draft persistence key bumped to v2: the step order changed, so a v1
 // draft's saved step index would land people on the wrong screen.
 "use client";
+import { StatusMessage } from "@/components/StatusMessage";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -669,7 +670,7 @@ function OnboardingForm() {
           <div className="sr-only" aria-live="polite" aria-atomic="true">
             {saving || skipPending ? "Saving your profile…" : error ? error : ""}
           </div>
-          {error && <p role="alert" className="text-sm text-rose mb-4">{error}</p>}
+          {error && <StatusMessage tone="error" className="mb-4">{error}</StatusMessage>}
           <div className="flex items-center justify-between mt-6 pt-6 border-t border-hairline gap-3">
             <button type="button" onClick={goBack} disabled={step === 0 || saving || skipPending}
               className="text-sm font-medium text-navy-light hover:text-navy disabled:opacity-0 disabled:pointer-events-none">

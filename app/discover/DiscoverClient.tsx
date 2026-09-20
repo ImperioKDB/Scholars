@@ -1,4 +1,5 @@
 "use client";
+import { StatusMessage } from "@/components/StatusMessage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ScholarshipCard, type CardScholarship } from "@/components/ScholarshipCard";
 import { isCurrentlyOpen } from "@/lib/discovery";
@@ -174,10 +175,10 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
         </div>
       </div>
       {loadError && (
-        <p className="text-sm text-rose mb-6" role="alert">
+        <StatusMessage tone="error" className="mb-6">
           {loadError}{" "}
           <button type="button" onClick={() => load(0, true)} className="font-medium underline">Retry</button>
-        </p>
+        </StatusMessage>
       )}
       {!loading && items.length === 0 && !loadError ? (
         <div className="bg-white rounded-2xl border border-hairline p-8 text-center shadow-[0_1px_2px_rgba(11,30,61,0.03)]">

@@ -1,4 +1,5 @@
 "use client";
+import { StatusMessage } from "@/components/StatusMessage";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -131,7 +132,7 @@ export default function AdminOpportunitiesPage() {
         {loading ? (
           <p className="text-sm text-navy-light p-5">Loading&hellip;</p>
         ) : loadError ? (
-          <p className="text-sm text-rose p-5">{loadError}</p>
+          <StatusMessage tone="error" className="m-5">{loadError}</StatusMessage>
         ) : filtered.length === 0 ? (
           <p className="text-sm text-navy-light p-5">No opportunities match this filter.</p>
         ) : (

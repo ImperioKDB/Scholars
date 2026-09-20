@@ -1,4 +1,5 @@
 "use client";
+import { StatusMessage } from "@/components/StatusMessage";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BackLink } from "@/components/BackLink";
@@ -125,7 +126,7 @@ export function OpportunityDetailClient({
             <p className="text-sm text-ink leading-relaxed">{opportunity.eligibility_notes}</p>
           </div>
         )}
-        {actionError && <p className="text-sm text-rose mb-4" role="alert">{actionError}</p>}
+        {actionError && <StatusMessage tone="error" className="mb-4">{actionError}</StatusMessage>}
         <div className="flex flex-wrap items-center gap-3 mb-8 pb-8 border-b border-hairline">
           {opportunity.application_url && (
             <a

@@ -1,4 +1,5 @@
 "use client";
+import { StatusMessage } from "@/components/StatusMessage";
 import { useState } from "react";
 import { useAde } from "@/components/ade/AdeProvider";
 import { Spinner } from "@/components/ScholarshipCard";
@@ -200,9 +201,9 @@ export function DraftPanel({
           </p>
         )}
         {error && (
-          <p className="text-xs text-rose mt-2" role="alert">
+          <StatusMessage tone="error" className="mt-2">
             {error}
-          </p>
+          </StatusMessage>
         )}
       </div>
     );
@@ -265,9 +266,9 @@ export function DraftPanel({
             </div>
           )}
           {error && (
-            <p className="text-xs text-rose" role="alert">
+            <StatusMessage tone="error">
               {error}
-            </p>
+            </StatusMessage>
           )}
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <button

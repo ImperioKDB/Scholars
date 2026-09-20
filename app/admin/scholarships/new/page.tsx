@@ -1,4 +1,5 @@
 "use client";
+import { StatusMessage } from "@/components/StatusMessage";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -117,7 +118,7 @@ application_url: parsed.data.application_url || null,
           <RuleBuilder rules={rules} onChange={setRules} />
         </div>
 
-        {submitError && <p className="text-sm text-rose mb-4">{submitError}</p>}
+        {submitError && <StatusMessage tone="error" className="mb-4">{submitError}</StatusMessage>}
 
         <div className="flex items-center gap-3">
           <button

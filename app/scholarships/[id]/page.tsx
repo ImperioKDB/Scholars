@@ -1,3 +1,4 @@
+import { StatusMessage } from "@/components/StatusMessage";
 import { notFound } from "next/navigation";
 import { getMatchForScholarship } from "@/lib/matching/getMatches";
 import { getCurrentUserAndProfile } from "@/lib/supabase/currentUser";
@@ -66,7 +67,7 @@ export default async function ScholarshipDetailPage({ params }: { params: Promis
   }
 
   if (error || !match) {
-    return <p className="text-sm text-rose">Couldn&apos;t load this scholarship. Try refreshing.</p>;
+    return <StatusMessage tone="error">We couldn&apos;t load this scholarship. Try refreshing, or return to Discover to keep browsing.</StatusMessage>;
   }
 
   // SIMILAR SCHOLARSHIPS: same discipline first, fall back to same level,

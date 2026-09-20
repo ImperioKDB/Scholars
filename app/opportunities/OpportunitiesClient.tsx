@@ -1,4 +1,5 @@
 "use client";
+import { StatusMessage } from "@/components/StatusMessage";
 import { useEffect, useRef, useState } from "react";
 import { OpportunityCard, type CardOpportunity } from "@/components/OpportunityCard";
 import { OPPORTUNITY_TYPE_OPTIONS } from "@/lib/admin/opportunity";
@@ -188,12 +189,12 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
         </div>
       </div>
       {loadError && (
-        <p className="text-sm text-rose mb-6" role="alert">
+        <StatusMessage tone="error" className="mb-6">
           {loadError}{" "}
           <button type="button" onClick={() => load(0, true)} className="font-medium underline">
             Retry
           </button>
-        </p>
+        </StatusMessage>
       )}
       {!loading && items.length === 0 && !loadError ? (
         <div className="bg-white rounded-xl border border-hairline p-8 text-center mb-12">

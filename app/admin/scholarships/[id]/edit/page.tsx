@@ -1,4 +1,5 @@
 "use client";
+import { StatusMessage } from "@/components/StatusMessage";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ScholarshipFields } from "@/components/admin/ScholarshipFields";
@@ -218,7 +219,7 @@ application_url: parsed.data.application_url || null,
     return <p className="text-sm text-navy-light">Loading…</p>;
   }
   if (notFound) {
-    return <p className="text-sm text-rose">Scholarship not found, or admin access is required.</p>;
+    return <StatusMessage tone="error">Scholarship not found, or admin access is required. Check the link or ask an administrator for access.</StatusMessage>;
   }
   return (
     <div>
@@ -250,7 +251,7 @@ application_url: parsed.data.application_url || null,
           <p className="text-sm text-navy-light mb-4">These drive the match score students see.</p>
           <RuleBuilder rules={rules} onChange={setRules} />
         </div>
-        {submitError && <p className="text-sm text-rose mb-4">{submitError}</p>}
+        {submitError && <StatusMessage tone="error" className="mb-4">{submitError}</StatusMessage>}
         <div className="flex items-center gap-3">
           <button
             type="submit"

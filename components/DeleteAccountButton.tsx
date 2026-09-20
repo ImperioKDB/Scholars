@@ -1,4 +1,5 @@
 "use client";
+import { StatusMessage } from "@/components/StatusMessage";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -48,9 +49,9 @@ export function DeleteAccountButton() {
   return (
     <div className="mt-4 pt-4 border-t border-hairline">
       {error && (
-        <p role="alert" className="text-sm text-rose mb-3">
+        <StatusMessage tone="error" className="mb-3">
           {error}
-        </p>
+        </StatusMessage>
       )}
       <button
         type="button"

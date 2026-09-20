@@ -1,4 +1,5 @@
 "use client";
+import { StatusMessage } from "@/components/StatusMessage";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { OpportunityFields } from "@/components/admin/OpportunityFields";
@@ -127,7 +128,7 @@ export default function EditOpportunityPage() {
     return <p className="text-sm text-navy-light">Loading…</p>;
   }
   if (notFound) {
-    return <p className="text-sm text-rose">Opportunity not found, or admin access is required.</p>;
+    return <StatusMessage tone="error">Opportunity not found, or admin access is required. Check the link or ask an administrator for access.</StatusMessage>;
   }
   return (
     <div>
@@ -154,7 +155,7 @@ export default function EditOpportunityPage() {
         <div className="bg-white rounded-xl border border-hairline p-6 mb-6">
           <OpportunityFields values={values} errors={errors} onChange={update} />
         </div>
-        {submitError && <p className="text-sm text-rose mb-4">{submitError}</p>}
+        {submitError && <StatusMessage tone="error" className="mb-4">{submitError}</StatusMessage>}
         <div className="flex items-center gap-3">
           <button
             type="submit"

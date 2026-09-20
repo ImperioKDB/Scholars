@@ -161,9 +161,9 @@ export default function AdminBroadcastPage() {
       </div>
 
       {loadError && (
-        <p className="text-sm text-rose mb-6" role="alert">
+        <StatusMessage tone="error" className="mb-6">
           {loadError}
-        </p>
+        </StatusMessage>
       )}
 
       {!loading && !loadError && (

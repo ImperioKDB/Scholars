@@ -1,4 +1,5 @@
 'use client';
+import { StatusMessage } from "@/components/StatusMessage";
 
 import { useState, useEffect } from "react";
 import { Avatar } from "@/components/Avatar";  // CORRECTED PATH - matches your project structure
@@ -78,7 +79,7 @@ export function ActiveUsersTable() {
   if (error) {
     return (
       <div className="bg-red-light border border-red p-4 rounded-lg">
-        <p className="text-red">Error: {error}</p>
+        <StatusMessage tone="error">We couldn&apos;t load the active users list. Check your connection and try again.</StatusMessage>
         <button 
           onClick={fetchUsers}
           className="mt-2 text-sm text-navy hover:text-navy-light"

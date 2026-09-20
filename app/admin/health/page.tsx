@@ -1,3 +1,4 @@
+import { StatusMessage } from "@/components/StatusMessage";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/admin/access";
 import { createClient } from "@/lib/supabase/server";
@@ -148,7 +149,7 @@ export default async function AdminHealthPage() {
     .order("deadline", { ascending: true })
     .limit(ROW_CAP);
   if (error) {
-    return <p className="text-sm text-rose">Couldn&apos;t load health data: {error.message}</p>;
+    return <StatusMessage tone="error">We couldn&apos;t load the health checks right now. Please try again shortly.</StatusMessage>;
   }
   const rows = (data ?? []) as Row[];
   const capped = rows.length >= ROW_CAP;

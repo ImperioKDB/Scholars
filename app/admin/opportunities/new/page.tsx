@@ -1,4 +1,5 @@
 "use client";
+import { StatusMessage } from "@/components/StatusMessage";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -84,7 +85,7 @@ export default function NewOpportunityPage() {
           <OpportunityFields values={values} errors={errors} onChange={update} />
         </div>
 
-        {submitError && <p className="text-sm text-rose mb-4">{submitError}</p>}
+        {submitError && <StatusMessage tone="error" className="mb-4">{submitError}</StatusMessage>}
 
         <div className="flex items-center gap-3">
           <button

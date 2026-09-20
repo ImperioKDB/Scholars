@@ -1,4 +1,5 @@
 "use client";
+import { StatusMessage } from "@/components/StatusMessage";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -218,7 +219,7 @@ export function ScholarshipDetailClient({
           <p className="text-sm text-ink leading-relaxed mb-6 mt-4">{scholarship.description}</p>
         )}
 
-        {actionError && <p className="text-sm text-rose mb-4" role="alert">{actionError}</p>}
+        {actionError && <StatusMessage tone="error" className="mb-4">{actionError}</StatusMessage>}
 
         <div className="flex flex-wrap items-center gap-3 mb-8 pb-8 border-b border-hairline">
           {scholarship.application_url && (

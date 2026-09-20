@@ -1,4 +1,5 @@
 "use client";
+import { StatusMessage } from "@/components/StatusMessage";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useOverlayAccessibility } from "@/lib/useOverlayAccessibility";
@@ -164,9 +165,9 @@ export function FeedbackModal({ open, onClose }: { open: boolean; onClose: () =>
               />
             </label>
             {error && (
-              <p role="alert" className="text-sm text-rose">
+              <StatusMessage tone="error">
                 {error}
-              </p>
+              </StatusMessage>
             )}
             <div className="flex items-center justify-end gap-3 pt-1">
               <button

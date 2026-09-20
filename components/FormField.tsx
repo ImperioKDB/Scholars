@@ -36,7 +36,7 @@ export function FormField({
         // silent for screen reader users). text-xs -> text-sm too: an
         // error is critical information, and 12px is below the size the
         // audit flags as risky on mobile.
-        <span id={errorId} role="alert" className="block text-sm text-rose mt-1.5">
+        <span id={errorId} role="alert" className="inline-flex items-start rounded-md border border-rose-light bg-rose-light px-2.5 py-1.5 text-sm leading-5 text-rose mt-1.5">
           {error}
         </span>
       )}
