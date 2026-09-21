@@ -238,14 +238,14 @@ export function DashboardClient({
     for (const m of matches) map.set(m.id, m);
     for (const s of saved) map.set(s.scholarship.id, s.scholarship);
     return [...map.values()]
-      .filter((s) => { const d = daysUntil(s.deadline); return d !== null && d >= 0; })
+      .filter((s) => { const d = daysUntil(s.deadline); return d !== null && d >= 0 && d <= 7; })
       .sort((a, b) => new Date(a.deadline as string).getTime() - new Date(b.deadline as string).getTime())
       .slice(0, 5);
   }, [matches, saved]);
   const closingSoonCount = useMemo(() => {
     const ids = new Set<string>();
-    for (const m of matches) { const d = daysUntil(m.deadline); if (d !== null && d >= 0 && d <= 30) ids.add(m.id); }
-    for (const s of saved) { const d = daysUntil(s.scholarship.deadline); if (d !== null && d >= 0 && d <= 30) ids.add(s.scholarship.id); }
+    for (const m of matches) { const d = daysUntil(m.deadline); if (d !== null && d >= 0 && d <= 7) ids.add(m.id); }
+    for (const s of saved) { const d = daysUntil(s.scholarship.deadline); if (d !== null && d >= 0 && d <= 7) ids.add(s.scholarship.id); }
     return ids.size;
   }, [matches, saved]);
   async function toggleSave(scholarshipId: string) {
@@ -309,7 +309,7 @@ export function DashboardClient({
       )}
       {upcomingDeadlines.length > 0 && (
         <div id="deadlines" className="mb-10 scroll-mt-6">
-          <h2 className="font-display text-lg font-semibold text-navy mb-3">Upcoming deadlines</h2>
+          <h2 className="font-display text-lg font-semibold text-navy mb-3">Deadlines within 7 days</h2>
           <div className="space-y-3 max-w-3xl">
             {upcomingDeadlines.map((s) => (
               <DeadlineCard key={s.id} scholarship={s} days={daysUntil(s.deadline) as number} />
