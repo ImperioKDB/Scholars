@@ -229,7 +229,7 @@ export function DraftPanel({
           <div>
             <p className="text-xs font-medium text-ink mb-1.5">Personal statement</p>
             <textarea
-              className="w-full rounded-lg border border-hairline bg-white px-3 py-2.5 text-sm text-ink resize-y min-h-[140px] focus:border-navy outline-none"
+              className="w-full rounded-lg border border-hairline bg-white px-3 py-2.5 text-sm text-ink resize-y min-h-[140px] focus:border-navy"
               value={statement}
               onChange={(e) => setStatement(e.target.value)}
               maxLength={STATEMENT_MAX_CHARS + 500}
