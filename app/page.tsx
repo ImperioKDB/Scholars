@@ -6,6 +6,7 @@ import { TestimonialsSection } from "@/components/TestimonialsSection";
 import { Footer } from "@/components/Footer";
 import { DeadlineBadge } from "@/components/DeadlineBadge";
 import { createPublicClient } from "@/lib/supabase/public";
+import { isCurrentlyOpen } from "@/lib/discovery";
 
 // PERF (batch 1): ISR. The live scholarship card hits Supabase at most
 // once per 5 minutes instead of on every landing-page visit. The data is
@@ -21,10 +22,13 @@ export const revalidate = 300;
 // public-client pattern as app/s/[id]/page.tsx), and says so honestly if
 // nothing is live yet.
 type LiveScholarship = {
+  id: string;
   title: string;
   provider_name: string;
   amount: string | null;
   deadline: string | null;
+  opens_at: string | null;
+  last_cycle_closed_at: string | null;
   discipline: string | null;
   level: "undergrad" | "postgrad" | "both";
 };
@@ -33,12 +37,14 @@ async function loadLiveScholarships(): Promise<LiveScholarship[]> {
   const supabase = createPublicClient();
   const { data } = await supabase
     .from("scholarships")
-    .select("title, provider_name, amount, deadline, discipline, level")
+    .select("id, title, provider_name, amount, deadline, opens_at, last_cycle_closed_at, discipline, level")
     .eq("verified", true)
     .in("level", ["undergrad", "both"])
     .order("deadline", { ascending: true })
-    .limit(3);
-  return (data ?? []) as LiveScholarship[];
+    .limit(20);
+  return (data ?? [])
+    .filter((scholarship) => isCurrentlyOpen(scholarship))
+    .slice(0, 4) as LiveScholarship[];
 }
 
 function levelLabel(level: LiveScholarship["level"]): string {
@@ -68,8 +74,9 @@ export default async function LandingPage() {
       </header>
       <main>
         {/* Hero */}
-        <section className="mx-auto max-w-4xl px-5 py-10 sm:px-6 sm:py-14 md:py-16">
-          <div>
+        <section className="mx-auto max-w-6xl px-5 py-10 sm:px-6 sm:py-14 md:py-20">
+          <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(26rem,0.9fr)] lg:gap-16">
+            <div>
             <span className="inline-flex items-center gap-2 rounded-full border border-emerald/20 bg-emerald-light px-3.5 py-1.5 text-xs font-medium text-emerald mb-5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald" />
               Eligibility-matched, not keyword-matched
@@ -99,37 +106,47 @@ export default async function LandingPage() {
                 Free to join, takes about 5 minutes
               </p>
             </div>
-          </div>
-          <div className="mt-10 max-w-2xl bg-white rounded-2xl shadow-card border border-hairline p-5 sm:p-6">
-            <p className="font-mono text-xs uppercase tracking-widest text-navy-light mb-4">
-              Live on Scholars right now
-            </p>
-            {live.length === 0 ? (
-              <p className="text-sm text-navy-light">
-                New scholarships are being researched and verified right now. Check back soon.
-              </p>
-            ) : (
-              <ul className="space-y-4">
-                {live.map((s) => {
-                  return (
-                    <li key={s.title} className="flex items-center gap-4 pb-4 border-b border-hairline last:border-0 last:pb-0">
+            </div>
+            <div className="bg-white rounded-2xl shadow-card border border-hairline p-5 sm:p-6 lg:mt-2">
+              <div className="flex items-start justify-between gap-4 mb-5">
+                <div>
+                  <p className="font-mono text-xs uppercase tracking-widest text-navy-light">
+                    Open now
+                  </p>
+                  <p className="text-sm text-navy-light mt-1">Verified opportunities accepting applications.</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-emerald-light px-2.5 py-1 text-xs font-medium text-emerald">
+                  Updated regularly
+                </span>
+              </div>
+              {live.length === 0 ? (
+                <p className="text-sm text-navy-light">
+                  New scholarships are being researched and verified right now. Check back soon.
+                </p>
+              ) : (
+                <ul className="space-y-4">
+                  {live.map((s) => (
+                    <li key={s.id} className="flex items-start gap-4 border-b border-hairline pb-4 last:border-0 last:pb-0">
                       <ProviderMonogram name={s.provider_name} size={48} />
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-ink text-sm leading-snug">{s.title}</p>
-                        <p className="text-xs text-navy-light mt-0.5">
-                          {levelLabel(s.level)}
-                          {s.discipline ? ` \u00b7 ${s.discipline}` : ""}
-                        </p>
+                        <Link href={`/scholarships/${s.id}`} className="font-medium text-ink text-sm leading-snug hover:text-navy hover:underline focus-visible:underline">
+                          {s.title}
+                        </Link>
+                        <p className="text-xs text-navy-light mt-0.5">{s.provider_name}</p>
                         <div className="flex flex-wrap items-center gap-2 mt-1.5">
                           {s.amount && <span className="text-xs font-mono text-emerald">{s.amount}</span>}
                           <DeadlineBadge deadline={s.deadline} />
+                          <span className="text-xs text-navy-light">{levelLabel(s.level)}</span>
                         </div>
                       </div>
                     </li>
-                  );
-                })}
-              </ul>
-            )}
+                  ))}
+                </ul>
+              )}
+              <Link href="/discover" className="mt-5 inline-flex min-h-[44px] items-center text-sm font-medium text-navy hover:underline">
+                Browse all active scholarships <span aria-hidden="true" className="ml-1">&rarr;</span>
+              </Link>
+            </div>
           </div>
         </section>
         {/* How it works */}
