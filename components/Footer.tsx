@@ -16,7 +16,7 @@ import { Logo } from "@/components/Logo";
 export function Footer() {
   return (
     <footer className="border-t border-hairline bg-white overflow-hidden">
-      <div className="mx-auto max-w-6xl px-6 py-14 grid md:grid-cols-3 gap-10">
+      <div className="mx-auto max-w-2xl px-6 py-14 grid grid-cols-1 gap-8">
         <div>
           <Logo className="text-navy mb-4" />
           <p className="text-sm text-navy-light max-w-xs leading-relaxed">
