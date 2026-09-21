@@ -220,6 +220,13 @@ export function DashboardClient({
     () => (tab === "all" ? openMatches : openMatches.filter((m) => m.tier === tab)),
     [openMatches, tab]
   );
+  const tabCounts = useMemo(() => ({
+    all: openMatches.length,
+    excellent: openMatches.filter((m) => m.tier === "excellent").length,
+    good: openMatches.filter((m) => m.tier === "good").length,
+    possible: openMatches.filter((m) => m.tier === "possible").length,
+    unlikely: openMatches.filter((m) => m.tier === "unlikely").length,
+  }), [openMatches]);
   const upcomingDeadlines = useMemo(() => {
     const map = new Map<string, CardScholarship>();
     for (const m of matches) map.set(m.id, m);
@@ -304,13 +311,38 @@ export function DashboardClient({
           </div>
         </div>
       )}
-      <div className="flex items-center gap-2 mb-5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
-        {TABS.map((t) => (
-          <button key={t.value} type="button" onClick={() => setTab(t.value)}
-            className={"inline-flex min-h-[44px] items-center rounded-full px-4 text-sm font-medium transition-colors " + (tab === t.value ? "bg-navy text-white" : "text-navy-light hover:bg-navy-50")}>
-            {t.label}
-          </button>
-        ))}
+      <div className="mb-5">
+        <div className="flex items-end justify-between gap-4 mb-2">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-navy-light">Your matches</p>
+            <p className="text-sm text-navy-light mt-1">Browse by confidence</p>
+          </div>
+          <span className="shrink-0 text-xs font-mono text-navy-light">{filteredMatches.length} shown</span>
+        </div>
+        <div role="tablist" aria-label="Filter scholarship matches" className="flex gap-1.5 overflow-x-auto rounded-2xl bg-navy-50 p-1.5 scrollbar-none">
+          {TABS.map((t) => {
+            const active = tab === t.value;
+            return (
+              <button
+                key={t.value}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setTab(t.value)}
+                className={[
+                  "inline-flex min-h-[42px] shrink-0 items-center gap-2 rounded-xl px-3.5 text-sm font-medium whitespace-nowrap transition-[background-color,color,box-shadow] duration-150",
+                  "focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-emerald",
+                  active ? "bg-white text-navy shadow-[0_1px_3px_rgba(11,30,61,0.14)]" : "text-navy-light hover:bg-white/70 hover:text-navy",
+                ].join(" ")}
+              >
+                <span>{t.label}</span>
+                <span className={active ? "rounded-full bg-navy px-1.5 py-0.5 text-[11px] leading-none text-white" : "rounded-full bg-white/70 px-1.5 py-0.5 text-[11px] leading-none text-navy-light"}>
+                  {tabCounts[t.value]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
       {filteredMatches.length === 0 ? (
         <div className="bg-white rounded-xl border border-hairline p-8 text-center mb-12">
