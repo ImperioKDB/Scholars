@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ScholarshipCard, Spinner, type CardScholarship } from "@/components/ScholarshipCard";
+import { DeadlineBadge } from "@/components/DeadlineBadge";
 import { WhatsappOptIn } from "@/components/WhatsappOptIn";
 import { consumeReturnScroll, saveReturnScroll } from "@/lib/scrollRestore";
 import { daysUntil, formatDeadlineLabel } from "@/lib/dates";
@@ -71,11 +72,34 @@ function WeeklyFocus({ profileCompleteness, onboardingStep, matches, savedCount,
         <p className="text-xs uppercase tracking-[0.16em] text-navy-light">Fresh matches</p>
         <p className="text-sm text-navy-light mt-1 mb-3">A short list to review now.</p>
         <div className="space-y-3">
-          {matches.slice(0, 3).map((match) => (
-            <Link key={match.id} href={`/scholarships/${match.id}`} onClick={() => track("weekly_focus_actioned", { action: "open_fresh_match", scholarship_id: match.id })} className="block text-sm font-medium text-ink hover:text-navy truncate">
-              {match.title}<span className="text-navy-light font-normal"> · {match.tier === "excellent" ? "Excellent fit" : "Worth a look"}</span>
-            </Link>
-          ))}
+          {matches.slice(0, 3).map((match) => {
+            // Keep the destination derived from this row's own stable ID so
+            // every Fresh Match opens its corresponding detail page.
+            const detailHref = `/scholarships/${encodeURIComponent(match.id)}`;
+            return (
+              <Link
+                key={`fresh-match-${match.id}`}
+                href={detailHref}
+                data-scholarship-id={match.id}
+                aria-label={`View details for ${match.title}`}
+                onClick={() => track("weekly_focus_actioned", { action: "open_fresh_match", scholarship_id: match.id })}
+                className="group flex items-start justify-between gap-4 rounded-xl border border-transparent px-2 py-2 -mx-2 hover:border-hairline hover:bg-parchment/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-ink group-hover:text-navy">{match.title}</span>
+                  <span className="mt-1 block text-xs text-navy-light">
+                    {match.tier === "excellent" ? "Excellent fit" : "Worth a look"}
+                  </span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <span className="block text-xs text-navy-light group-hover:text-navy">View details <span aria-hidden="true">&rarr;</span></span>
+                  <span className="mt-1 block">
+                    <DeadlineBadge deadline={match.deadline} />
+                  </span>
+                </span>
+              </Link>
+            );
+          })}
           {matches.length === 0 && <p className="text-sm text-navy-light">Complete a few profile fields to unlock fresh matches.</p>}
         </div>
       </div>
