@@ -156,7 +156,7 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
           <label className="block mb-3">
             <span className="sr-only">Search by title or provider</span>
             <input
-              className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-navy-light/50 focus:border-navy outline-none transition-colors"
+              className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-navy-light/50 focus:border-navy transition-colors"
               type="search"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
@@ -178,7 +178,7 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
               ))}
             </select>
             <input
-              className="text-sm rounded-lg border border-hairline bg-white px-3 py-2 w-full sm:w-72 placeholder:text-navy-light/50 focus:border-navy outline-none transition-colors"
+              className="text-sm rounded-lg border border-hairline bg-white px-3 py-2 w-full sm:w-72 placeholder:text-navy-light/50 focus:border-navy transition-colors"
               type="text"
               value={discipline}
               onChange={(e) => setDiscipline(e.target.value)}

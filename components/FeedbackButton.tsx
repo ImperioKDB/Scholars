@@ -160,7 +160,7 @@ export function FeedbackButton() {
                 <label className="block">
                   <span className="block text-sm font-medium text-ink mb-1.5">What is this about?</span>
                   <select
-                    className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink focus:border-navy outline-none transition-colors"
+                    className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink focus:border-navy transition-colors"
                     value={category}
                     onChange={(e) => setCategory(e.target.value as Category)}
                     disabled={submitting}
@@ -175,7 +175,7 @@ export function FeedbackButton() {
                 <label className="block">
                   <span className="block text-sm font-medium text-ink mb-1.5">Your message</span>
                   <textarea
-                    className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink resize-y min-h-[140px] focus:border-navy outline-none transition-colors"
+                    className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink resize-y min-h-[140px] focus:border-navy transition-colors"
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder="What happened, what you expected, and where you saw it. The more concrete, the faster we can act."
@@ -196,7 +196,7 @@ export function FeedbackButton() {
                   </span>
                   <input
                     type="email"
-                    className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink focus:border-navy outline-none transition-colors"
+                    className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink focus:border-navy transition-colors"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@university.edu.ng"

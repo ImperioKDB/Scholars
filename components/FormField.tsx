@@ -45,6 +45,6 @@ export function FormField({
 }
 
 export const inputClass =
-  "w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-navy-light/50 focus:border-navy focus-visible:ring-2 focus-visible:ring-emerald focus-visible:ring-offset-1 outline-none transition-colors";
+  "w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-navy-light/50 focus:border-navy focus-visible:ring-2 focus-visible:ring-emerald focus-visible:ring-offset-1 transition-colors";
 export const selectClass = inputClass + " appearance-none bg-white";
 export const textareaClass = inputClass + " resize-none min-h-[96px]";

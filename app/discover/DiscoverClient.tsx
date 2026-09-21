@@ -145,7 +145,7 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
           <label className="block mb-3">
             <span className="sr-only">Search by scholarship name or provider</span>
             <input
-              className="w-full min-h-[48px] rounded-xl border border-hairline bg-white px-3.5 text-sm text-ink placeholder:text-navy-light/50 focus:border-navy outline-none transition-colors"
+              className="w-full min-h-[48px] rounded-xl border border-hairline bg-white px-3.5 text-sm text-ink placeholder:text-navy-light/50 focus:border-navy transition-colors"
               type="search"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
@@ -164,7 +164,7 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
               ))}
             </select>
             <input
-              className="min-h-[44px] text-sm rounded-xl border border-hairline bg-white px-3 w-full sm:w-72 placeholder:text-navy-light/50 focus:border-navy outline-none transition-colors"
+              className="min-h-[44px] text-sm rounded-xl border border-hairline bg-white px-3 w-full sm:w-72 placeholder:text-navy-light/50 focus:border-navy transition-colors"
               type="text"
               value={discipline}
               onChange={(e) => setDiscipline(e.target.value)}

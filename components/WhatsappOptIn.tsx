@@ -99,7 +99,7 @@ export function WhatsappOptIn({ initialOptIn }: { initialOptIn: boolean }) {
             type="tel"
             inputMode="tel"
             autoComplete="tel"
-            className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-navy-light/50 focus:border-navy outline-none transition-colors"
+            className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-navy-light/50 focus:border-navy transition-colors"
             placeholder="08031234567"
             value={number}
             onChange={(e) => setNumber(e.target.value)}

@@ -123,7 +123,7 @@ export function FeedbackModal({ open, onClose }: { open: boolean; onClose: () =>
               <select
                 id="feedback-category"
                 aria-label="What is this about?"
-                className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink focus:border-navy focus-visible:ring-2 focus-visible:ring-emerald focus-visible:ring-offset-1 outline-none transition-colors"
+                className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink focus:border-navy focus-visible:ring-2 focus-visible:ring-emerald focus-visible:ring-offset-1 transition-colors"
                 value={category}
                 onChange={(e) => setCategory(e.target.value as Category)}
                 disabled={submitting}
@@ -141,7 +141,7 @@ export function FeedbackModal({ open, onClose }: { open: boolean; onClose: () =>
                 ref={messageRef}
                 id="feedback-message"
                 aria-label="Your message"
-                className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink resize-y min-h-[120px] focus:border-navy focus-visible:ring-2 focus-visible:ring-emerald focus-visible:ring-offset-1 outline-none transition-colors"
+                className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink resize-y min-h-[120px] focus:border-navy focus-visible:ring-2 focus-visible:ring-emerald focus-visible:ring-offset-1 transition-colors"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="What happened, what you expected, and where you saw it."
@@ -157,7 +157,7 @@ export function FeedbackModal({ open, onClose }: { open: boolean; onClose: () =>
                 type="email"
                 id="feedback-email"
                 aria-label="Email for a reply (optional)"
-                className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink focus:border-navy focus-visible:ring-2 focus-visible:ring-emerald focus-visible:ring-offset-1 outline-none transition-colors"
+                className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink focus:border-navy focus-visible:ring-2 focus-visible:ring-emerald focus-visible:ring-offset-1 transition-colors"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@university.edu.ng"
