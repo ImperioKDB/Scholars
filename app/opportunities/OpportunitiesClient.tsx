@@ -153,9 +153,10 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
           verified, but not scored, since eligibility for these varies too much to gate automatically.
         </p>
         <div className="bg-white rounded-xl border border-hairline p-4">
-          <label className="block mb-3">
-            <span className="sr-only">Search by title or provider</span>
+          <label htmlFor="opportunities-search" className="block mb-3">
+            <span className="block text-sm font-medium text-ink mb-1.5">Search opportunities</span>
             <input
+              id="opportunities-search"
               className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-navy-light/50 focus:border-navy transition-colors"
               type="search"
               value={keyword}
@@ -163,12 +164,14 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
               placeholder="Search by title or provider"
             />
           </label>
-          <div className="flex flex-wrap gap-2">
-            <select
+          <div className="flex flex-wrap items-end gap-3">
+            <label htmlFor="opportunities-type" className="block text-sm font-medium text-ink">
+              Type
+              <select
+              id="opportunities-type"
               className="text-sm rounded-lg border border-hairline bg-white px-3 py-2"
               value={type}
               onChange={(e) => setType(e.target.value)}
-              aria-label="Filter by type"
             >
               <option value="">All types</option>
               {OPPORTUNITY_TYPE_OPTIONS.map((o) => (
@@ -176,15 +179,19 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
                   {o.label}
                 </option>
               ))}
-            </select>
-            <input
+              </select>
+            </label>
+            <label htmlFor="opportunities-discipline" className="block text-sm font-medium text-ink flex-1 sm:flex-none">
+              Course or discipline
+              <input
+              id="opportunities-discipline"
               className="text-sm rounded-lg border border-hairline bg-white px-3 py-2 w-full sm:w-72 placeholder:text-navy-light/50 focus:border-navy transition-colors"
               type="text"
               value={discipline}
               onChange={(e) => setDiscipline(e.target.value)}
               placeholder="Filter by course, e.g. Computer Science"
-              aria-label="Filter by course"
-            />
+              />
+            </label>
           </div>
         </div>
       </div>

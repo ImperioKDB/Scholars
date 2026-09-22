@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Fraunces, Manrope } from "next/font/google";
+import { Fraunces, IBM_Plex_Mono, Manrope } from "next/font/google";
 import { AdeProvider } from "@/components/ade/AdeProvider";
 import { AuthRescue } from "@/components/AuthRescue";
 import { CookieConsent } from "@/components/CookieConsent";
@@ -20,6 +20,12 @@ const manrope = Manrope({
   weight: ["400", "500", "600", "700"],
 });
 
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  variable: "--font-plex-mono",
+  weight: ["400", "500", "600"],
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng"),
   title: {
@@ -36,12 +42,14 @@ export const metadata: Metadata = {
     description:
       "Create one profile and discover verified scholarships for students in Nigeria.",
     url: "/",
+    images: [{ url: "/logo.png", width: 256, height: 256, alt: "Scholars logo" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Find scholarships you're actually eligible for",
     description:
       "Create one profile and discover verified scholarships for students in Nigeria.",
+    images: ["/logo.png"],
   },
 };
 
@@ -51,7 +59,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${manrope.variable}`}>
+    <html lang="en" className={`${fraunces.variable} ${manrope.variable} ${plexMono.variable}`}>
       <body className="font-sans bg-parchment text-ink antialiased">
         {/* Rescues auth codes/tokens that Supabase strands on the root
             when a redirectTo is rejected (see components/AuthRescue.tsx).

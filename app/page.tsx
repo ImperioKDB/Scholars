@@ -7,6 +7,7 @@ import { Footer } from "@/components/Footer";
 import { DeadlineBadge } from "@/components/DeadlineBadge";
 import { createPublicClient } from "@/lib/supabase/public";
 import { isCurrentlyOpen } from "@/lib/discovery";
+import type { Metadata } from "next";
 
 // PERF (batch 1): ISR. The live scholarship card hits Supabase at most
 // once per 5 minutes instead of on every landing-page visit. The data is
@@ -14,6 +15,12 @@ import { isCurrentlyOpen } from "@/lib/discovery";
 // revalidation window costs nothing in freshness. This route is eligible
 // for ISR because it reads through the cookie-free public client only.
 export const revalidate = 300;
+
+export const metadata: Metadata = {
+  title: "Find scholarships you are eligible for",
+  description:
+    "Create one profile and discover verified scholarships for students in Nigeria, with deadlines and eligibility details in one place.",
+};
 
 // AUDIT FIX (batch 5): the hero card used to show three hardcoded sample
 // matches, complete with invented match scores. A visitor has no profile
@@ -116,7 +123,7 @@ export default async function LandingPage() {
                   <p className="text-sm text-navy-light mt-1">Verified opportunities accepting applications.</p>
                 </div>
                 <span className="shrink-0 rounded-full bg-emerald-light px-2.5 py-1 text-xs font-medium text-emerald">
-                  Updated regularly
+                  Verified listings
                 </span>
               </div>
               {live.length === 0 ? (

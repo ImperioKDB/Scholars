@@ -41,7 +41,6 @@ export function FeedbackModal({ open, onClose }: { open: boolean; onClose: () =>
     if (!open) return;
     setSent(false);
     setError(null);
-    messageRef.current?.focus();
     if (!email) {
       (async () => {
         const { data } = await supabase.auth.getUser();
@@ -89,12 +88,13 @@ export function FeedbackModal({ open, onClose }: { open: boolean; onClose: () =>
       role="dialog"
       aria-modal="true"
       aria-labelledby="feedback-title"
+      aria-describedby="feedback-description"
     >
       <div className="bg-white rounded-2xl border border-hairline shadow-card p-6 max-w-sm w-full">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
             <h2 id="feedback-title" className="font-display text-lg font-semibold text-navy">Send feedback</h2>
-            <p className="text-xs text-navy-light mt-0.5">
+            <p id="feedback-description" className="text-xs text-navy-light mt-0.5">
               Bugs, ideas, or a scholarship that looks wrong. We read every message.
             </p>
           </div>
@@ -118,11 +118,10 @@ export function FeedbackModal({ open, onClose }: { open: boolean; onClose: () =>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-            <label className="block">
+            <label htmlFor="feedback-category" className="block">
               <span className="block text-sm font-medium text-ink mb-1.5">What is this about?</span>
               <select
                 id="feedback-category"
-                aria-label="What is this about?"
                 className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink focus:border-navy focus-visible:ring-2 focus-visible:ring-emerald focus-visible:ring-offset-1 transition-colors"
                 value={category}
                 onChange={(e) => setCategory(e.target.value as Category)}
@@ -135,12 +134,11 @@ export function FeedbackModal({ open, onClose }: { open: boolean; onClose: () =>
                 ))}
               </select>
             </label>
-            <label className="block">
+            <label htmlFor="feedback-message" className="block">
               <span className="block text-sm font-medium text-ink mb-1.5">Your message</span>
               <textarea
                 ref={messageRef}
                 id="feedback-message"
-                aria-label="Your message"
                 className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink resize-y min-h-[120px] focus:border-navy focus-visible:ring-2 focus-visible:ring-emerald focus-visible:ring-offset-1 transition-colors"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
@@ -149,14 +147,13 @@ export function FeedbackModal({ open, onClose }: { open: boolean; onClose: () =>
                 disabled={submitting}
               />
             </label>
-            <label className="block">
+            <label htmlFor="feedback-email" className="block">
               <span className="block text-sm font-medium text-ink mb-1.5">
                 Email for a reply <span className="text-navy-light font-normal">(optional)</span>
               </span>
               <input
                 type="email"
                 id="feedback-email"
-                aria-label="Email for a reply (optional)"
                 className="w-full rounded-lg border border-hairline bg-white px-3.5 py-2.5 text-sm text-ink focus:border-navy focus-visible:ring-2 focus-visible:ring-emerald focus-visible:ring-offset-1 transition-colors"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}

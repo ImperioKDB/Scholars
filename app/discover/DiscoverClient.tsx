@@ -142,9 +142,10 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
           Every verified listing on Scholars. Your personalized matches live on the dashboard; this is the full catalog.
         </p>
         <div className="bg-white rounded-2xl border border-hairline p-4 sm:p-5 shadow-[0_1px_2px_rgba(11,30,61,0.03)]">
-          <label className="block mb-3">
-            <span className="sr-only">Search by scholarship name or provider</span>
+          <label htmlFor="discover-search" className="block mb-3">
+            <span className="block text-sm font-medium text-ink mb-1.5">Search scholarships</span>
             <input
+              id="discover-search"
               className="w-full min-h-[48px] rounded-xl border border-hairline bg-white px-3.5 text-sm text-ink placeholder:text-navy-light/50 focus:border-navy transition-colors"
               type="search"
               value={keyword}
@@ -152,25 +153,44 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
               placeholder="Search by scholarship name or provider, e.g. MTN"
             />
           </label>
-          <div className="flex flex-wrap gap-2">
-            <select
-              className="min-h-[44px] text-sm rounded-xl border border-hairline bg-white px-3"
+          <div className="flex flex-wrap items-end gap-3">
+            <label htmlFor="discover-level" className="block text-sm font-medium text-ink">
+              Level
+              <select
+                id="discover-level"
+                className="mt-1 block min-h-[44px] text-sm rounded-xl border border-hairline bg-white px-3"
               value={level}
               onChange={(e) => setLevel(e.target.value)}
-              aria-label="Filter by level"
             >
               {LEVEL_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
-            </select>
-            <input
-              className="min-h-[44px] text-sm rounded-xl border border-hairline bg-white px-3 w-full sm:w-72 placeholder:text-navy-light/50 focus:border-navy transition-colors"
+              </select>
+            </label>
+            <label htmlFor="discover-discipline" className="block text-sm font-medium text-ink flex-1 sm:flex-none">
+              Course or discipline
+              <input
+              id="discover-discipline"
+              className="mt-1 block min-h-[44px] text-sm rounded-xl border border-hairline bg-white px-3 w-full sm:w-72 placeholder:text-navy-light/50 focus:border-navy transition-colors"
               type="text"
               value={discipline}
               onChange={(e) => setDiscipline(e.target.value)}
               placeholder="Filter by course, e.g. Computer Science"
-              aria-label="Filter by course"
-            />
+              />
+            </label>
+            {filtersActive && (
+              <button
+                type="button"
+                onClick={() => {
+                  setKeyword("");
+                  setLevel("");
+                  setDiscipline("");
+                }}
+                className="min-h-[44px] px-3 text-sm font-medium text-navy hover:underline"
+              >
+                Clear filters
+              </button>
+            )}
           </div>
         </div>
       </div>
