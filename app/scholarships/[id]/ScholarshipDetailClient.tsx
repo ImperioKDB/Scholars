@@ -15,6 +15,8 @@ import { useAde } from "@/components/ade/AdeProvider";
 import type { CyclePrediction } from "@/lib/cycles";
 import { track } from "@/lib/analytics";
 import { ReportScholarshipButton } from "@/components/ReportScholarshipButton";
+import { ScholarshipCommunity } from "@/components/ScholarshipCommunity";
+import type { ScholarshipCommunity as ScholarshipCommunityData } from "@/lib/scholarship-community";
 
 type ScholarshipDetail = {
   id: string;
@@ -73,12 +75,14 @@ export function ScholarshipDetailClient({
   initialApplication,
   sharerId,
   similar,
+  initialCommunity,
 }: {
   scholarship: ScholarshipDetail;
   initialSaved: boolean;
   initialApplication: { id: string; status: ApplicationStatus } | null;
   sharerId: string;
   similar: SimilarScholarship[];
+  initialCommunity: ScholarshipCommunityData;
 }) {
   const router = useRouter();
   const { interceptApply } = useAde();
@@ -290,6 +294,13 @@ export function ScholarshipDetailClient({
           <ReportScholarshipButton scholarshipId={scholarship.id} />
         </div>
       </div>
+
+      <ScholarshipCommunity
+        scholarshipId={scholarship.id}
+        initialDiscussions={initialCommunity.discussions}
+        socialProof={initialCommunity.socialProof}
+        canInteract
+      />
 
       {similar.length > 0 && (
         <div className="mt-8">

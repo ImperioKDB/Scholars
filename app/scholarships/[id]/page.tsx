@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getMatchForScholarship } from "@/lib/matching/getMatches";
 import { getCurrentUserAndProfile } from "@/lib/supabase/currentUser";
 import { createClient } from "@/lib/supabase/server";
+import { loadScholarshipCommunity } from "@/lib/scholarship-community";
 import { ScholarshipDetailClient, type SimilarScholarship } from "./ScholarshipDetailClient";
 import { isUuid } from "@/lib/validate";
 
@@ -36,7 +37,7 @@ export default async function ScholarshipDetailPage({ params }: { params: Promis
   // saved + application ran as a second wave. All four queries are
   // independent, so run them in ONE parallel wave to cut a full Supabase
   // round-trip off every card click.
-  const [matchResult, savedResult, applicationResult] = await Promise.all([
+  const [matchResult, savedResult, applicationResult, community] = await Promise.all([
     getMatchForScholarship(id),
     supabase
       .from("saved_scholarships")
@@ -50,6 +51,7 @@ export default async function ScholarshipDetailPage({ params }: { params: Promis
       .eq("profile_id", user.id)
       .eq("scholarship_id", id)
       .maybeSingle(),
+    loadScholarshipCommunity(supabase, id),
   ]);
 
   const { match, error } = matchResult;
@@ -112,6 +114,7 @@ export default async function ScholarshipDetailPage({ params }: { params: Promis
       initialApplication={initialApplication}
       sharerId={user.id}
       similar={similar}
+      initialCommunity={community}
     />
   );
 }
