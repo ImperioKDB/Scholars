@@ -55,7 +55,7 @@ function WeeklyFocus({ profileCompleteness, onboardingStep, matches, savedCount,
     : savedCount === 0
     ? { title: "Save your first opportunity", detail: "Keep a shortlist so you can return when deadlines get closer.", href: "#matches", label: "Browse matches", id: "browse_matches" }
     : closingSoonCount > 0
-    ? { title: "Review closing opportunities", detail: `${closingSoonCount} matched scholarship${closingSoonCount === 1 ? " is" : "s are"} closing within 30 days.`, href: "#deadlines", label: "Check deadlines", id: "review_deadlines" }
+    ? { title: "Review closing opportunities", detail: `${closingSoonCount} matched scholarship${closingSoonCount === 1 ? " is" : "s are"} closing within 7 days.`, href: "#deadlines", label: "Check deadlines", id: "review_deadlines" }
     : { title: "Refresh your shortlist", detail: "Open a new match and decide whether it belongs in your funding plan.", href: "#matches", label: "See matches", id: "refresh_shortlist" };
   return (
     <div className="grid grid-cols-1 gap-5 mb-10">
@@ -63,7 +63,7 @@ function WeeklyFocus({ profileCompleteness, onboardingStep, matches, savedCount,
         <p className="text-xs uppercase tracking-[0.16em] text-white/65">Your focus this week</p>
         <h2 className="font-display text-xl font-semibold mt-2">{action.title}</h2>
         <p className="text-sm text-white/75 mt-1 max-w-md">{action.detail}</p>
-        <Link href={action.href} onClick={() => track("weekly_focus_actioned", { action: action.id })} className="inline-flex mt-5 rounded-seal bg-white text-navy text-sm font-medium px-4 py-2.5 hover:bg-navy-50 transition-colors">
+        <Link href={action.href} onClick={() => track("weekly_focus_actioned", { action: action.id })} className="mt-5 inline-flex min-h-10 items-center justify-center rounded-seal bg-white px-4 py-2.5 text-sm font-medium text-navy transition-colors hover:bg-navy-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
           {action.label} <span aria-hidden="true" className="ml-2">&rarr;</span>
         </Link>
       </div>
@@ -83,7 +83,7 @@ function WeeklyFocus({ profileCompleteness, onboardingStep, matches, savedCount,
           ))}
           {matches.length === 0 && <p className="text-sm text-navy-light">Complete a few profile fields to unlock fresh matches.</p>}
         </div>
-        {matches.length > 0 && <span className="mt-4 inline-flex text-sm font-medium text-navy">Review fresh matches <span aria-hidden="true" className="ml-2">&rarr;</span></span>}
+        {matches.length > 0 && <span className="mt-4 inline-flex min-h-10 items-center rounded-seal bg-navy px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors group-hover:bg-navy/90">Review fresh matches <span aria-hidden="true" className="ml-2">&rarr;</span></span>}
       </Link>
     </div>
   );
@@ -114,7 +114,7 @@ function GapNudgeBanner({ gaps }: { gaps: GapNudge[] }) {
               scholarships: top.scholarshipCount,
             })
           }
-          className="shrink-0 text-xs font-medium text-white bg-emerald rounded-full px-4 py-2 hover:opacity-90 transition-opacity"
+          className="inline-flex min-h-10 shrink-0 items-center rounded-full bg-emerald px-4 py-2 text-xs font-medium text-white shadow-sm transition-colors hover:bg-emerald/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald"
         >
           Add it now
         </Link>
@@ -281,7 +281,7 @@ export function DashboardClient({
           <div className="bg-white rounded-2xl border border-hairline p-5 mb-6 shadow-[0_1px_2px_rgba(11,30,61,0.03)]">
             <div className="flex items-center justify-between mb-2 gap-3">
               <p className="text-sm font-medium text-ink">Your profile is {profileCompleteness}% complete</p>
-              <Link href="/onboarding" className="text-sm font-medium text-navy hover:underline shrink-0">Finish it &rarr;</Link>
+              <Link href="/onboarding" className="inline-flex min-h-10 shrink-0 items-center rounded-full bg-navy px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-navy/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald">Finish it <span aria-hidden="true" className="ml-2">&rarr;</span></Link>
             </div>
             <div className="h-2 rounded-full bg-hairline overflow-hidden">
               <div className="h-full rounded-full bg-amber" style={{ width: `${profileCompleteness}%` }} />
