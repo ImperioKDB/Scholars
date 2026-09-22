@@ -37,11 +37,11 @@ const SCHOLARSHIP_COLUMNS =
   "id, title, provider_name, description, amount, deadline, application_url, how_to_apply, level, discipline, verified";
 
 // scholarships!inner -- an application or saved-scholarship row whose
-// joined scholarship has since failed RLS (e.g. an admin unverified it)
-// must not come back as { scholarship: null }. ApplicationsClient reads
-// a.scholarship.title / a.scholarship.application_url unconditionally,
-// so !inner drops the unjoinable row entirely instead of crashing the
-// render. Same fix applied to app/dashboard/page.tsx,
+// joined scholarship is no longer accessible must not come back as
+// { scholarship: null }. Expired listings remain accessible to their
+// saved/tracking owners through RLS, while other unjoinable rows are
+// dropped instead of crashing the render. Same pattern is used in
+// app/dashboard/page.tsx,
 // app/api/applications/route.ts, and app/api/applications/[id]/route.ts.
 const APPLICATION_COLUMNS = `id, status, notes, created_at, updated_at, link_clicked_at, checkin_prompted_at, draft_statement, draft_summary, draft_generated_at, draft_confirmed_at, scholarship:scholarships!inner ( ${SCHOLARSHIP_COLUMNS} )`;
 

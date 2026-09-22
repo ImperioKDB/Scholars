@@ -21,14 +21,11 @@ export default async function DashboardPage() {
     supabase
       .from("saved_scholarships")
       .select(
-        // scholarships!inner -- a saved scholarship that has since been
-        // unverified by an admin fails the scholarships_select_verified
-        // RLS policy on the join. Without !inner, PostgREST still returns
-        // the saved_scholarships row with scholarship: null instead of
-        // dropping it, and isCurrentlyOpen(s.scholarship) below crashes
-        // the whole page reading .deadline off null. !inner drops the
-        // row entirely instead, matching the pattern already used in
-        // app/api/cron/deadline-check/route.ts.
+        // scholarships!inner -- the RLS policy allows an expired listing
+        // through for users who saved or track it, while excluding it from
+        // general discovery. Without !inner, any deleted or otherwise
+        // inaccessible joined row would arrive as scholarship: null and
+        // isCurrentlyOpen(s.scholarship) below would crash the page.
         `id, saved_at,
          scholarship:scholarships!inner ( id, slug, title, provider_name, description, amount, deadline, opens_at, application_url, level, discipline, verified )`
       )

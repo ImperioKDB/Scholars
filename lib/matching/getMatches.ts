@@ -173,7 +173,6 @@ export async function getMatchForScholarship(scholarshipId: string): Promise<{
       .from("scholarships")
       .select(SCHOLARSHIP_DETAIL_COLUMNS)
       .eq("id", scholarshipId)
-      .eq("verified", true)
       .in("level", ["undergrad", "both"])
       .maybeSingle(),
     supabase
