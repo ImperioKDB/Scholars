@@ -99,8 +99,8 @@ function PlannerRow({
         <p className="text-xs text-navy-light">
           {section === "urgent" && days !== null ? `${formatDeadlineLabel(days)} — prioritize this review` : `${match.tier === "excellent" ? "Excellent" : match.tier === "good" ? "Strong" : "Possible"} fit`}
         </p>
-        <Link href={`/scholarships/${match.id}`} onClick={saveReturnScroll} className="shrink-0 text-xs font-medium text-navy hover:underline">
-          View full details &rarr;
+        <Link href={`/scholarships/${match.id}`} onClick={saveReturnScroll} className="inline-flex min-h-10 shrink-0 items-center rounded-full bg-navy px-4 text-xs font-medium text-white shadow-sm transition-colors hover:bg-navy/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald">
+          View full details <span aria-hidden="true" className="ml-2">&rarr;</span>
         </Link>
       </div>
     </div>
