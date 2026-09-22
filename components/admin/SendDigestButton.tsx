@@ -39,7 +39,7 @@ export function SendDigestButton({ lastDigestAt }: { lastDigestAt: string | null
           `Dry run: email is not configured on the server, so ${summary.students_emailed} digest(s) were prepared but nothing was sent.`
         );
       } else if (summary.students_emailed === 0) {
-        setNotice("Nothing new to announce. Every student is already up to date on the last 7 days of listings.");
+        setNotice("Nothing new to announce. No newly added listings are waiting for students.");
       } else {
         setNotice(
           `Sent ${summary.students_emailed} digest email${summary.students_emailed === 1 ? "" : "s"} covering ${summary.listings_announced} listing${summary.listings_announced === 1 ? "" : "s"}.` +
@@ -66,7 +66,7 @@ export function SendDigestButton({ lastDigestAt }: { lastDigestAt: string | null
     <div>
       {confirmOpen && (
         <ConfirmDialog
-          message="Send the new-listing digest now? Each student gets ONE email bundling every verified listing from the last 7 days they haven't been told about yet. Students already up to date receive nothing."
+          message="Send the latest new-listing email now? Each student gets at most one email featuring the newest verified listing from the last 7 days that they have not already received. Students with nothing newly added receive nothing."
           onConfirm={send}
           onClose={() => !busy && setConfirmOpen(false)}
           confirmLabel="Send digest"

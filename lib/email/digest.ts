@@ -5,16 +5,16 @@
 // Semantics:
 //   - Collect every verified scholarship (undergrad or both) and every
 //     verified opportunity created in the last DIGEST_WINDOW_DAYS days.
-//   - Per student, skip listings already present in announcement_log, so
-//     each student receives each listing exactly once, ever.
-//   - Bundle everything pending into ONE email (max DIGEST_CAP tiles plus
-//     an "and N more" line). Never one email per listing.
+//   - Per student, skip listings already present in announcement_log, using
+//     the full history so a previously sent listing is never re-announced.
+//   - Send only the newest pending listing, rather than bundling a backlog
+//     of older listings into a student email.
 //   - minIntervalMs is the per-student re-blast throttle. The cron passes
 //     2 hours; the admin button passes 0 because an admin pressing it just
 //     added listings and wants them out now. Listing-level dedupe still
 //     holds either way.
 //   - Record every pending listing in announcement_log after a successful
-//     send (or a dry run), so nothing is re-announced later.
+//     send (or a dry run), so stale pending listings do not return later.
 import { createServiceClient } from '@/lib/supabase/service'
 import { logError } from '@/lib/logging'
 import { renderNewListingsDigest, type EmailListing } from '@/lib/email/template'
@@ -23,7 +23,7 @@ import { firstName, getAuthEmailsByUserId } from '@/lib/email/authRecipients'
 import { claimNotificationDelivery, markNotificationAccepted, markNotificationRetryable } from '@/lib/email/outbox'
 
 export const DIGEST_WINDOW_DAYS = 7
-export const DIGEST_CAP = 6
+export const DIGEST_CAP = 1
 
 const KIND_LABELS: Record<string, string> = {
   fellowship: 'Fellowship',
@@ -58,19 +58,21 @@ export async function runNewListingDigest(opts: { minIntervalMs?: number } = {})
       supabase.from('profiles').select('id,full_name'),
       supabase
         .from('scholarships')
-        .select('id,title,provider_name,amount,deadline')
+        .select('id,title,provider_name,amount,deadline,created_at')
         .eq('verified', true)
         .in('level', ['undergrad', 'both'])
         .gte('created_at', since),
       supabase
         .from('opportunities')
-        .select('id,type,title,provider_name,compensation,deadline')
+        .select('id,type,title,provider_name,compensation,deadline,created_at')
         .eq('verified', true)
         .gte('created_at', since),
+      // This is deliberately not limited to the recent window: a listing
+      // sent in the past must never be included again.
       supabase
         .from('announcement_log')
         .select('profile_id,listing_kind,listing_id,created_at')
-        .gte('created_at', since),
+        .limit(100000),
     ])
     const announced = new Set(
       (logRows ?? []).map((r) => `${r.profile_id}:${r.listing_kind}:${r.listing_id}`)
@@ -83,8 +85,8 @@ export async function runNewListingDigest(opts: { minIntervalMs?: number } = {})
       const prev = lastDigestAt.get(r.profile_id) ?? 0
       if (t > prev) lastDigestAt.set(r.profile_id, t)
     }
-    const schList = (newSch ?? []) as { id: string; title: string; provider_name: string; amount: string | null; deadline: string | null }[]
-    const oppList = (newOpp ?? []) as { id: string; type: string; title: string; provider_name: string; compensation: string | null; deadline: string | null }[]
+    const schList = (newSch ?? []) as { id: string; title: string; provider_name: string; amount: string | null; deadline: string | null; created_at: string }[]
+    const oppList = (newOpp ?? []) as { id: string; type: string; title: string; provider_name: string; compensation: string | null; deadline: string | null; created_at: string }[]
     for (const p of profileRows) {
       const email = emailById.get(p.id)
       if (!email) {
@@ -95,9 +97,8 @@ export async function runNewListingDigest(opts: { minIntervalMs?: number } = {})
       if (minIntervalMs > 0 && last && now - last < minIntervalMs) continue
       const pendingSch = schList.filter((s) => !announced.has(`${p.id}:scholarship:${s.id}`))
       const pendingOpp = oppList.filter((o) => !announced.has(`${p.id}:opportunity:${o.id}`))
-      if (pendingSch.length === 0 && pendingOpp.length === 0) continue
-      const items: EmailListing[] = [
-        ...pendingSch.map((s) => ({
+      const pending = [
+        ...pendingSch.map((s) => ({ created_at: s.created_at, listing: {
           id: s.id,
           title: s.title,
           provider_name: s.provider_name,
@@ -105,8 +106,8 @@ export async function runNewListingDigest(opts: { minIntervalMs?: number } = {})
           deadline: s.deadline,
           kind_label: 'Scholarship',
           url: `${baseUrl}/scholarships/${s.id}`,
-        })),
-        ...pendingOpp.map((o) => ({
+        } })),
+        ...pendingOpp.map((o) => ({ created_at: o.created_at, listing: {
           id: o.id,
           title: o.title,
           provider_name: o.provider_name,
@@ -114,10 +115,12 @@ export async function runNewListingDigest(opts: { minIntervalMs?: number } = {})
           deadline: o.deadline,
           kind_label: KIND_LABELS[o.type] ?? 'Opportunity',
           url: `${baseUrl}/opportunities/${o.id}`,
-        })),
+        } })),
       ]
-      const shown = items.slice(0, DIGEST_CAP)
-      const moreCount = items.length - shown.length
+      if (pending.length === 0) continue
+      pending.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+      const shown: EmailListing[] = [pending[0].listing]
+      const moreCount = 0
       const { subject, html, text } = renderNewListingsDigest({
         firstName: firstName(p.full_name),
         items: shown,
