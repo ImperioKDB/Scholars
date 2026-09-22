@@ -10,6 +10,11 @@ type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected" |
 
 const SIMILAR_COLUMNS = "id, title, provider_name, amount, deadline, level, discipline";
 
+// This page reads the authenticated user and the scholarship identified by
+// the URL. Never reuse a rendered detail page for a different scholarship.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function ScholarshipDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
