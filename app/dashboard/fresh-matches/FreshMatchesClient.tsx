@@ -165,7 +165,7 @@ export function FreshMatchesClient({
       }
     }
     for (const match of initialMatches) {
-      if (!assigned.has(match.id)) strongest.push(match);
+      if (!assigned.has(match.id) && match.eligibilityScore > 80) strongest.push(match);
     }
     urgent.sort((a, b) => (daysUntil(a.deadline) ?? 999) - (daysUntil(b.deadline) ?? 999));
     attention.sort((a, b) => b.score - a.score);
@@ -230,7 +230,7 @@ export function FreshMatchesClient({
           </div>
           <PlannerSection title="Act this week" description="These matches have deadlines within seven days. Review them before browsing anything else." matches={plan.urgent} section="urgent" savedIds={savedIds} pendingIds={pendingIds} onToggleSave={toggleSave} />
           <PlannerSection title="Needs your attention" description="Your profile is missing information needed to confirm these matches." matches={plan.attention} section="attention" savedIds={savedIds} pendingIds={pendingIds} onToggleSave={toggleSave} />
-          <PlannerSection title="Strongest matches" description="Good opportunities to shortlist after the urgent items are handled." matches={plan.strongest} section="strongest" savedIds={savedIds} pendingIds={pendingIds} onToggleSave={toggleSave} />
+          <PlannerSection title="Strongest matches" description="Your best eligibility fits, with an eligibility score above 80%." matches={plan.strongest} section="strongest" savedIds={savedIds} pendingIds={pendingIds} onToggleSave={toggleSave} />
         </>
       )}
     </div>
