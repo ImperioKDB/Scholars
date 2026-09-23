@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Fraunces, Manrope } from "next/font/google";
-import { AdeProvider } from "@/components/ade/AdeProvider";
 import { AuthRescue } from "@/components/AuthRescue";
 import { CookieConsent } from "@/components/CookieConsent";
 import { Monitoring } from "@/components/Monitoring";
@@ -57,11 +56,10 @@ export default function RootLayout({
             when a redirectTo is rejected (see components/AuthRescue.tsx).
             No-op everywhere else. */}
         <AuthRescue />
-        <AdeProvider>{children}</AdeProvider>
+        {children}
         <Monitoring />
-        {/* Essential-only cookie consent banner. Mounted outside
-            AdeProvider so it renders even on public routes where Ade
-            self-gates off (landing, /s/[id], /legal). Consent is stored
+        {/* Essential-only cookie consent banner. Mounted in the root layout so
+            it renders on every public route. Consent is stored
             in localStorage with a 1-year expiry. */}
         <CookieConsent />
       </body>

@@ -150,7 +150,7 @@ export default async function LandingPage() {
           </div>
         </section>
         {/* How it works */}
-        <section id="how-it-works" className="border-t border-hairline bg-white">
+        <section id="how-it-works" className="below-fold border-t border-hairline bg-white">
           <div className="mx-auto max-w-4xl px-6 py-14 md:py-16">
             <h2 className="font-display text-2xl font-semibold text-navy mb-10">
               How Scholars works

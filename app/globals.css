@@ -48,6 +48,13 @@
     background-image: radial-gradient(rgba(11, 30, 61, 0.035) 1px, transparent 1px);
     background-size: 3px 3px;
   }
+
+  /* Let the browser defer layout and paint work below the initial viewport
+     without collapsing scroll geometry before the section is reached. */
+  .below-fold {
+    content-visibility: auto;
+    contain-intrinsic-size: 480px;
+  }
 }
 
 /* One-shot celebratory confetti burst (components/Confetti.tsx) -- not a

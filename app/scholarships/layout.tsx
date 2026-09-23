@@ -1,3 +1,4 @@
+import { AdeShell } from "@/components/ade/AdeShell";
 import { getCurrentUserAndProfile } from "@/lib/supabase/currentUser";
 import { Sidebar } from "@/components/Sidebar";
 
@@ -10,11 +11,13 @@ export default async function ScholarshipsLayout({ children }: { children: React
   const avatarUrl = profile?.avatar_url ?? null;
 
   return (
-    <div className="min-h-screen bg-parchment">
+    <AdeShell>
+      <div className="min-h-screen bg-parchment">
       <Sidebar fullName={fullName} isAdmin={isAdmin} profileCompleteness={profileCompleteness} xpTotal={xpTotal} avatarUrl={avatarUrl} />
       <main id="main" className="md:pl-60">
         <div className="mx-auto max-w-3xl px-6 pt-20 pb-24 md:pt-10 md:pb-10">{children}</div>
       </main>
-    </div>
+      </div>
+    </AdeShell>
   );
 }

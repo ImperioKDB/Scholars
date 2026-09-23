@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { createPublicClient } from "@/lib/supabase/public";
@@ -43,7 +44,7 @@ type PublicScholarship = {
   verified: boolean;
   last_verified_at: string | null;
 };
-async function loadScholarship(slug: string): Promise<PublicScholarship | null> {
+const loadScholarship = cache(async (slug: string): Promise<PublicScholarship | null> => {
   const supabase = createPublicClient();
   const { data } = await supabase
     .from("scholarships")
@@ -52,7 +53,7 @@ async function loadScholarship(slug: string): Promise<PublicScholarship | null> 
     .eq("verified", true)
     .maybeSingle();
   return data as PublicScholarship | null;
-}
+});
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const scholarship = await loadScholarship(slug);

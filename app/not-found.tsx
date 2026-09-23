@@ -3,7 +3,7 @@ import Link from "next/link";
 // Branded 404. Next renders this for any URL that matches no route (and
 // whenever notFound() is called, e.g. a dead scholarship share link), so
 // visitors never see the framework's default error screen. Rendered
-// inside the root layout; AdeProvider self-gates off unknown paths, so
+// inside the root layout; protected route layouts add Ade only where needed, so
 // no mascot shows here.
 export default function NotFound() {
   return (

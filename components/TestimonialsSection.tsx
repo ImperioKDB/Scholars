@@ -19,13 +19,14 @@ export async function TestimonialsSection() {
     .eq("approved", true)
     .eq("consent", true)
     .order("sort_order", { ascending: true })
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })
+    .limit(HOMEPAGE_COUNT + 1);
   const all = (data ?? []) as TestimonialItem[];
   if (all.length === 0) return null;
   const items = all.slice(0, HOMEPAGE_COUNT);
   const hasMore = all.length > HOMEPAGE_COUNT;
   return (
-    <section className="border-t border-hairline bg-grain">
+    <section className="below-fold border-t border-hairline bg-grain">
       <div className="mx-auto max-w-4xl px-6 py-14 md:py-16">
         <h2 className="font-display text-2xl md:text-3xl font-semibold text-navy mb-8">
           What students say

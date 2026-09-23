@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
@@ -62,7 +63,7 @@ const TYPE_TONES: Record<PublicOpportunity["type"], string> = {
   mentorship: "bg-rose-light text-rose",
 };
 
-async function loadOpportunity(slug: string): Promise<PublicOpportunity | null> {
+const loadOpportunity = cache(async (slug: string): Promise<PublicOpportunity | null> => {
   const supabase = createPublicClient();
   const { data } = await supabase
     .from("opportunities")
@@ -71,7 +72,7 @@ async function loadOpportunity(slug: string): Promise<PublicOpportunity | null> 
     .eq("verified", true)
     .maybeSingle();
   return data as PublicOpportunity | null;
-}
+});
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
