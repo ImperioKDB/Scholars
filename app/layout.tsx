@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Fraunces, Manrope } from "next/font/google";
 import { AuthRescue } from "@/components/AuthRescue";
 import { CookieConsent } from "@/components/CookieConsent";
+import { InstallAppPrompt } from "@/components/InstallAppPrompt";
 import { Monitoring } from "@/components/Monitoring";
 import "./globals.css";
 import "./motion.css";
@@ -58,6 +59,7 @@ export default function RootLayout({
         <AuthRescue />
         {children}
         <Monitoring />
+        <InstallAppPrompt />
         {/* Essential-only cookie consent banner. Mounted in the root layout so
             it renders on every public route. Consent is stored
             in localStorage with a 1-year expiry. */}
