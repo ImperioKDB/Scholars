@@ -127,6 +127,19 @@ function valuesMatch(a: unknown, b: unknown): boolean {
   return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
 }
 
+const OPEN_DISCIPLINE_VALUES = new Set([
+  "all disciplines",
+  "any discipline",
+  "all fields",
+  "any field",
+  "open to all disciplines",
+  "open to any discipline",
+]);
+
+function isOpenDiscipline(value: unknown): boolean {
+  return typeof value === "string" && OPEN_DISCIPLINE_VALUES.has(value.trim().toLowerCase());
+}
+
 function evaluateOperator(
   operator: RuleOperator,
   profileValue: string | number | boolean,
@@ -197,7 +210,14 @@ function evaluateRule(
     };
   }
 
-  const met = evaluateOperator(operator, profileValue as string | number | boolean, value);
+  // Scholarship records use “All disciplines” (and equivalent labels) as a
+  // wildcard, not as a literal course name. Treat it as met for any student
+  // who has supplied a discipline, while keeping normal discipline rules
+  // exact and case-insensitive.
+  const met =
+    field === "discipline" && operator === "eq" && isOpenDiscipline(value)
+      ? true
+      : evaluateOperator(operator, profileValue as string | number | boolean, value);
   const shownValue = displayValue(field, profileValue);
 
   return {
