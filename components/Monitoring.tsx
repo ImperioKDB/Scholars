@@ -2,10 +2,15 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { onCLS, onFCP, onINP, onLCP, onTTFB, type Metric } from "web-vitals";
+import type { Metric } from "web-vitals";
 import { track } from "@/lib/analytics";
 
 const MAX_MESSAGE_LENGTH = 180;
+
+type IdleWindow = Window & {
+  requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+  cancelIdleCallback?: (handle: number) => void;
+};
 
 function clean(value: unknown): string {
   return String(value ?? "unknown").slice(0, MAX_MESSAGE_LENGTH);
@@ -29,11 +34,36 @@ export function Monitoring() {
   }, [pathname]);
 
   useEffect(() => {
-    onCLS(reportVital);
-    onFCP(reportVital);
-    onINP(reportVital);
-    onLCP(reportVital);
-    onTTFB(reportVital);
+    // Performance telemetry must never compete with the page's critical path.
+    // Keep web-vitals out of the initial layout chunk and load it after the
+    // browser has had a chance to render and become interactive.
+    const idleWindow = window as IdleWindow;
+    let cancelled = false;
+    let idleHandle: number | undefined;
+    let timeoutHandle: number | undefined;
+
+    const loadVitals = async () => {
+      if (cancelled) return;
+      const { onCLS, onFCP, onINP, onLCP, onTTFB } = await import("web-vitals");
+      if (cancelled) return;
+      onCLS(reportVital);
+      onFCP(reportVital);
+      onINP(reportVital);
+      onLCP(reportVital);
+      onTTFB(reportVital);
+    };
+
+    if (idleWindow.requestIdleCallback) {
+      idleHandle = idleWindow.requestIdleCallback(() => void loadVitals(), { timeout: 3000 });
+    } else {
+      timeoutHandle = window.setTimeout(() => void loadVitals(), 1500);
+    }
+
+    return () => {
+      cancelled = true;
+      if (idleHandle !== undefined) idleWindow.cancelIdleCallback?.(idleHandle);
+      if (timeoutHandle !== undefined) window.clearTimeout(timeoutHandle);
+    };
   }, []);
 
   useEffect(() => {
