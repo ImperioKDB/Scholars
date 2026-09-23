@@ -158,19 +158,28 @@ async function renderDigestFromKey(
   const opportunityIds = refs.filter((ref) => ref.startsWith('opportunity:')).map((ref) => ref.slice('opportunity:'.length))
   const [{ data: scholarships, error: scholarshipError }, { data: opportunities, error: opportunityError }] = await Promise.all([
     scholarshipIds.length
-      ? supabase.from('scholarships').select('id,title,provider_name,amount,deadline').in('id', scholarshipIds)
+      ? supabase.from('scholarships').select('id,title,provider_name,amount,deadline,created_at').in('id', scholarshipIds)
       : Promise.resolve({ data: [], error: null }),
     opportunityIds.length
-      ? supabase.from('opportunities').select('id,type,title,provider_name,compensation,deadline').in('id', opportunityIds)
+      ? supabase.from('opportunities').select('id,type,title,provider_name,compensation,deadline,created_at').in('id', opportunityIds)
       : Promise.resolve({ data: [], error: null }),
   ])
   if (scholarshipError) throw scholarshipError
   if (opportunityError) throw opportunityError
   const labels: Record<string, string> = { fellowship: 'Fellowship', internship: 'Internship', competition: 'Competition', mentorship: 'Mentorship' }
-  const items: EmailListing[] = [
-    ...(scholarships ?? []).map((item) => ({ id: item.id, title: item.title, provider_name: item.provider_name, amount: item.amount, deadline: item.deadline, kind_label: 'Scholarship', url: `${baseUrl}/scholarships/${item.id}` })),
-    ...(opportunities ?? []).map((item) => ({ id: item.id, title: item.title, provider_name: item.provider_name, amount: item.compensation, deadline: item.deadline, kind_label: labels[item.type] ?? 'Opportunity', url: `${baseUrl}/opportunities/${item.id}` })),
+  const items: Array<EmailListing & { created_at: string }> = [
+    ...(scholarships ?? []).map((item) => ({ id: item.id, title: item.title, provider_name: item.provider_name, amount: item.amount, deadline: item.deadline, kind_label: 'Scholarship', url: `${baseUrl}/scholarships/${item.id}`, created_at: item.created_at })),
+    ...(opportunities ?? []).map((item) => ({ id: item.id, title: item.title, provider_name: item.provider_name, amount: item.compensation, deadline: item.deadline, kind_label: labels[item.type] ?? 'Opportunity', url: `${baseUrl}/opportunities/${item.id}`, created_at: item.created_at })),
   ]
   if (items.length === 0) throw new Error(`No listings found for ${dedupeKey}`)
-  return renderNewListingsDigest({ firstName: firstName(fullName), items: items.slice(0, 6), moreCount: Math.max(0, items.length - 6), baseUrl })
+
+  // The digest contract is one email containing one listing: the newest
+  // qualifying listing. This guard is also required for deliveries created
+  // by older digest runs whose dedupe key contains several listing IDs.
+  items.sort((a, b) => {
+    const createdDiff = Date.parse(b.created_at) - Date.parse(a.created_at)
+    return createdDiff || b.id.localeCompare(a.id)
+  })
+  const [latest] = items
+  return renderNewListingsDigest({ firstName: firstName(fullName), items: [latest], moreCount: 0, baseUrl })
 }
