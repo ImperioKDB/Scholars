@@ -40,8 +40,9 @@ export type DigestSummary = {
   dry_run: boolean
 }
 
-export async function runNewListingDigest(opts: { minIntervalMs?: number } = {}): Promise<DigestSummary> {
+export async function runNewListingDigest(opts: { minIntervalMs?: number; manual?: boolean } = {}): Promise<DigestSummary> {
   const minIntervalMs = opts.minIntervalMs ?? 0
+  const manual = opts.manual ?? false
   const supabase = createServiceClient()
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.scholars.com.ng'
   const summary: DigestSummary = {
@@ -143,7 +144,7 @@ export async function runNewListingDigest(opts: { minIntervalMs?: number } = {})
         })
         if (!delivery) continue
         deliveryId = delivery.id
-        const res = await sendEmail({ to: email, subject, html, text })
+        const res = await sendEmail({ to: email, subject, html, text, manual })
         summary.emails_sent += res.sent
         if (res.dry) summary.dry_run = true
         await markNotificationAccepted(supabase, delivery.id)

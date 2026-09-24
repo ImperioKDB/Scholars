@@ -24,7 +24,6 @@ import { createClient } from '@/lib/supabase/server'
 import { assertAdmin } from '@/lib/admin/guard'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { runProfileNudges, PROFILE_NUDGE_INTERVAL_MS } from '@/lib/email/profileNudges'
-import { queueProfileNudges } from '@/lib/email/profileNudgesQueue'
 export const maxDuration = 300
 const bodySchema = z.object({ force: z.boolean().optional().default(false) })
 export async function POST(request: Request) {
@@ -46,8 +45,9 @@ const options =
 force
 ? { minIntervalMs: 0, enforceSendWindow: false, ignoreCap: true }
 : { minIntervalMs: PROFILE_NUDGE_INTERVAL_MS, enforceSendWindow: false }
-const summary = process.env.PROFILE_NUDGES_USE_INNGEST === 'true'
-? await queueProfileNudges(options)
-: await runProfileNudges(options)
+// A click is the only allowed email trigger. Keep this path synchronous so
+// the response reports the actual send result and the override button cannot
+// silently enqueue work for a background worker.
+const summary = await runProfileNudges({ ...options, manual: true })
 return NextResponse.json({ summary: { ...summary, forced: force } })
 }

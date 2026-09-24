@@ -10,12 +10,21 @@ import { logWarn } from '@/lib/logging'
 
 export type SendResult = { sent: number; failed: number; dry: boolean }
 
+export class AutomaticEmailDisabledError extends Error {
+  constructor() {
+    super('Automatic email sending is disabled. Send from an admin action instead.')
+    this.name = 'AutomaticEmailDisabledError'
+  }
+}
+
 export async function sendEmail(params: {
   to: string
   subject: string
   html: string
   text: string
+  manual?: boolean
 }): Promise<SendResult> {
+  if (!params.manual) throw new AutomaticEmailDisabledError()
   const apiKey = process.env.BREVO_API_KEY
   const from = process.env.REMINDER_FROM_EMAIL
   if (!apiKey || !from) {

@@ -129,11 +129,12 @@ const t = Date.parse(p.profile_reminder_last_sent_at)
 return Number.isNaN(t) ? -1 : t
 }
 export async function runProfileNudges(
-opts: { minIntervalMs?: number; enforceSendWindow?: boolean; ignoreCap?: boolean } = {}
+opts: { minIntervalMs?: number; enforceSendWindow?: boolean; ignoreCap?: boolean; manual?: boolean } = {}
 ): Promise<ProfileNudgeSummary> {
 const minIntervalMs = opts.minIntervalMs ?? PROFILE_NUDGE_INTERVAL_MS
 const enforceSendWindow = opts.enforceSendWindow ?? false
 const ignoreCap = opts.ignoreCap ?? false
+const manual = opts.manual ?? false
 const supabase = createServiceClient()
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.scholars.com.ng'
 const summary: ProfileNudgeSummary = {
@@ -230,7 +231,7 @@ missingLabels: missingProfileLabels(p),
 baseUrl,
 })
 try {
-const res = await sendEmail({ to: email, subject, html, text })
+const res = await sendEmail({ to: email, subject, html, text, manual })
 summary.emails_sent += res.sent
 if (res.dry) summary.dry_run = true
 await markNotificationAccepted(supabase, delivery.id)

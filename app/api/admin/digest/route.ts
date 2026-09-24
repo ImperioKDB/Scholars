@@ -37,6 +37,6 @@ export async function POST(request: Request) {
   if (!profile?.is_admin) {
     return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
   }
-  const summary = await runNewListingDigest({ minIntervalMs: 0 })
+  const summary = await runNewListingDigest({ minIntervalMs: 0, manual: true })
   return NextResponse.json({ summary })
 }
