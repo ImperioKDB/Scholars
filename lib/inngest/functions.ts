@@ -3,6 +3,7 @@ import { getAuthEmailsByUserId } from '@/lib/email/authRecipients'
 import { renderDeadlineReminder, renderProfileNudge, type EmailListing } from '@/lib/email/template'
 import { sendEmail } from '@/lib/email/send'
 import { claimNotificationDeliveryById, markNotificationAccepted, markNotificationRetryable } from '@/lib/email/outbox'
+import { sendPushForProfile } from '@/lib/push/deliver'
 import { DEADLINE_REMINDER_EVENT, PROFILE_NUDGE_EVENT, inngest } from './client'
 import { missingProfileLabels } from '@/lib/email/profileNudges'
 
@@ -63,6 +64,19 @@ export const sendProfileNudge = inngest.createFunction(
           text: message.subjectAndBody.text,
         }),
       )
+
+      await step.run('send-push', async () => {
+        try {
+          const supabase = createServiceClient()
+          await sendPushForProfile(supabase, claimed.profileId, {
+            title: 'Complete your Scholars profile',
+            body: message.subjectAndBody.text,
+            data: { screen: '/onboarding' },
+          })
+        } catch (error) {
+          console.error('[PushNotifications] Profile nudge failed', error)
+        }
+      })
 
       await step.run('record-success', async () => {
         const supabase = createServiceClient()
@@ -161,6 +175,19 @@ export const sendDeadlineReminder = inngest.createFunction(
           text: message.subjectAndBody.text,
         }),
       )
+
+      await step.run('send-push', async () => {
+        try {
+          const supabase = createServiceClient()
+          await sendPushForProfile(supabase, claimed.profileId, {
+            title: message.subjectAndBody.subject,
+            body: message.subjectAndBody.text,
+            data: { screen: `/scholarships/${claimed.scholarshipId}`, scholarshipId: claimed.scholarshipId },
+          })
+        } catch (error) {
+          console.error('[PushNotifications] Deadline reminder failed', error)
+        }
+      })
 
       await step.run('record-success', async () => {
         const supabase = createServiceClient()
