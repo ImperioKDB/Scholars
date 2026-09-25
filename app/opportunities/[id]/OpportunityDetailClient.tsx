@@ -7,6 +7,7 @@ import { ShareButton } from "@/components/ShareButton";
 import { DeadlineBadge } from "@/components/DeadlineBadge";
 import { ProviderMonogram } from "@/components/ProviderMonogram";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { scrollAppTo } from "@/lib/scrollRestore";
 
 export type OpportunityDetail = {
   id: string;
@@ -65,7 +66,7 @@ export function OpportunityDetailClient({
   const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
-    window.scrollTo(0, 0);
+    scrollAppTo(0);
   }, []);
 
   async function toggleSave() {

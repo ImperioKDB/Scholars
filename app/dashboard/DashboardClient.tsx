@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ScholarshipCard, Spinner, type CardScholarship } from "@/components/ScholarshipCard";
 import { WhatsappOptIn } from "@/components/WhatsappOptIn";
-import { consumeReturnScroll, saveReturnScroll } from "@/lib/scrollRestore";
+import { consumeReturnScroll, saveReturnScroll, scrollAppTo } from "@/lib/scrollRestore";
 import { daysUntil, formatDeadlineLabel } from "@/lib/dates";
 import { track } from "@/lib/analytics";
 import type { GapNudge } from "@/lib/matching/gaps";
@@ -183,7 +183,7 @@ export function DashboardClient({
   useEffect(() => {
     const y = consumeReturnScroll("/dashboard");
     if (y === null) return;
-    const raf = requestAnimationFrame(() => window.scrollTo(0, y));
+    const raf = requestAnimationFrame(() => scrollAppTo(y));
     return () => cancelAnimationFrame(raf);
   }, []);
   // PHASE 1 funnel event: an incomplete profile that already has real

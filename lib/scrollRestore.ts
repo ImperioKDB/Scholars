@@ -1,22 +1,37 @@
 // lib/scrollRestore.ts
 //
-// Return-scroll restore. Next.js Link navigation always scrolls to top
-// (scroll={true} default), and the dashboard re-renders from the server
-// behind a skeleton, so the position a student left is lost by the time
-// they tap "Back to matches". We record the offset at the moment a
-// scholarship card is tapped and replay it once the real dashboard
-// content mounts (after the skeleton), then consume the record so a
-// later sidebar visit still lands at the top.
+// Return-scroll restore. Authenticated desktop layouts scroll inside #main,
+// while mobile and public routes scroll the window. Keep all position reads and
+// writes on the same owner so returning from a detail page is consistent.
 const KEY = "scholars:return-scroll";
 
 type Saved = { from: string; y: number };
+type ScrollOwner = HTMLElement | Window;
+
+function getScrollOwner(): ScrollOwner {
+  if (typeof document !== "undefined") {
+    const main = document.getElementById("main");
+    if (main) return main;
+  }
+  return window;
+}
+
+function getScrollTop(owner: ScrollOwner): number {
+  return owner instanceof HTMLElement ? owner.scrollTop : owner.scrollY;
+}
+
+export function scrollAppTo(top: number, behavior: ScrollBehavior = "auto") {
+  const owner = getScrollOwner();
+  owner.scrollTo({ top, left: 0, behavior });
+}
 
 export function saveReturnScroll() {
   try {
-    const saved: Saved = { from: window.location.pathname, y: window.scrollY };
+    const owner = getScrollOwner();
+    const saved: Saved = { from: window.location.pathname, y: getScrollTop(owner) };
     sessionStorage.setItem(KEY, JSON.stringify(saved));
   } catch {
-    // storage blocked -- degrade to current behavior (land at top)
+    // storage or DOM access blocked -- degrade to current behavior (land at top)
   }
 }
 

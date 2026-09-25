@@ -11,6 +11,7 @@ import { ProviderMonogram } from "@/components/ProviderMonogram";
 import { CompetitivenessBadge, type CompetitivenessTier } from "@/components/CompetitivenessBadge";
 import { RequirementsList, type Requirement } from "@/components/RequirementsList";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { scrollAppTo } from "@/lib/scrollRestore";
 import { useAde } from "@/components/ade/AdeProvider";
 import type { CyclePrediction } from "@/lib/cycles";
 import { track } from "@/lib/analytics";
@@ -100,7 +101,7 @@ export function ScholarshipDetailClient({
   }
 
   useEffect(() => {
-    window.scrollTo(0, 0);
+    scrollAppTo(0);
     track("match_viewed", {
       scholarship_id: scholarship.id,
       score: scholarship.score,
