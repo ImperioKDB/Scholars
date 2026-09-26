@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { XpCounter } from "./XpCounter";
 import { titleForLevel } from "@/lib/xp/level";
 
@@ -140,6 +140,7 @@ export function AchievementsClient({
   progress: ProgressCounts;
 }) {
   const [filter, setFilter] = useState<Filter>("all");
+  const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
   const unlockedMap = useMemo(
     () => new Map(unlocked.map((u) => [u.achievement_id, u.unlocked_at])),
     [unlocked]
@@ -152,6 +153,18 @@ export function AchievementsClient({
   const showUnlocked = filter !== "locked";
   const showLocked = filter !== "unlocked";
 
+  const selectedUnlockedAt = selectedAchievement ? unlockedMap.get(selectedAchievement.id) : undefined;
+  const selectedProgress = selectedAchievement ? progressFor(selectedAchievement.id, progress) : null;
+
+  useEffect(() => {
+    if (!selectedAchievement) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setSelectedAchievement(null);
+    }
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [selectedAchievement]);
+
   const TABS: { value: Filter; label: string }[] = [
     { value: "all", label: `All (${achievements.length})` },
     { value: "unlocked", label: `Unlocked (${unlockedList.length})` },
@@ -160,6 +173,49 @@ export function AchievementsClient({
 
   return (
     <div>
+      {selectedAchievement && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-navy/45 p-4"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setSelectedAchievement(null);
+          }}
+        >
+          <section role="dialog" aria-modal="true" aria-labelledby="achievement-detail-title" className="w-full max-w-md rounded-2xl bg-white border border-hairline shadow-card p-5 sm:p-6">
+            <div className="flex items-start gap-4">
+              <Medal tier={selectedAchievement.tier} unlocked={Boolean(selectedUnlockedAt)} size={56} />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium uppercase tracking-[0.14em] text-navy-light">
+                  {selectedUnlockedAt ? "Achievement unlocked" : `${TIER_LABELS[selectedAchievement.tier]} achievement`}
+                </p>
+                <h2 id="achievement-detail-title" className="font-display text-xl font-semibold text-navy mt-1">{selectedAchievement.label}</h2>
+              </div>
+              <button type="button" onClick={() => setSelectedAchievement(null)} aria-label="Close achievement details" className="shrink-0 rounded-full p-2 text-navy-light hover:bg-navy-50 hover:text-navy transition-colors">
+                <span aria-hidden="true" className="text-xl leading-none">&times;</span>
+              </button>
+            </div>
+            <div className="mt-5 rounded-xl bg-paper p-4">
+              <p className="text-xs font-medium uppercase tracking-[0.12em] text-navy-light">How to earn it</p>
+              <p className="text-sm leading-relaxed text-ink mt-2">{selectedAchievement.description}</p>
+            </div>
+            {selectedProgress && !selectedUnlockedAt && (
+              <div className="mt-4">
+                <div className="flex items-center justify-between gap-3 mb-1.5">
+                  <span className="text-xs font-medium text-navy-light">Your progress</span>
+                  <span className="text-xs font-mono text-navy">
+                    {selectedProgress.unit === "%" ? `${selectedProgress.have}% of ${selectedProgress.need}%` : `${selectedProgress.have} of ${selectedProgress.need} ${selectedProgress.need === 1 ? selectedProgress.unit : `${selectedProgress.unit}s`}`}
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full bg-hairline overflow-hidden"><div className="h-full rounded-full bg-amber" style={{ width: `${Math.round((selectedProgress.have / selectedProgress.need) * 100)}%` }} /></div>
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-3 mt-5 pt-4 border-t border-hairline">
+              <span className="text-xs font-mono text-emerald">+{selectedAchievement.xp_reward} XP</span>
+              <span className="text-xs text-navy-light">{selectedUnlockedAt ? `Earned ${formatUnlockedDate(selectedUnlockedAt)}` : "Keep going to unlock it"}</span>
+            </div>
+          </section>
+        </div>
+      )}
       <div className="mb-8">
         <h1 className="font-display text-2xl font-semibold text-navy">Achievements</h1>
         <p className="text-sm text-navy-light mt-1 mb-6">
@@ -221,16 +277,19 @@ export function AchievementsClient({
               const unlockedAt = unlockedMap.get(a.id)!;
               const isNew = Date.now() - new Date(unlockedAt).getTime() < NEW_WINDOW_MS;
               return (
-                <div
+                <button
+                  type="button"
                   key={a.id}
-                  className="animate-card-in flex flex-col items-center text-center bg-white rounded-xl border border-hairline p-4"
+                  onClick={() => setSelectedAchievement(a)}
+                  aria-label={`View details for ${a.label}`}
+                  className="animate-card-in flex flex-col items-center text-center bg-white rounded-xl border border-hairline p-4 hover:border-navy/30 transition-colors"
                   style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}
                 >
                   <Medal tier={a.tier} unlocked isNew={isNew} size={56} />
                   <p className="font-display font-semibold text-navy mt-2 text-sm leading-snug">{a.label}</p>
                   <p className="text-xs font-mono text-emerald mt-0.5">+{a.xp_reward} XP</p>
                   <p className="text-[10px] text-navy-light mt-0.5">{formatUnlockedDate(unlockedAt)}</p>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -252,9 +311,12 @@ export function AchievementsClient({
             {lockedList.map((a, i) => {
               const prog = progressFor(a.id, progress);
               return (
-                <div
+                <button
+                  type="button"
                   key={a.id}
-                  className="animate-card-in bg-white rounded-xl border border-hairline p-5 flex gap-4"
+                  onClick={() => setSelectedAchievement(a)}
+                  aria-label={`View details for ${a.label}`}
+                  className="animate-card-in bg-white rounded-xl border border-hairline p-5 flex gap-4 text-left w-full hover:border-navy/30 transition-colors"
                   style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}
                 >
                   <Medal tier={a.tier} unlocked={false} />
@@ -286,7 +348,7 @@ export function AchievementsClient({
                       <span className="text-xs text-navy-light">Locked</span>
                     </div>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
