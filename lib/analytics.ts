@@ -5,8 +5,8 @@
 // survive navigation (e.g. tapping a gap nudge leaves the dashboard).
 //
 // Keep the EventName union in sync with the zod enum in
-// app/api/events/route.ts and the events_event_whitelist check constraint
-// in migration 0019. The DB constraint is the backstop if they drift.
+// app/api/events/route.ts and the latest events_event_whitelist migration.
+// The DB constraint is the backstop if they drift.
 export type EventName =
   | "page_viewed"
   | "web_vital"

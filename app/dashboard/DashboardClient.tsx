@@ -173,6 +173,10 @@ export function DashboardClient({
   onboardingStep: number;
 }) {
   const router = useRouter();
+  // Keep the first render identical on the server and browser. Reading the
+  // current hour during render caused intermittent React #425 hydration
+  // mismatches around the hour boundary (and on users in another timezone).
+  const [greeting, setGreeting] = useState("Welcome back");
   const [loadError, setLoadError] = useState<string | null>(initialError);
   const [matches] = useState<MatchApiItem[]>(initialMatches);
   const [profileCompleteness] = useState(initialProfileCompleteness);
@@ -180,6 +184,9 @@ export function DashboardClient({
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set(initialSaved.map((s) => s.scholarship.id)));
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<"all" | MatchTier>("all");
+  useEffect(() => {
+    setGreeting(timeGreeting());
+  }, []);
   useEffect(() => {
     const y = consumeReturnScroll("/dashboard");
     if (y === null) return;
@@ -275,7 +282,7 @@ export function DashboardClient({
   return (
     <div>
       <div className="mb-8">
-        <h1 className="font-display text-3xl leading-tight font-semibold text-navy">{timeGreeting()}{firstName ? `, ${firstName}` : ""}</h1>
+        <h1 className="font-display text-3xl leading-tight font-semibold text-navy">{greeting}{firstName ? `, ${firstName}` : ""}</h1>
         <p className="text-sm text-navy-light mt-1 mb-6">{openMatches.length} open scholarship{openMatches.length === 1 ? "" : "s"} you can apply to now.</p>
         {profileCompleteness < 100 && (
           <div className="bg-white rounded-2xl border border-hairline p-5 mb-6 shadow-[0_1px_2px_rgba(11,30,61,0.03)]">

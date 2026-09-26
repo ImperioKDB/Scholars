@@ -30,7 +30,8 @@ export default async function DashboardPage() {
          scholarship:scholarships!inner ( id, slug, title, provider_name, description, amount, deadline, opens_at, application_url, level, discipline, verified )`
       )
       .eq("profile_id", user.id)
-      .order("saved_at", { ascending: false }),
+      .order("saved_at", { ascending: false })
+      .limit(50),
     // Real save-velocity signal, computed in Postgres -- see migration:
     // add_opens_at_and_trending_fn. Not a fabricated number: if fewer than
     // `threshold` students saved it in the last `days` days, it's not
