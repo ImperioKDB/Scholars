@@ -113,7 +113,7 @@ export async function middleware(request: NextRequest) {
 
   if (isProtected && !user) {
     const redirectUrl = new URL("/login", request.url);
-    redirectUrl.searchParams.set("next", path);
+    redirectUrl.searchParams.set("next", path + request.nextUrl.search);
     return NextResponse.redirect(redirectUrl);
   }
   if (isAuthPage && user) {
