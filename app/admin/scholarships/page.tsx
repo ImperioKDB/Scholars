@@ -117,7 +117,7 @@ export default function AdminScholarshipsPage() {
             key={f}
             onClick={() => setFilter(f)}
             className={
-              "text-sm font-medium px-3 py-1.5 rounded-full transition-colors " +
+              "inline-flex min-h-[44px] items-center text-sm font-medium px-3 py-1.5 rounded-full transition-colors " +
               (filter === f ? "bg-navy text-white" : "text-navy-light hover:bg-navy-50")
             }
           >
@@ -167,7 +167,7 @@ export default function AdminScholarshipsPage() {
                       <button
                         onClick={() => toggleVerified(s)}
                         className={
-                          "text-xs font-medium px-2 py-1 rounded-full transition-colors " +
+                          "inline-flex min-h-[44px] items-center text-xs font-medium px-2 py-1 rounded-full transition-colors " +
                           (s.verified ? "bg-emerald-light text-emerald" : "bg-amber-light text-amber")
                         }
                       >

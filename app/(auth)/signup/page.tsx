@@ -1,7 +1,7 @@
 "use client";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AuthShell } from "@/components/AuthShell";
 import { FormField, inputClass } from "@/components/FormField";
@@ -10,6 +10,7 @@ import { PasswordField } from "@/components/PasswordField";
 import { AuthConfirmation } from "@/components/AuthConfirmation";
 import { validatePasswordStrength } from "@/lib/auth/password";
 import { normalizeEmail } from "@/lib/auth/email";
+import { safeNextPath } from "@/lib/validate";
 
 // REDIRECT FIX (test feedback): same canonical-origin rule as the login
 // page, applied to both the Google OAuth redirectTo and the email
@@ -20,8 +21,10 @@ function appBase(): string {
   return process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
 }
 
-export default function SignupPage() {
+function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = safeNextPath(searchParams.get("next"), "/onboarding");
   const supabase = createClient();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -64,7 +67,7 @@ export default function SignupPage() {
       password,
       options: {
         data: { full_name: fullName },
-        emailRedirectTo: `${appBase()}/auth/callback?next=/onboarding`,
+        emailRedirectTo: `${appBase()}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
     setLoading(false);
@@ -79,7 +82,7 @@ export default function SignupPage() {
       return;
     }
     if (data.session) {
-      router.push("/onboarding");
+      router.push(next);
       return;
     }
     setAwaitingConfirmation(true);
@@ -90,7 +93,7 @@ export default function SignupPage() {
     setGoogleLoading(true);
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${appBase()}/auth/callback?next=/onboarding` },
+      options: { redirectTo: `${appBase()}/auth/callback?next=${encodeURIComponent(next)}` },
     });
   }
 
@@ -183,10 +186,18 @@ export default function SignupPage() {
       </button>
       <p className="text-sm text-navy-light mt-8 text-center">
         Already have an account?{" "}
-        <Link href="/login" className="text-navy font-medium hover:underline">
+        <Link href={`/login?next=${encodeURIComponent(next)}`} className="text-navy font-medium hover:underline">
           Log in
         </Link>
       </p>
     </AuthShell>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupForm />
+    </Suspense>
   );
 }

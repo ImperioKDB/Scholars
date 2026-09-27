@@ -10,6 +10,7 @@ import { PasswordField } from "@/components/PasswordField";
 import { normalizeEmail } from "@/lib/auth/email";
 import { Skeleton } from "@/components/Skeleton";
 import { AuthConfirmation } from "@/components/AuthConfirmation";
+import { safeNextPath } from "@/lib/validate";
 
 // AUTH SECURITY AUDIT (brute-force brake, client side): progressive
 // lockout stored in localStorage. UX-level only -- the real brakes are
@@ -67,6 +68,7 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(searchParams.get("error"));
   const [confirmationEmail, setConfirmationEmail] = useState<string | null>(null);
   const cleanEmail = normalizeEmail(email);
+  const next = safeNextPath(searchParams.get("next"), "/dashboard");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -100,7 +102,7 @@ function LoginForm() {
       return;
     }
     clearLock();
-    router.push("/dashboard");
+    router.push(next);
     router.refresh();
   }
 
@@ -109,7 +111,7 @@ function LoginForm() {
     setGoogleLoading(true);
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${appBase()}/auth/callback?next=/dashboard` },
+      options: { redirectTo: `${appBase()}/auth/callback?next=${encodeURIComponent(next)}` },
     });
   }
 
@@ -186,7 +188,7 @@ function LoginForm() {
       </button>
       <p className="text-sm text-navy-light mt-8 text-center">
         Don&apos;t have an account?{" "}
-        <Link href="/signup" className="text-navy font-medium hover:underline">
+        <Link href={`/signup?next=${encodeURIComponent(next)}`} className="text-navy font-medium hover:underline">
           Sign up
         </Link>
       </p>

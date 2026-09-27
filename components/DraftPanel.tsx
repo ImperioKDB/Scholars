@@ -227,17 +227,22 @@ export function DraftPanel({
       {open && (
         <div className="space-y-3">
           <div>
-            <p className="text-xs font-medium text-ink mb-1.5">Personal statement</p>
+            <label htmlFor={`draft-statement-${applicationId}`} className="block text-xs font-medium text-ink mb-1.5">Personal statement</label>
             <textarea
+              id={`draft-statement-${applicationId}`}
+              name="personal_statement"
               className="w-full rounded-lg border border-hairline bg-white px-3 py-2.5 text-sm text-ink resize-y min-h-[140px] focus:border-navy"
               value={statement}
               onChange={(e) => setStatement(e.target.value)}
               maxLength={STATEMENT_MAX_CHARS + 500}
+              aria-describedby={`draft-statement-count-${applicationId}`}
+              aria-invalid={overLimit || undefined}
             />
             <p
               className={`text-xs mt-1 text-right ${
                 overLimit ? "text-rose font-medium" : "text-navy-light"
               }`}
+              id={`draft-statement-count-${applicationId}`}
               aria-live="polite"
             >
               {statement.length}/{STATEMENT_MAX_CHARS} characters

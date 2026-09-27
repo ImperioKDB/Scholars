@@ -77,12 +77,14 @@ export default async function ApplicationsPage() {
   const applications = (appsResult.data ?? []) as unknown as ApplicationApiItem[];
   const saved = (savedResult.data ?? []) as unknown as SavedApiItem[];
   const loadError = appsResult.error ? "Couldn't load your applications. Try refreshing." : null;
+  const savedError = savedResult.error ? "Saved scholarships are temporarily unavailable. Try refreshing." : null;
 
   return (
     <ApplicationsClient
       initialApplications={applications}
       initialSaved={saved}
       initialError={loadError}
+      initialSavedError={savedError}
     />
   );
 }

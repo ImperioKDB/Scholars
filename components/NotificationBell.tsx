@@ -29,6 +29,8 @@ export function NotificationBell() {
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   async function load() {
     setLoading(true);
@@ -50,6 +52,22 @@ export function NotificationBell() {
   }, []);
 
   useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && open) {
+        event.preventDefault();
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) panelRef.current?.querySelector<HTMLElement>("a, button")?.focus();
+  }, [open]);
+
+  useEffect(() => {
     function close(event: MouseEvent) {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     }
@@ -60,6 +78,7 @@ export function NotificationBell() {
   async function openNotifications() {
     const next = !open;
     setOpen(next);
+    if (!next) triggerRef.current?.focus();
     if (next) {
       await load();
       if (unread > 0) {
@@ -80,7 +99,9 @@ export function NotificationBell() {
         type="button"
         onClick={openNotifications}
         aria-label={unread > 0 ? `${unread} unread notifications` : "Notifications"}
+        ref={triggerRef}
         aria-expanded={open}
+        aria-controls="notification-panel"
         className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl text-navy-light hover:bg-navy-50 hover:text-navy"
       >
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
@@ -89,10 +110,10 @@ export function NotificationBell() {
         {unread > 0 && <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-rose" aria-hidden="true" />}
       </button>
       {open && (
-        <div className="absolute right-0 top-12 z-50 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-hairline bg-white shadow-card">
+        <div id="notification-panel" ref={panelRef} role="region" aria-labelledby="notification-heading" tabIndex={-1} className="absolute right-0 top-12 z-50 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-hairline bg-white shadow-card">
           <div className="flex items-center justify-between border-b border-hairline px-4 py-3">
             <div>
-              <p className="font-display text-base font-semibold text-navy">Notifications</p>
+              <p id="notification-heading" className="font-display text-base font-semibold text-navy">Notifications</p>
               <p className="text-[11px] text-navy-light">Replies and helpful reactions from the community.</p>
             </div>
             <span className="text-xs font-mono text-navy-light">{unread} new</span>

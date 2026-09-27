@@ -43,12 +43,13 @@ function readinessFor(application: ApplicationApiItem) {
   return { score, items };
 }
 
-export function ApplicationsClient({ initialApplications, initialSaved, initialError }: {
-  initialApplications: ApplicationApiItem[]; initialSaved: SavedApiItem[]; initialError: string | null;
+export function ApplicationsClient({ initialApplications, initialSaved, initialError, initialSavedError }: {
+  initialApplications: ApplicationApiItem[]; initialSaved: SavedApiItem[]; initialError: string | null; initialSavedError?: string | null;
 }) {
   const router = useRouter();
   const { confirmApply } = useAde();
   const [loadError, setLoadError] = useState<string | null>(initialError);
+  const [savedError, setSavedError] = useState<string | null>(initialSavedError ?? null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [applications, setApplications] = useState<ApplicationApiItem[]>(initialApplications);
   const [saved, setSaved] = useState<SavedApiItem[]>(initialSaved);
@@ -61,6 +62,7 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
 
   async function load() {
     setLoadError(null);
+    setSavedError(null);
     try {
       const [appsRes, savedRes] = await Promise.all([
         fetchWithTimeout("/api/applications"),
@@ -70,6 +72,7 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
       const appsData = await appsRes.json();
       setApplications(appsData.applications ?? []);
       if (savedRes.ok) { const savedData = await savedRes.json(); setSaved(savedData.saved ?? []); }
+      else setSavedError("Saved scholarships are temporarily unavailable. Try refreshing.");
     } catch {
       setLoadError("Couldn't load your applications. Check your connection and try again.");
     }
@@ -103,7 +106,7 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
   }, [applications]);
 
   function focusApplication(applicationId: string) {
-    document.getElementById(`application-${applicationId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    document.getElementById(`application-${applicationId}`)?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
   }
 
   async function startTracking(scholarshipId: string) {
@@ -168,6 +171,17 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
 
   function handleDraftChange(applicationId: string, updated: Draft) {
     setApplications((prev) => prev.map((a) => (a.id === applicationId ? { ...a, ...updated } : a)));
+  }
+
+
+  async function removeSaved(scholarshipId: string) {
+    setPendingIds((p) => new Set(p).add(scholarshipId));
+    try {
+      const res = await fetchWithTimeout(`/api/scholarships/save?scholarship_id=${scholarshipId}`, { method: "DELETE" });
+      if (res.ok) setSaved((current) => current.filter((item) => item.scholarship.id !== scholarshipId));
+      else setActionError("Couldn't remove this saved scholarship. Try again.");
+    } catch { setActionError("Couldn't remove this saved scholarship. Check your connection and try again."); }
+    setPendingIds((p) => { const n = new Set(p); n.delete(scholarshipId); return n; });
   }
 
   function openApplication(a: ApplicationApiItem) {
@@ -246,7 +260,7 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
                   <p className="text-xs text-navy-light">{s.scholarship.provider_name}</p>
                 </div>
                 <button type="button" onClick={() => startTracking(s.scholarship.id)} disabled={pendingIds.has(s.scholarship.id)}
-                  className="shrink-0 text-xs font-medium text-white bg-navy rounded-full px-3 py-1.5 hover:bg-navy-light transition-colors disabled:opacity-50">
+                  className="shrink-0 inline-flex min-h-[44px] items-center text-xs font-medium text-white bg-navy rounded-full px-3 py-1.5 hover:bg-navy-light transition-colors disabled:opacity-50">
                   + Track
                 </button>
               </div>
@@ -280,7 +294,7 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
                         <p className="font-medium text-ink leading-snug">{a.scholarship.title}</p>
                         <p className="text-xs text-navy-light mt-0.5">{a.scholarship.provider_name}</p>
                       </div>
-                      <button type="button" onClick={() => stopTracking(a.id)} disabled={pendingIds.has(a.id)} className="shrink-0 text-xs text-navy-light hover:text-rose disabled:opacity-50">Remove</button>
+                      <button type="button" onClick={() => stopTracking(a.id)} disabled={pendingIds.has(a.id)} className="shrink-0 inline-flex min-h-[44px] items-center px-2 text-xs text-navy-light hover:text-rose disabled:opacity-50">Remove</button>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 mt-3">
                       <DeadlineBadge deadline={a.scholarship.deadline} />
@@ -320,7 +334,7 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
                   {a.status === "rejected" && (
                     <Link
                       href={`/discover?discipline=${encodeURIComponent(a.scholarship.discipline ?? "")}`}
-                      className="inline-block text-xs font-medium text-navy hover:underline mt-3"
+                      className="inline-flex min-h-[44px] items-center text-xs font-medium text-navy hover:underline mt-3"
                     >
                       Didn&apos;t work out? Browse similar open awards &rarr;
                     </Link>
@@ -341,6 +355,7 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
       )}
 
       <h2 id="saved" className="font-display text-lg font-semibold text-navy mb-5 scroll-mt-20">Saved ({saved.length})</h2>
+      {savedError && <StatusMessage tone="error" className="mb-5">{savedError} <button type="button" onClick={() => router.refresh()} className="font-medium underline">Try again</button></StatusMessage>}
       {saved.length === 0 ? (
         <div className="bg-white rounded-xl border border-hairline p-8 text-center">
           <p className="text-sm text-navy-light">Save scholarships from your matches above to track their deadlines here.</p>
@@ -351,8 +366,13 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
             <div key={s.scholarship.id} className="bg-white rounded-xl border border-hairline p-5 flex gap-4 shadow-card">
               <ProviderMonogram name={s.scholarship.provider_name} size={52} />
               <div className="min-w-0 flex-1">
-                <p className="font-medium text-ink leading-snug">{s.scholarship.title}</p>
+                <Link href={`/scholarships/${s.scholarship.id}`} className="font-medium text-ink leading-snug hover:text-navy hover:underline">{s.scholarship.title}</Link>
                 <p className="text-xs text-navy-light mt-0.5">{s.scholarship.provider_name}</p>
+                <div className="mt-2"><DeadlineBadge deadline={s.scholarship.deadline} /></div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => startTracking(s.scholarship.id)} disabled={pendingIds.has(s.scholarship.id)} className="inline-flex min-h-[44px] items-center text-xs font-medium text-white bg-navy rounded-full px-3 py-1.5 disabled:opacity-50">+ Track</button>
+                  <button type="button" onClick={() => removeSaved(s.scholarship.id)} disabled={pendingIds.has(s.scholarship.id)} className="inline-flex min-h-[44px] items-center px-2 text-xs font-medium text-navy-light hover:text-rose disabled:opacity-50">Unsave</button>
+                </div>
               </div>
             </div>
           ))}

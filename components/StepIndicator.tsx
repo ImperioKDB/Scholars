@@ -6,7 +6,9 @@ export function StepIndicator({
   current: number;
 }) {
   return (
-    <ol className="flex items-center w-full mb-10">
+    <nav aria-label="Onboarding progress">
+      <p className="sr-only" aria-live="polite">Step {current + 1} of {steps.length}: {steps[current]}</p>
+      <ol className="flex items-center w-full mb-10">
       {steps.map((label, i) => {
         const done = i < current;
         const active = i === current;
@@ -14,6 +16,8 @@ export function StepIndicator({
           <li key={label} className="flex items-center flex-1 last:flex-none">
             <div className="flex flex-col items-center gap-2">
               <div
+                aria-current={active ? "step" : undefined}
+                aria-label={`${done ? "Completed" : active ? "Current" : "Upcoming"}: ${label}`}
                 className={[
                   "flex items-center justify-center w-8 h-8 rounded-seal border font-mono text-xs transition-colors",
                   done
@@ -45,6 +49,7 @@ export function StepIndicator({
           </li>
         );
       })}
-    </ol>
+      </ol>
+    </nav>
   );
 }

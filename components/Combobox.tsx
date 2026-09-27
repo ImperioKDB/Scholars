@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { inputClass } from "@/components/FormField";
 
 export type ComboboxOption = {
@@ -26,13 +26,24 @@ export function Combobox({
   onChange,
   placeholder,
   emptyMessage = "No matches -- try a different search.",
+  id,
+  name,
+  "aria-describedby": ariaDescribedBy,
+  "aria-invalid": ariaInvalid,
 }: {
   options: ComboboxOption[];
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   emptyMessage?: string;
+  id?: string;
+  name?: string;
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean;
 }) {
+  const generatedId = useId();
+  const inputId = id ?? `combobox-${generatedId}`;
+  const listboxId = `${inputId}-listbox`;
   const selected = options.find((o) => o.value === value);
   const [query, setQuery] = useState(selected?.label ?? "");
   const [open, setOpen] = useState(false);
@@ -78,6 +89,7 @@ export function Combobox({
     query.trim() === "" || query === selected?.label
       ? options
       : options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase()));
+  const activeOption = filtered[highlighted];
 
   function select(option: ComboboxOption) {
     onChange(option.value);
@@ -115,6 +127,8 @@ export function Combobox({
   return (
     <div className="relative" ref={wrapperRef}>
       <input
+        id={inputId}
+        name={name}
         className={inputClass}
         type="text"
         value={query}
@@ -137,15 +151,19 @@ export function Combobox({
         role="combobox"
         aria-expanded={open}
         aria-autocomplete="list"
+        aria-controls={listboxId}
+        aria-activedescendant={open && activeOption ? `${listboxId}-option-${highlighted}` : undefined}
+        aria-describedby={ariaDescribedBy}
+        aria-invalid={ariaInvalid || undefined}
         autoComplete="off"
       />
       {open && (
-        <ul className="absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-lg border border-hairline bg-white shadow-card py-1">
+        <ul id={listboxId} role="listbox" className="absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-lg border border-hairline bg-white shadow-card py-1">
           {filtered.length === 0 && (
             <li className="px-3.5 py-2.5 text-sm text-navy-light">{emptyMessage}</li>
           )}
           {filtered.map((option, i) => (
-            <li key={option.value}>
+            <li key={option.value} id={`${listboxId}-option-${i}`} role="option" aria-selected={option.value === value}>
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}

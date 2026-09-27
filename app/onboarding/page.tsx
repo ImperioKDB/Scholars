@@ -126,6 +126,8 @@ function OnboardingForm() {
   const [saving, setSaving] = useState(false);
   const [skipPending, setSkipPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [dirty, setDirty] = useState(false);
   const lastTrackedStep = useRef<number | null>(null);
   const completedSteps = useRef(new Set<number>());
@@ -142,6 +144,8 @@ function OnboardingForm() {
   }, []);
   useEffect(() => {
     async function loadExistingProfile() {
+      setLoadFailed(false);
+      try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         router.replace("/login");
@@ -212,11 +216,16 @@ function OnboardingForm() {
           setManualDiscipline(true);
         }
       }
-      setLoading(false);
+      } catch {
+        setLoadFailed(true);
+        setError("We couldn't load your onboarding details. Check your connection and try again.");
+      } finally {
+        setLoading(false);
+      }
     }
     loadExistingProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadAttempt]);
   useEffect(() => {
     if (loading) return;
     writeDraft({ form, waecRows, step, manualInstitution, manualDiscipline, matchingAuthorized });
@@ -342,102 +351,46 @@ function OnboardingForm() {
     });
   }
   async function saveProfileAndGoDashboard() {
-    if (!matchingAuthorized) {
-      setStep(STEPS.length - 1);
-      setError(null);
-      return;
-    }
+    if (!matchingAuthorized) { setStep(STEPS.length - 1); setError(null); return; }
     setSaving(true);
     setError(null);
-    const res = await fetch("/api/profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(profilePayload(form)),
-    });
-    if (res.status === 401) {
-      setSaving(false);
-      router.replace("/login");
-      return;
-    }
-    if (!res.ok) {
-      setSaving(false);
-      setError("Couldn't save your profile. Please try again.");
-      return;
-    }
-    trackStepCompletion(0, "provisional_matches");
-    terminalEventTracked.current = true;
-    setDirty(false);
-    clearDraft();
-    router.push("/dashboard");
-    router.refresh();
+    try {
+      const res = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(profilePayload(form)) });
+      if (res.status === 401) { router.replace("/login"); return; }
+      if (!res.ok) { setError("Couldn't save your profile. Please try again. Your draft is still safe."); return; }
+      trackStepCompletion(0, "provisional_matches");
+      terminalEventTracked.current = true; setDirty(false); clearDraft(); router.push("/dashboard"); router.refresh();
+    } catch {
+      setError("Couldn't save your profile. Check your connection and try again. Your draft is still safe.");
+    } finally { setSaving(false); }
   }
   async function handleFinish() {
     const err = validateStep();
-    if (err) {
-      setError(err);
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    const res = await fetch("/api/profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(profilePayload(form)),
-    });
-    if (res.status === 401) {
-      setSaving(false);
-      router.replace("/login");
-      return;
-    }
-    if (!res.ok) {
-      setSaving(false);
-      setError("Couldn't save your profile. Please try again.");
-      return;
-    }
-    const validWaecRows = waecRows.filter((r) => r.subject && r.grade);
-    const waecRes = await fetch("/api/profile/waec", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ results: validWaecRows.map((r) => ({ subject: r.subject, grade: r.grade })) }),
-    });
-    setSaving(false);
-    if (!waecRes.ok) {
-      setError("Your profile saved, but your WAEC results didn't. You can retry from this page.");
-      return;
-    }
-    trackStepCompletion(STEPS.length - 1, "finish");
-    terminalEventTracked.current = true;
-    setDirty(false);
-    clearDraft();
-    router.push("/dashboard");
-    router.refresh();
-  }
-  // MOMENTUM FIX (user feedback): skipping is no longer lossy. We save
-  // whatever the student has filled so far, then send them straight to the
-  // dashboard so they still see first matches and can finish later from
-  // Edit profile. A skip that discards everything is what made onboarding
-  // feel like a toll booth.
-  async function handleSkip() {
-    if (!matchingAuthorized) {
-      setStep(STEPS.length - 1);
-      setError(null);
-      return;
-    }
-    trackSkip();
-    setSkipPending(true);
+    if (err) { setError(err); return; }
+    setSaving(true); setError(null);
     try {
-      await fetch("/api/profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(profilePayload(form)),
-      });
-      clearDraft();
+      const res = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(profilePayload(form)) });
+      if (res.status === 401) { router.replace("/login"); return; }
+      if (!res.ok) { setError("Couldn't save your profile. Please try again. Your draft is still safe."); return; }
+      const validWaecRows = waecRows.filter((r) => r.subject && r.grade);
+      const waecRes = await fetch("/api/profile/waec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ results: validWaecRows.map((r) => ({ subject: r.subject, grade: r.grade })) }) });
+      if (!waecRes.ok) { setError("Your profile saved, but your WAEC results didn't. You can retry from this page."); return; }
+      trackStepCompletion(STEPS.length - 1, "finish"); terminalEventTracked.current = true; setDirty(false); clearDraft(); router.push("/dashboard"); router.refresh();
     } catch {
-      // Skip must always work even if the save fails -- navigate anyway.
-    }
-    setDirty(false);
-    router.push("/dashboard");
-    router.refresh();
+      setError("Couldn't save your profile. Check your connection and try again. Your draft is still safe.");
+    } finally { setSaving(false); }
+  }
+  async function handleSkip() {
+    if (!matchingAuthorized) { setStep(STEPS.length - 1); setError(null); return; }
+    setSkipPending(true); setError(null);
+    try {
+      const res = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(profilePayload(form)) });
+      if (res.status === 401) { router.replace("/login"); return; }
+      if (!res.ok) { setError("Couldn't save before skipping. Your draft is still safe; try again."); return; }
+      trackSkip(); clearDraft(); setDirty(false); router.push("/dashboard"); router.refresh();
+    } catch {
+      setError("Couldn't save before skipping. Check your connection and try again. Your draft is still safe.");
+    } finally { setSkipPending(false); }
   }
   if (loading) {
     return (
@@ -482,7 +435,7 @@ function OnboardingForm() {
       </header>
       <main className="mx-auto max-w-2xl px-6 py-12">
         <StepIndicator steps={STEPS} current={step} />
-        <div className="bg-white rounded-2xl border border-hairline shadow-card p-8">
+        <form onSubmit={(event) => { event.preventDefault(); if (step < STEPS.length - 1) goNext(); else void handleFinish(); }} className="bg-white rounded-2xl border border-hairline shadow-card p-8">
           <h1 className="font-display text-2xl font-semibold text-navy mb-1">
             {step === 0 && "Core details"}
             {step === 1 && "Personal information"}
@@ -596,9 +549,9 @@ function OnboardingForm() {
                 <WaecResultsEditor rows={waecRows} onChange={updateWaecRows} />
               </FormField>
               <FormField label="Do you have significant financial need?">
-                <div className="grid grid-cols-2 gap-3">
+                <div role="group" aria-label="Significant financial need" className="grid grid-cols-2 gap-3">
                   {[{ label: "Yes", value: true }, { label: "No", value: false }].map((opt) => (
-                    <button key={opt.label} type="button" onClick={() => update("financial_need", opt.value)}
+                    <button key={opt.label} type="button" aria-pressed={form.financial_need === opt.value} onClick={() => update("financial_need", opt.value)}
                       className={["rounded-lg border px-4 py-3 text-sm font-medium transition-colors", form.financial_need === opt.value ? "border-navy bg-navy-50 text-navy" : "border-hairline text-navy-light hover:border-navy/40"].join(" ")}>
                       {opt.label}
                     </button>
@@ -606,9 +559,9 @@ function OnboardingForm() {
                 </div>
               </FormField>
               <FormField label="Do you live with a disability?">
-                <div className="grid grid-cols-2 gap-3">
+                <div role="group" aria-label="Disability status" className="grid grid-cols-2 gap-3">
                   {[{ label: "Yes", value: true }, { label: "No", value: false }].map((opt) => (
-                    <button key={opt.label} type="button" onClick={() => update("disability_status", opt.value)}
+                    <button key={opt.label} type="button" aria-pressed={form.disability_status === opt.value} onClick={() => update("disability_status", opt.value)}
                       className={["rounded-lg border px-4 py-3 text-sm font-medium transition-colors", form.disability_status === opt.value ? "border-navy bg-navy-50 text-navy" : "border-hairline text-navy-light hover:border-navy/40"].join(" ")}>
                       {opt.label}
                     </button>
@@ -670,13 +623,13 @@ function OnboardingForm() {
           <div className="sr-only" aria-live="polite" aria-atomic="true">
             {saving || skipPending ? "Saving your profile…" : error ? error : ""}
           </div>
-          {error && <StatusMessage tone="error" className="mb-4">{error}</StatusMessage>}
+          {error && <StatusMessage tone="error" className="mb-4">{error}{loadFailed && <button type="button" onClick={() => { setLoading(true); setLoadAttempt((n) => n + 1); }} className="ml-2 font-medium underline">Try again</button>}</StatusMessage>}
           <div className="flex items-center justify-between mt-6 pt-6 border-t border-hairline gap-3">
             <button type="button" onClick={goBack} disabled={step === 0 || saving || skipPending}
               className="text-sm font-medium text-navy-light hover:text-navy disabled:opacity-0 disabled:pointer-events-none">
               Back
             </button>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-3">
               {step > 0 && (
                 <button type="button" onClick={handleSkip} disabled={saving || skipPending}
                   className="text-sm font-medium text-navy-light hover:text-navy px-3 py-2 disabled:opacity-60">
@@ -686,12 +639,12 @@ function OnboardingForm() {
               {step === 0 ? (
                 <>
                   <button type="button" onClick={goNext} disabled={saving || skipPending}
-                    className="rounded-seal border border-hairline bg-white text-navy text-sm font-medium px-5 py-2.5 hover:bg-navy-50 transition-colors disabled:opacity-60">
+                    className="w-full sm:w-auto rounded-seal border border-hairline bg-white text-navy text-sm font-medium px-5 py-2.5 hover:bg-navy-50 transition-colors disabled:opacity-60">
                     Continue
                   </button>
                   <button type="button" onClick={saveProfileAndGoDashboard} disabled={!coreValid || saving || skipPending}
                     aria-busy={saving}
-                    className="inline-flex items-center gap-2 rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60">
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60">
                     {saving ? "Saving…" : "See my provisional matches"}
                   </button>
                 </>
@@ -703,7 +656,7 @@ function OnboardingForm() {
               ) : (
                 <button type="button" onClick={handleFinish} disabled={saving || skipPending}
                   aria-busy={saving}
-                  className="inline-flex items-center gap-2 rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60">
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60">
                   {saving && (
                     <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -715,7 +668,7 @@ function OnboardingForm() {
               )}
             </div>
           </div>
-        </div>
+        </form>
       </main>
     </div>
   );

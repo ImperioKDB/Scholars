@@ -37,11 +37,13 @@ export function ReportScholarshipButton({ scholarshipId }: { scholarshipId: stri
       </button>
       {open && (
         <div className="mt-3 rounded-xl border border-hairline bg-paper p-4 max-w-lg">
-          <label className="block text-xs font-medium text-navy-light mb-1">What needs checking?</label>
-          <select value={reason} onChange={(e) => setReason(e.target.value as typeof reason)} className="w-full rounded-lg border border-hairline bg-white px-3 py-2 text-sm">
+          <label htmlFor={`report-reason-${scholarshipId}`} className="block text-xs font-medium text-navy-light mb-1">What needs checking?</label>
+          <select id={`report-reason-${scholarshipId}`} name="reason" value={reason} onChange={(e) => setReason(e.target.value as typeof reason)} className="w-full rounded-lg border border-hairline bg-white px-3 py-2 text-sm">
             {REASONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
-          <textarea value={details} onChange={(e) => setDetails(e.target.value)} maxLength={500} rows={2} placeholder="Optional details" className="w-full rounded-lg border border-hairline bg-white px-3 py-2 text-sm mt-2 resize-none" />
+          <label htmlFor={`report-details-${scholarshipId}`} className="sr-only">Additional details (optional)</label>
+          <textarea id={`report-details-${scholarshipId}`} name="details" aria-describedby={`report-details-help-${scholarshipId}`} value={details} onChange={(e) => setDetails(e.target.value)} maxLength={500} rows={2} placeholder="Optional details" className="w-full rounded-lg border border-hairline bg-white px-3 py-2 text-sm mt-2 resize-none" />
+          <p id={`report-details-help-${scholarshipId}`} className="sr-only">Up to 500 characters.</p>
           <div className="flex items-center gap-3 mt-3">
             <button type="button" onClick={submit} disabled={state === "sending"} className="rounded-seal bg-navy text-white text-xs font-medium px-3 py-2 disabled:opacity-60">{state === "sending" ? "Sending…" : "Send report"}</button>
             {state === "error" && <span className="text-xs text-rose" role="alert">Couldn&apos;t send. Try again.</span>}

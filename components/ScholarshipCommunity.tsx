@@ -124,7 +124,7 @@ export function ScholarshipCommunity({
       body: "",
     });
     setComposerOpen(true);
-    requestAnimationFrame(() => composerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    requestAnimationFrame(() => composerRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }));
   }
 
   async function submitPost(event: React.FormEvent<HTMLFormElement>) {
