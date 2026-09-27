@@ -233,6 +233,7 @@ export function ScholarshipCommunity({
             <div>
               <h3 className="font-display text-lg font-semibold text-navy">{form.parent_id ? "Add an answer" : "Ask the community"}</h3>
               <p className="mt-0.5 text-xs text-navy-light">Keep it specific, kind, and useful to the next student.</p>
+              <p className="mt-1 text-xs text-navy-light">Your response will be posted publicly in this scholarship’s community.</p>
             </div>
             <button type="button" onClick={() => setComposerOpen(false)} className="text-sm text-navy-light hover:text-navy">Cancel</button>
           </div>
@@ -307,6 +308,7 @@ export function ScholarshipCommunity({
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-navy">Official prompts</p>
               <p className="mt-1 text-sm text-navy-light">A few useful starting points from the Scholars editorial team.</p>
+              <p className="mt-1 text-xs text-navy-light">Responses are public and specific to this scholarship.</p>
             </div>
             <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-navy-light">Editorial</span>
           </div>
