@@ -20,6 +20,8 @@ async function getStats() {
     lastLog,
     lastNudge,
     { data: metricsSummary },
+    { data: recentMonitoringErrors },
+    { count: monitoringErrorCount },
   ] = await Promise.all([
     supabase.from("scholarships").select("*", { count: "exact", head: true }),
     supabase.from("scholarships").select("*", { count: "exact", head: true }).eq("verified", true),
@@ -44,6 +46,15 @@ async function getStats() {
     // Aggregate inside Postgres instead of serializing every event and
     // application row into this server component on every admin visit.
     supabase.rpc("get_admin_metrics_summary", { p_since: sinceIso }),
+    supabase
+      .from("monitoring_error_events")
+      .select("id, kind, message, pathname, created_at")
+      .order("created_at", { ascending: false })
+      .limit(12),
+    supabase
+      .from("monitoring_error_events")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", sinceIso),
   ]);
   const summary = (metricsSummary ?? {}) as {
     activation?: Record<string, number>;
@@ -69,7 +80,7 @@ async function getStats() {
   Object.assign(activation, summary.activation ?? {});
   const monitoring = {
     pageViews: summary.monitoring?.pageViews ?? 0,
-    clientErrors: summary.monitoring?.clientErrors ?? 0,
+    clientErrors: monitoringErrorCount ?? 0,
     vitals: summary.monitoring?.vitals ?? {},
   };
   const community: Record<string, number> = {
@@ -109,6 +120,7 @@ async function getStats() {
     monitoring,
     community,
     outcome,
+    recentMonitoringErrors: recentMonitoringErrors ?? [],
     recent: recent ?? [],
   };
 }
@@ -214,7 +226,7 @@ export default async function AdminOverviewPage() {
       <div className="bg-white rounded-xl border border-hairline p-5 mb-10">
         <h2 className="font-display text-lg font-semibold text-navy mb-1">App health, last {ACTIVATION_WINDOW_DAYS} days</h2>
         <p className="text-sm text-navy-light mb-4">
-          First-party monitoring from authenticated sessions. Web Vitals are reported in milliseconds except CLS; client errors are counted without storing full stack traces or form contents.
+          First-party monitoring from public and authenticated sessions. Web Vitals are reported in milliseconds except CLS; client errors are counted without storing full stack traces or form contents.
         </p>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           {monitoringCards.map((c) => (
@@ -224,6 +236,47 @@ export default async function AdminOverviewPage() {
             </div>
           ))}
         </div>
+      </div>
+      <div className="bg-white rounded-xl border border-hairline p-5 mb-10">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-display text-lg font-semibold text-navy mb-1">Recent client errors</h2>
+            <p className="text-sm text-navy-light">Sanitized browser and error-boundary reports. No form contents, tokens, or full stack traces are stored.</p>
+          </div>
+          <span className="text-xs text-navy-light">Latest 12</span>
+        </div>
+        {stats.recentMonitoringErrors.length === 0 ? (
+          <p className="mt-4 rounded-lg bg-parchment px-4 py-3 text-sm text-navy-light">No client errors recorded.</p>
+        ) : (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead>
+                <tr className="border-b border-hairline text-left text-xs text-navy-light">
+                  <th className="px-3 py-2 font-medium">When</th>
+                  <th className="px-3 py-2 font-medium">Type</th>
+                  <th className="px-3 py-2 font-medium">Route</th>
+                  <th className="px-3 py-2 font-medium">Message</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.recentMonitoringErrors.map((item: {
+                  id: string;
+                  kind: string;
+                  message: string;
+                  pathname: string | null;
+                  created_at: string;
+                }) => (
+                  <tr key={item.id} className="border-b border-hairline last:border-0">
+                    <td className="px-3 py-3 whitespace-nowrap text-xs text-navy-light">{new Date(item.created_at).toLocaleString()}</td>
+                    <td className="px-3 py-3 whitespace-nowrap text-xs font-medium text-rose">{item.kind}</td>
+                    <td className="px-3 py-3 whitespace-nowrap text-xs text-navy-light">{item.pathname || "—"}</td>
+                    <td className="px-3 py-3 max-w-[360px] truncate text-ink" title={item.message}>{item.message}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
       <div className="bg-white rounded-xl border border-hairline p-5 mb-10">
         <h2 className="font-display text-lg font-semibold text-navy mb-1">Outcome funnel (all time)</h2>

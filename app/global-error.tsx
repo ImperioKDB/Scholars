@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
+import { reportClientError } from "@/lib/monitoring";
+
 // app/global-error.tsx
 // Root-level error boundary. Renders only when the root layout itself
 // throws, so it must provide its own <html> and <body>. Tailwind and
@@ -11,6 +14,15 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    reportClientError({
+      kind: "root_error",
+      message: error.message || "Root error",
+      pathname: window.location.pathname,
+      digest: error.digest,
+    });
+  }, [error]);
+
   return (
     <html lang="en">
       <body

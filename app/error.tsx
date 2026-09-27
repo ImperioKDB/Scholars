@@ -1,5 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
+import { usePathname } from "next/navigation";
+import { reportClientError } from "@/lib/monitoring";
+
 // app/error.tsx
 // Route-level error boundary (product audit P2: a crash in any client
 // component used to white-screen the page with no recovery path). Next
@@ -13,6 +17,17 @@ export default function ErrorPage({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const pathname = usePathname();
+
+  useEffect(() => {
+    reportClientError({
+      kind: "route_error",
+      message: error.message || "Route error",
+      pathname: pathname || "/",
+      digest: error.digest,
+    });
+  }, [error, pathname]);
+
   return (
     <div className="min-h-[50vh] flex items-center justify-center px-6 py-16">
       <div className="bg-white rounded-2xl border border-hairline shadow-card p-8 max-w-md w-full text-center">

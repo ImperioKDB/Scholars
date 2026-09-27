@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import type { Metric } from "web-vitals";
 import { track } from "@/lib/analytics";
+import { reportClientError } from "@/lib/monitoring";
 
 const MAX_MESSAGE_LENGTH = 180;
 
@@ -28,6 +29,11 @@ function reportVital(metric: Metric) {
 export function Monitoring() {
   const pathname = usePathname();
   const errorListenersReady = useRef(false);
+  const pathnameRef = useRef(pathname);
+
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
 
   useEffect(() => {
     track("page_viewed", { path: pathname || "/" });
@@ -71,19 +77,20 @@ export function Monitoring() {
     errorListenersReady.current = true;
 
     function onError(event: ErrorEvent) {
-      track("client_error", {
+      reportClientError({
         kind: "runtime_error",
         message: clean(event.message),
         source: clean(event.filename),
-        line: event.lineno || 0,
+        pathname: pathnameRef.current || "/",
       });
     }
 
     function onUnhandledRejection(event: PromiseRejectionEvent) {
       const reason = event.reason instanceof Error ? event.reason.message : event.reason;
-      track("client_error", {
+      reportClientError({
         kind: "unhandled_rejection",
         message: clean(reason),
+        pathname: pathnameRef.current || "/",
       });
     }
 
