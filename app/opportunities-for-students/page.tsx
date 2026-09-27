@@ -10,6 +10,19 @@ export const metadata: Metadata = {
   description:
     "Find verified fellowships, internships, competitions, and mentorship opportunities for students in Nigeria and beyond.",
   alternates: { canonical: "/opportunities-for-students" },
+  openGraph: {
+    title: "Student Fellowships, Internships and Opportunities",
+    description:
+      "Find verified fellowships, internships, competitions, and mentorship opportunities for students in Nigeria and beyond.",
+    url: "/opportunities-for-students",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Student Fellowships, Internships and Opportunities",
+    description:
+      "Find verified fellowships, internships, competitions, and mentorship opportunities for students in Nigeria and beyond.",
+  },
 };
 
 type Opportunity = {

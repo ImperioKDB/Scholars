@@ -1,9 +1,20 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Terms of Service | Scholars",
+  title: "Terms of Service",
   description: "The rules of using Scholars, in plain language.",
   alternates: { canonical: "/legal/terms" },
+  openGraph: {
+    title: "Terms of Service",
+    description: "The rules of using Scholars, in plain language.",
+    url: "/legal/terms",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Terms of Service",
+    description: "The rules of using Scholars, in plain language.",
+  },
 };
 
 // Keep in sync with app/legal/privacy/page.tsx. Live support inbox.

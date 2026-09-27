@@ -5,9 +5,20 @@ import { createClient } from "@/lib/supabase/server";
 import { AboutPhotoUploader } from "@/components/AboutPhotoUploader";
 
 export const metadata: Metadata = {
-  title: "About | Scholars",
+  title: "About",
   description: "Why Scholars exists, how the matching works, and who builds it.",
   alternates: { canonical: "/about" },
+  openGraph: {
+    title: "About",
+    description: "Why Scholars exists, how the matching works, and who builds it.",
+    url: "/about",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "About",
+    description: "Why Scholars exists, how the matching works, and who builds it.",
+  },
 };
 
 // Fixed object name in the public 'site' bucket (migration 0013). Fixed on

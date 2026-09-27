@@ -9,9 +9,20 @@ import { initialsFor } from "@/lib/text/initials";
 // (testimonials_public_read requires approved AND consent), read through
 // the cookie-free public client, ISR 300s like the other public pages.
 export const metadata: Metadata = {
-  title: "Reviews | Scholars",
+  title: "Reviews",
   description: "What students say about Scholars, in their own words.",
   alternates: { canonical: "/reviews" },
+  openGraph: {
+    title: "Reviews",
+    description: "What students say about Scholars, in their own words.",
+    url: "/reviews",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Reviews",
+    description: "What students say about Scholars, in their own words.",
+  },
 };
 export const revalidate = 300;
 type Review = {

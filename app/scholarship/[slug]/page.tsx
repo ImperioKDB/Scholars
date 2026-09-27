@@ -60,20 +60,31 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   if (!scholarship) {
     return { title: "Scholarship not found -- Scholars" };
   }
+  const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
+  const title = scholarship.title;
+  const description =
+    scholarship.provider_name +
+    (scholarship.amount ? " \u00b7 " + scholarship.amount : "") +
+    " \u00b7 Deadline " +
+    scholarship.deadline +
+    ". See if you qualify on Scholars.";
+  const image = `${base}/scholarship/${slug}/opengraph-image`;
   return {
-    title: scholarship.title + " -- Scholars",
-    description:
-      scholarship.provider_name +
-      (scholarship.amount ? " \u00b7 " + scholarship.amount : "") +
-      " \u00b7 Deadline " +
-      scholarship.deadline +
-      ". See if you qualify on Scholars.",
+    title,
+    description,
     alternates: { canonical: `/scholarship/${slug}` },
     openGraph: {
-      title: scholarship.title + " -- Scholars",
-      description: scholarship.provider_name + ". See if you qualify on Scholars.",
+      title,
+      description,
       type: "article",
       url: `/scholarship/${slug}`,
+      images: [image],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [image],
     },
   };
 }

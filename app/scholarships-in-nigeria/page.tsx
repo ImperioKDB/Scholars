@@ -10,6 +10,19 @@ export const metadata: Metadata = {
   description:
     "Browse verified undergraduate scholarships in Nigeria, including deadlines, providers, awards, and study disciplines.",
   alternates: { canonical: "/scholarships-in-nigeria" },
+  openGraph: {
+    title: "Undergraduate Scholarships in Nigeria",
+    description:
+      "Browse verified undergraduate scholarships in Nigeria, including deadlines, providers, awards, and study disciplines.",
+    url: "/scholarships-in-nigeria",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Undergraduate Scholarships in Nigeria",
+    description:
+      "Browse verified undergraduate scholarships in Nigeria, including deadlines, providers, awards, and study disciplines.",
+  },
 };
 
 type Scholarship = {

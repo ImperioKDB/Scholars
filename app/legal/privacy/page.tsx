@@ -1,9 +1,20 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy | Scholars",
+  title: "Privacy Policy",
   description: "What Scholars collects, why it collects it, and the choices you have.",
   alternates: { canonical: "/legal/privacy" },
+  openGraph: {
+    title: "Privacy Policy",
+    description: "What Scholars collects, why it collects it, and the choices you have.",
+    url: "/legal/privacy",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Privacy Policy",
+    description: "What Scholars collects, why it collects it, and the choices you have.",
+  },
 };
 
 // Keep in sync with app/legal/terms/page.tsx. Live support inbox.

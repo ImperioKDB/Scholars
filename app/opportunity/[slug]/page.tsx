@@ -87,18 +87,18 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     (opportunity.deadline ? " \u00b7 Deadline " + opportunity.deadline : " \u00b7 Rolling") +
     ". Find it on Scholars.";
   return {
-    title: opportunity.title + " -- Scholars",
+    title: opportunity.title,
     description,
     alternates: { canonical: `/opportunity/${slug}` },
     openGraph: {
-      title: opportunity.title + " -- Scholars",
+      title: opportunity.title,
       description,
       images: [`${base}/opportunity/${slug}/opengraph-image`],
       type: "website",
     },
     twitter: {
       card: "summary_large_image",
-      title: opportunity.title + " -- Scholars",
+      title: opportunity.title,
       description,
       images: [`${base}/opportunity/${slug}/opengraph-image`],
     },
