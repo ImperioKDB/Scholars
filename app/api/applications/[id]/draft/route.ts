@@ -40,6 +40,7 @@ import { evaluateScholarship } from '@/lib/matching/engine'
 import { toMatchableProfile, type MatchableProfileSource } from '@/lib/matching/profileMapper'
 import { isUuid } from '@/lib/validate'
 import { trackServerEvent } from '@/lib/analytics-server'
+import { checkRateLimit } from '@/lib/ratelimit'
 
 const PROFILE_COLUMNS =
   'full_name, discipline, gpa, nationality, gender, financial_need, career_goals, date_of_birth, state_of_origin, lga_of_origin, year_of_study, institution_name, institution_type, jamb_score, waec_credit_count, has_english_maths_credit, disability_status, has_valid_id, has_transcript, has_recommendation_letter, has_personal_statement, has_lga_certificate, profile_completeness'
@@ -106,7 +107,7 @@ async function loadContext(
   }
 }
 
-export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   if (!isUuid(id)) {
     return NextResponse.json({ error: 'Application not found' }, { status: 404 })
@@ -120,6 +121,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
+
+  const limited = await checkRateLimit(request, {
+    route: 'application-draft-generation',
+    limit: 5,
+    extraKeys: [`user:${user.id}`],
+  })
+  if (limited) return limited
 
   const context = await loadContext(supabase, id, user.id)
   if (context.error) {
@@ -221,6 +229,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
+
+  const limited = await checkRateLimit(request, {
+    route: 'application-draft-edit',
+    limit: 30,
+    extraKeys: [`user:${user.id}`],
+  })
+  if (limited) return limited
 
   const raw = await request.json().catch(() => null)
   const parsed = patchSchema.safeParse(raw)

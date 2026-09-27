@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { assertAdmin } from '@/lib/admin/guard'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { z } from 'zod'
+import { sanitizePlainText } from '@/lib/validate'
 
 const updateSchema = z.object({
   candidate_id: z.string().uuid(),
@@ -40,7 +41,8 @@ export async function PATCH(request: Request) {
     if (candidate.quality_status !== 'ready') return NextResponse.json({ error: 'Candidate must pass quality scoring before publication' }, { status: 409 })
     if (candidate.published_scholarship_id) return NextResponse.json({ error: 'Candidate is already published', scholarship_id: candidate.published_scholarship_id }, { status: 409 })
     const level = candidate.level === 'undergraduate' ? 'undergrad' : candidate.level === 'postgraduate' ? 'postgrad' : 'both'
-    const { data: scholarship, error: scholarshipError } = await supabase.from('scholarships').insert({ title: candidate.title, provider_name: candidate.provider_name, description: candidate.description, amount: candidate.amount, deadline: candidate.deadline, application_url: candidate.application_url, level, discipline: candidate.discipline, verified: false, created_by: guard.userId, research_notes: `Discovery evidence:\n${candidate.evidence_excerpt}\n\nSource: ${candidate.source_url}\n${candidate.eligibility_notes ?? ''}` }).select('id').single()
+    const clean = (value: string | null | undefined) => value == null ? value : sanitizePlainText(value)
+    const { data: scholarship, error: scholarshipError } = await supabase.from('scholarships').insert({ title: sanitizePlainText(candidate.title), provider_name: sanitizePlainText(candidate.provider_name), description: clean(candidate.description), amount: clean(candidate.amount), deadline: candidate.deadline, application_url: candidate.application_url, level, discipline: clean(candidate.discipline), verified: false, created_by: guard.userId, research_notes: `Discovery evidence:\n${sanitizePlainText(candidate.evidence_excerpt)}\n\nSource: ${candidate.source_url}\n${clean(candidate.eligibility_notes) ?? ''}` }).select('id').single()
     if (scholarshipError || !scholarship) return NextResponse.json({ error: 'Could not publish candidate to catalogue' }, { status: 500 })
     const { data, error } = await supabase.from('scholarship_discovery_candidates').update({ status: 'published', published_scholarship_id: scholarship.id, published_at: new Date().toISOString(), reviewed_by: guard.userId, reviewed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', candidateId).select('id,status,published_scholarship_id,published_at').single()
     if (error) return NextResponse.json({ error: 'Scholarship created but candidate tracking failed', scholarship_id: scholarship.id }, { status: 207 })

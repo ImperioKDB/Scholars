@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
+import { checkRateLimit } from '@/lib/ratelimit'
 
 export const dynamic = 'force-dynamic'
 
@@ -7,6 +8,8 @@ const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://scholars-eight.verc
 const ALLOWED_PATHS = new Set(['/onboarding', '/applications', '/dashboard'])
 
 export async function GET(request: Request, { params }: { params: { assignmentId: string } }) {
+  const limited = await checkRateLimit(request, { route: 'reengagement-click', limit: 60 })
+  if (limited) return limited
   const service = createServiceClient()
   const { data: assignment, error } = await service
     .from('reengagement_assignments')

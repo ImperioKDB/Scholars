@@ -87,6 +87,17 @@ export function sanitizeSearchText(raw: string): string {
   return escapeLikePattern(raw.replace(/[%,()"\\]/g, " ").trim());
 }
 
+// Plain-text fields from scraped or user-controlled sources may be rendered
+// outside React's normal escaping (for example in JSON-LD). Keep them text.
+export function sanitizePlainText(raw: string): string {
+  return raw
+    .replace(/<[^>]*>/g, " ")
+    .replace(/[<>]/g, "")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // Safe target for ?next= style redirect params. Only same-origin relative
 // paths pass; absolute URLs, protocol-relative (//evil.com), backslash
 // tricks (/\evil.com normalizes to //evil.com in some browsers) and

@@ -35,7 +35,13 @@ function getLimiter(route: string, limit: number, client: Redis): Ratelimit {
 }
 
 export function clientIp(request: Request): string {
-  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+  // The first value in a client-provided x-forwarded-for header is
+  // attacker-controlled and must not be used as the bucket key.
+  return (
+    request.headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim() ??
+    request.headers.get('x-real-ip')?.trim() ??
+    'unknown'
+  )
 }
 
 function unavailableResponse(): NextResponse {

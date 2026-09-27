@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { httpUrlSchema } from '@/lib/validate'
+import { sanitizePlainText } from '@/lib/validate'
 import { z } from 'zod'
 
 const candidateSchema = z.object({
@@ -31,14 +32,25 @@ export async function POST(request: Request) {
   const { data: existing, error: existingError } = await service.from('scholarship_discovery_candidates').select('id,canonical_url,title,provider_name,content_hash,status').not('status', 'eq', 'rejected').order('created_at', { ascending: false }).limit(1000)
   if (existingError) return NextResponse.json({ error: 'Could not check discovery duplicates' }, { status: 500 })
   const rows = parsed.data.candidates.map((candidate) => {
+    const clean = (value: string | null | undefined) => value == null ? value : sanitizePlainText(value)
+    const sanitized = {
+      ...candidate,
+      title: sanitizePlainText(candidate.title),
+      provider_name: sanitizePlainText(candidate.provider_name),
+      description: clean(candidate.description),
+      amount: clean(candidate.amount),
+      discipline: clean(candidate.discipline),
+      eligibility_notes: clean(candidate.eligibility_notes),
+      evidence_excerpt: sanitizePlainText(candidate.evidence_excerpt),
+    }
     const duplicate = (existing ?? []).map((item) => {
-      const exactUrl = Boolean(candidate.canonical_url && item.canonical_url && candidate.canonical_url === item.canonical_url)
-      const exactHash = Boolean(candidate.content_hash && item.content_hash && candidate.content_hash === item.content_hash)
-      const titleProvider = similarity(candidate.title, item.title) * 0.7 + similarity(candidate.provider_name, item.provider_name) * 0.3
+      const exactUrl = Boolean(sanitized.canonical_url && item.canonical_url && sanitized.canonical_url === item.canonical_url)
+      const exactHash = Boolean(sanitized.content_hash && item.content_hash && sanitized.content_hash === item.content_hash)
+      const titleProvider = similarity(sanitized.title, item.title) * 0.7 + similarity(sanitized.provider_name, item.provider_name) * 0.3
       return { item, score: exactUrl ? 1 : exactHash ? 0.98 : titleProvider }
     }).sort((left, right) => right.score - left.score)[0]
     const isDuplicate = Boolean(duplicate && duplicate.score >= 0.82)
-    return { ...candidate, fetched_at: candidate.fetched_at ?? new Date().toISOString(), status: 'pending_review', duplicate_of: isDuplicate ? duplicate?.item.id : null, duplicate_score: isDuplicate ? Number(duplicate?.score.toFixed(3)) : null, duplicate_reason: isDuplicate ? 'Matches an existing discovery by canonical URL, content hash, or normalized title/provider.' : null }
+    return { ...sanitized, fetched_at: sanitized.fetched_at ?? new Date().toISOString(), status: 'pending_review', duplicate_of: isDuplicate ? duplicate?.item.id : null, duplicate_score: isDuplicate ? Number(duplicate?.score.toFixed(3)) : null, duplicate_reason: isDuplicate ? 'Matches an existing discovery by canonical URL, content hash, or normalized title/provider.' : null }
   })
   const { data, error } = await service.from('scholarship_discovery_candidates').upsert(rows, { onConflict: 'idempotency_key', ignoreDuplicates: true }).select('id,idempotency_key,status,duplicate_of,duplicate_score')
   if (error) return NextResponse.json({ error: 'Could not save discovery candidates' }, { status: 500 })

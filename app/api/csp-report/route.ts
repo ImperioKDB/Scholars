@@ -18,6 +18,7 @@
 //   - Body capped at 4KB before logging, so a hostile page cannot use
 //     this as an unbounded log-flood sink.
 import { logWarn } from "@/lib/logging";
+import { checkRateLimit } from "@/lib/ratelimit";
 
 const MAX_BODY = 4096;
 
@@ -42,6 +43,8 @@ function extractRecord(parsed: unknown): Record<string, unknown> {
 }
 
 export async function POST(request: Request) {
+  const limited = await checkRateLimit(request, { route: "csp-report", limit: 60 });
+  if (limited) return limited;
   const contentLength = request.headers.get("content-length");
   if (contentLength && Number(contentLength) > MAX_BODY) {
     return new Response(null, { status: 413 });
