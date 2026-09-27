@@ -36,6 +36,9 @@ export type ScholarshipSocialProof = {
   applied_count: number;
   discussion_student_count: number;
   discussion_count: number;
+  discussion_post_count: number;
+  discussion_reply_count: number;
+  discussion_contributor_count: number;
   recent_view_count: number;
   recent_institutions: Array<{ name: string; count: number }>;
 };
@@ -51,6 +54,9 @@ export const EMPTY_SOCIAL_PROOF: ScholarshipSocialProof = {
   applied_count: 0,
   discussion_student_count: 0,
   discussion_count: 0,
+  discussion_post_count: 0,
+  discussion_reply_count: 0,
+  discussion_contributor_count: 0,
   recent_view_count: 0,
   recent_institutions: [],
 };
@@ -63,6 +69,9 @@ function normalizeSocialProof(value: unknown): ScholarshipSocialProof {
     applied_count: Number(row?.applied_count ?? 0),
     discussion_student_count: Number(row?.discussion_student_count ?? 0),
     discussion_count: Number(row?.discussion_count ?? 0),
+    discussion_post_count: Number(row?.discussion_post_count ?? row?.discussion_count ?? 0),
+    discussion_reply_count: Number(row?.discussion_reply_count ?? 0),
+    discussion_contributor_count: Number(row?.discussion_contributor_count ?? row?.discussion_student_count ?? 0),
     recent_view_count: Number(row?.recent_view_count ?? 0),
     recent_institutions: institutions
       .map((item) => {

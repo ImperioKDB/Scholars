@@ -205,14 +205,14 @@ export function ScholarshipCommunity({
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-emerald">Community notes</p>
-          <h2 id="community-title" className="mt-1 font-display text-2xl font-semibold text-navy">Questions, answers, and real experiences</h2>
+          <h2 id="community-title" className="mt-1 font-display text-2xl font-semibold text-navy">Ask, share, and learn from students</h2>
           <p className="mt-1 max-w-2xl text-sm leading-relaxed text-navy-light">
             Learn from students who have explored this award. Community posts are helpful context, not official scholarship guidance.
           </p>
         </div>
         {canInteract ? (
-          <button type="button" onClick={() => openComposer()} className="rounded-seal bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy-light">
-            Start a discussion
+          <button type="button" onClick={() => openComposer()} className="w-full rounded-seal bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy-light sm:w-auto">
+            Ask the community
           </button>
         ) : (
           <Link href="/login" className="rounded-seal border border-hairline bg-white px-4 py-2.5 text-center text-sm font-medium text-navy hover:border-navy/40">
@@ -221,108 +221,50 @@ export function ScholarshipCommunity({
         )}
       </div>
 
-      {officialPrompts.length > 0 && (
-        <div className="mt-4 rounded-2xl border border-navy/10 bg-navy-50/60 p-4 sm:p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-navy">Official prompts</p>
-              <p className="mt-1 text-sm text-navy-light">A few useful starting points from the Scholars editorial team.</p>
-            </div>
-            <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-navy-light">Editorial</span>
-          </div>
-          <div className="mt-3 grid gap-2 md:grid-cols-3">
-            {officialPrompts.map((prompt) => (
-              <article key={prompt.id} className="rounded-xl border border-white bg-white p-3 shadow-sm">
-                <p className="text-sm font-medium leading-relaxed text-navy">{prompt.prompt_text}</p>
-                {canInteract ? (
-                  <button type="button" onClick={() => openComposer(undefined, prompt)} className="mt-3 text-xs font-medium text-emerald hover:underline">
-                    Respond to this prompt →
-                  </button>
-                ) : (
-                  <Link href="/login" className="mt-3 inline-block text-xs font-medium text-emerald hover:underline">
-                    Log in to respond →
-                  </Link>
-                )}
-              </article>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <ScholarshipSocialProof proof={socialProof} />
+      <div className="mt-4 grid grid-cols-3 divide-x divide-hairline rounded-2xl border border-hairline bg-white px-2 py-3 sm:max-w-xl sm:px-4" aria-label="Activity for this scholarship">
+        <ActivityStat value={socialProof.discussion_post_count} label="discussions" />
+        <ActivityStat value={socialProof.discussion_reply_count} label="replies" />
+        <ActivityStat value={socialProof.discussion_contributor_count} label="contributors" />
+      </div>
 
       {composerOpen && canInteract && (
         <form onSubmit={submitPost} className="mt-4 rounded-2xl border border-emerald/30 bg-white p-4 shadow-card sm:p-5">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <h3 className="font-display text-lg font-semibold text-navy">{form.parent_id ? "Add an answer" : "Start a discussion"}</h3>
+              <h3 className="font-display text-lg font-semibold text-navy">{form.parent_id ? "Add an answer" : "Ask the community"}</h3>
               <p className="mt-0.5 text-xs text-navy-light">Keep it specific, kind, and useful to the next student.</p>
             </div>
             <button type="button" onClick={() => setComposerOpen(false)} className="text-sm text-navy-light hover:text-navy">Cancel</button>
           </div>
           {!form.parent_id && officialPrompts.length > 0 && (
             <div className="mb-4 rounded-xl bg-navy-50/70 p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-navy">Choose a starting prompt</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-navy">Need a way in?</p>
+              <p className="mt-1 text-xs text-navy-light">Choose a conversation starter or write your own question.</p>
               <div className="mt-2 grid gap-2 sm:grid-cols-3">
                 {officialPrompts.map((prompt) => (
-                  <button
-                    key={prompt.id}
-                    type="button"
-                    disabled={pending}
-                    onClick={() => {
-                      setSelectedPrompt(prompt);
-                      setForm((current) => ({ ...current, body: prompt.prompt_text }));
-                    }}
-                    className={`rounded-lg border px-3 py-2 text-left text-xs leading-relaxed transition-colors ${selectedPrompt?.id === prompt.id ? "border-emerald bg-white text-navy" : "border-white bg-white/60 text-navy-light hover:border-emerald/40"}`}
-                  >
-                    {prompt.prompt_text}
-                  </button>
+                  <button key={prompt.id} type="button" disabled={pending} onClick={() => { setSelectedPrompt(prompt); setForm((current) => ({ ...current, body: prompt.prompt_text })); }} className={`rounded-lg border px-3 py-2 text-left text-xs leading-relaxed transition-colors ${selectedPrompt?.id === prompt.id ? "border-emerald bg-white text-navy" : "border-white bg-white/60 text-navy-light hover:border-emerald/40"}`}>{prompt.prompt_text}</button>
                 ))}
               </div>
-              <p className="mt-2 text-[11px] text-navy-light">You can edit the prompt text before publishing.</p>
             </div>
           )}
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-navy">Post type</span>
-              <select
-                value={form.category}
-                disabled={Boolean(form.parent_id) || pending}
-                onChange={(event) => setForm((current) => ({ ...current, category: event.target.value as DiscussionFormState["category"] }))}
-                className="w-full rounded-lg border border-hairline bg-white px-3 py-2.5 text-sm text-ink"
-              >
-                <option value="question">Question</option>
-                <option value="experience">Experience</option>
-                <option value="update">Update</option>
-                {form.parent_id && <option value="answer">Answer</option>}
-              </select>
-            </label>
-            <label className="flex items-end gap-2 pb-2.5 text-sm text-navy-light">
-              <input type="checkbox" checked={form.is_anonymous} disabled={pending} onChange={(event) => setForm((current) => ({ ...current, is_anonymous: event.target.checked }))} className="h-4 w-4 accent-emerald" />
-              Post anonymously
-            </label>
+            <label className="block"><span className="mb-1.5 block text-xs font-medium text-navy">Post type</span><select value={form.category} disabled={Boolean(form.parent_id) || pending} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value as DiscussionFormState["category"] }))} className="w-full rounded-lg border border-hairline bg-white px-3 py-2.5 text-sm text-ink"><option value="question">Question</option><option value="experience">Experience</option><option value="update">Update</option>{form.parent_id && <option value="answer">Answer</option>}</select></label>
+            <label className="flex items-end gap-2 pb-2.5 text-sm text-navy-light"><input type="checkbox" checked={form.is_anonymous} disabled={pending} onChange={(event) => setForm((current) => ({ ...current, is_anonymous: event.target.checked }))} className="h-4 w-4 accent-emerald" />Post anonymously</label>
           </div>
-          <label className="mt-3 block">
-            <span className="mb-1.5 block text-xs font-medium text-navy">Headline <span className="font-normal text-navy-light">(optional for answers)</span></span>
-            <input value={form.title} disabled={pending} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} maxLength={140} placeholder={form.parent_id ? "What are you answering?" : "e.g. Has anyone applied with a polytechnic transcript?"} className="w-full rounded-lg border border-hairline bg-white px-3 py-2.5 text-sm text-ink" />
-          </label>
-          <label className="mt-3 block">
-            <span className="mb-1.5 block text-xs font-medium text-navy">Your note</span>
-            <textarea required minLength={10} maxLength={2000} value={form.body} disabled={pending} onChange={(event) => setForm((current) => ({ ...current, body: event.target.value }))} placeholder="Share what you know, what you tried, or what you need clarified." className="min-h-[130px] w-full resize-y rounded-lg border border-hairline bg-white px-3 py-2.5 text-sm leading-relaxed text-ink" />
-          </label>
+          <label className="mt-3 block"><span className="mb-1.5 block text-xs font-medium text-navy">Headline <span className="font-normal text-navy-light">(optional for answers)</span></span><input value={form.title} disabled={pending} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} maxLength={140} placeholder={form.parent_id ? "What are you answering?" : "e.g. Has anyone applied with a polytechnic transcript?"} className="w-full rounded-lg border border-hairline bg-white px-3 py-2.5 text-sm text-ink" /></label>
+          <label className="mt-3 block"><span className="mb-1.5 block text-xs font-medium text-navy">Your note</span><textarea required minLength={10} maxLength={2000} value={form.body} disabled={pending} onChange={(event) => setForm((current) => ({ ...current, body: event.target.value }))} placeholder="Share what you know, what you tried, or what you need clarified." className="min-h-[130px] w-full resize-y rounded-lg border border-hairline bg-white px-3 py-2.5 text-sm leading-relaxed text-ink" /></label>
           {error && <p className="mt-3 text-sm text-rose" role="alert">{error}</p>}
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-[11px] leading-relaxed text-navy-light">Do not share phone numbers, passwords, or private documents.</p>
-            <button type="submit" disabled={pending || form.body.trim().length < 10} className="rounded-seal bg-emerald px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald/90 disabled:opacity-60">{pending ? "Posting…" : "Publish post"}</button>
-          </div>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-[11px] leading-relaxed text-navy-light">Do not share phone numbers, passwords, or private documents.</p><button type="submit" disabled={pending || form.body.trim().length < 10} className="rounded-seal bg-emerald px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald/90 disabled:opacity-60">{pending ? "Posting…" : "Publish post"}</button></div>
         </form>
       )}
+
+      <ScholarshipSocialProof proof={socialProof} />
 
       {notice && <p className="mt-4 rounded-lg bg-emerald-light px-3 py-2.5 text-sm text-emerald" role="status">{notice}</p>}
       {error && !composerOpen && <p className="mt-4 rounded-lg bg-rose-light px-3 py-2.5 text-sm text-rose" role="alert">{error}</p>}
 
-      <div className="mt-5 flex items-center justify-between gap-3">
-        <p className="text-sm text-navy-light">{socialProof.discussion_count > 0 ? `${socialProof.discussion_count} community ${socialProof.discussion_count === 1 ? "post" : "posts"}` : "No community posts yet"}</p>
+      <div className="mt-6 flex items-center justify-between gap-3">
+        <div><p className="text-sm font-medium text-navy">Recent conversations</p><p className="text-xs text-navy-light">{socialProof.discussion_post_count > 0 ? `${socialProof.discussion_post_count} ${socialProof.discussion_post_count === 1 ? "discussion" : "discussions"} about this scholarship` : "No discussions about this scholarship yet"}</p></div>
         <div className="flex rounded-lg border border-hairline bg-white p-1 text-xs">
           {(["helpful", "recent"] as const).map((option) => (
             <button key={option} type="button" onClick={() => setSort(option)} className={`rounded-md px-3 py-1.5 font-medium capitalize ${sort === option ? "bg-navy text-white" : "text-navy-light hover:text-navy"}`} aria-pressed={sort === option}>{option}</button>
@@ -358,8 +300,41 @@ export function ScholarshipCommunity({
           ))}
         </div>
       )}
+
+      {officialPrompts.length > 0 && (
+        <div className="mt-4 rounded-2xl border border-navy/10 bg-navy-50/60 p-4 sm:p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-navy">Official prompts</p>
+              <p className="mt-1 text-sm text-navy-light">A few useful starting points from the Scholars editorial team.</p>
+            </div>
+            <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-navy-light">Editorial</span>
+          </div>
+          <div className="mt-3 grid gap-2 md:grid-cols-3">
+            {officialPrompts.map((prompt) => (
+              <article key={prompt.id} className="rounded-xl border border-white bg-white p-3 shadow-sm">
+                <p className="text-sm font-medium leading-relaxed text-navy">{prompt.prompt_text}</p>
+                {canInteract ? (
+                  <button type="button" onClick={() => openComposer(undefined, prompt)} className="mt-3 text-xs font-medium text-emerald hover:underline">
+                    Respond to this prompt →
+                  </button>
+                ) : (
+                  <Link href="/login" className="mt-3 inline-block text-xs font-medium text-emerald hover:underline">
+                    Log in to respond →
+                  </Link>
+                )}
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
+
     </section>
   );
+}
+
+function ActivityStat({ value, label }: { value: number; label: string }) {
+  return <div className="px-2 text-center"><p className="font-display text-lg font-semibold text-navy">{value}</p><p className="text-[11px] text-navy-light">{label}</p></div>;
 }
 
 function DiscussionCard({
