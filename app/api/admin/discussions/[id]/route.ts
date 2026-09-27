@@ -12,10 +12,11 @@ const updateSchema = z.object({
   is_verified_contributor: z.boolean().optional(),
 }).refine((value) => Object.keys(value).length > 0, "No changes supplied");
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const limited = await checkRateLimit(request, { route: "admin-discussion-update", limit: 60 });
   if (limited) return limited;
-  if (!isUuid(params.id)) return NextResponse.json({ error: "Discussion not found" }, { status: 404 });
+  if (!isUuid(id)) return NextResponse.json({ error: "Discussion not found" }, { status: 404 });
   const supabase = createClient();
   const guard = await assertAdmin(supabase);
   if (!guard.ok) return guard.response;
@@ -24,7 +25,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   const { data, error } = await supabase
     .from("scholarship_discussions")
     .update(parsed.data)
-    .eq("id", params.id)
+    .eq("id", id)
     .select("id, status, is_pinned, is_verified_contributor")
     .maybeSingle();
   if (error) return dbErrorResponse("admin/discussions/update", error);

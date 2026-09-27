@@ -19,14 +19,15 @@ const postSchema = z.object({
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  if (!isUuid(params.id)) {
+  const { id } = await params;
+  if (!isUuid(id)) {
     return NextResponse.json({ error: "Invalid scholarship id" }, { status: 400 });
   }
   const sort = new URL(request.url).searchParams.get("sort") === "recent" ? "recent" : "helpful";
   const supabase = createClient();
-  const community = await loadScholarshipCommunity(supabase, params.id, sort);
+  const community = await loadScholarshipCommunity(supabase, id, sort);
   return NextResponse.json(community, {
     headers: { "Cache-Control": "private, max-age=20, stale-while-revalidate=60" },
   });
@@ -34,9 +35,10 @@ export async function GET(
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  if (!isUuid(params.id)) {
+  const { id } = await params;
+  if (!isUuid(id)) {
     return NextResponse.json({ error: "Invalid scholarship id" }, { status: 400 });
   }
   const supabase = createClient();
@@ -71,7 +73,7 @@ export async function POST(
   const { data: scholarship, error: scholarshipError } = await supabase
     .from("scholarships")
     .select("id")
-    .eq("id", params.id)
+    .eq("id", id)
     .eq("verified", true)
     .maybeSingle();
   if (scholarshipError) return dbErrorResponse("scholarship_discussion_scholarship_check", scholarshipError);
@@ -84,7 +86,7 @@ export async function POST(
       .eq("id", parent_id)
       .maybeSingle();
     if (parentError) return dbErrorResponse("scholarship_discussion_parent_check", parentError);
-    if (!parent || parent.scholarship_id !== params.id || parent.status !== "published") {
+    if (!parent || parent.scholarship_id !== id || parent.status !== "published") {
       return NextResponse.json({ error: "That discussion is no longer available" }, { status: 409 });
     }
   }
@@ -92,7 +94,7 @@ export async function POST(
   const { data, error } = await supabase
     .from("scholarship_discussions")
     .insert({
-      scholarship_id: params.id,
+      scholarship_id: id,
       author_id: user.id,
       parent_id: parent_id ?? null,
       category,
@@ -107,7 +109,7 @@ export async function POST(
     supabase,
     user.id,
     parent_id ? "community_reply_created" : "community_post_created",
-    { scholarship_id: params.id, category },
+    { scholarship_id: id, category },
   );
 
   return NextResponse.json({ discussion: data }, { status: 201 });
