@@ -19,6 +19,7 @@ import { levelForXp } from "@/lib/xp/level";
 import { initialsFor } from "@/lib/text/initials";
 import { usePresenceHeartbeat } from "@/lib/presence";
 import { useOverlayAccessibility } from "@/lib/useOverlayAccessibility";
+import { NotificationBell } from "@/components/NotificationBell";
 import {
   DashboardIcon,
   ApplicationsIcon,
@@ -41,6 +42,9 @@ const MOBILE_TABS = [
   { href: "/applications", label: "Applications", Icon: ApplicationsIcon },
   { href: "/achievements", label: "Achievements", Icon: AchievementsIcon },
 ];
+function NotificationIcon() {
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M15 17H9m9-3V10a6 6 0 0 0-12 0v4l-1.5 2h15L18 14Zm-4 7a2.2 2.2 0 0 1-4 0" /></svg>;
+}
 export function Sidebar({
   fullName,
   isAdmin,
@@ -98,6 +102,7 @@ useEffect(() => {
     { href: "/opportunities", label: "Opportunities", Icon: OpportunitiesIcon },
     { href: "/applications", label: "Applications", Icon: ApplicationsIcon },
     { href: "/achievements", label: "Achievements", Icon: AchievementsIcon },
+    { href: "/notifications", label: "Notifications", Icon: NotificationIcon },
     { href: "/settings", label: "Profile", Icon: SettingsIcon },
     ...(isAdmin ? [{ href: "/admin", label: "Admin", Icon: AdminIcon }] : []),
   ];
@@ -189,8 +194,9 @@ useEffect(() => {
         Skip to content
       </a>
       <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-60 border-r border-hairline bg-white">
-        <div className="px-5 py-5 border-b border-hairline">
+        <div className="flex items-center justify-between gap-2 px-5 py-5 border-b border-hairline">
           <Logo className="text-navy" />
+          <NotificationBell />
         </div>
         {profileBlock}
         <div className="flex-1 px-3 py-4">{navList}</div>
@@ -201,6 +207,7 @@ useEffect(() => {
           <MenuIcon />
         </button>
         <Logo className="text-navy" />
+        <div className="ml-auto"><NotificationBell /></div>
       </header>
       <div
         className={[

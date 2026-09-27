@@ -5,6 +5,7 @@ import { checkRateLimit } from "@/lib/ratelimit";
 import { dbErrorResponse } from "@/lib/errors";
 import { isUuid } from "@/lib/validate";
 import { loadScholarshipCommunity } from "@/lib/scholarship-community";
+import { trackServerEvent } from "@/lib/analytics-server";
 
 export const dynamic = "force-dynamic";
 
@@ -102,6 +103,12 @@ export async function POST(
     .select("id, scholarship_id, parent_id, category, title, body, is_anonymous, created_at")
     .single();
   if (error) return dbErrorResponse("scholarship_discussions_insert", error);
+  trackServerEvent(
+    supabase,
+    user.id,
+    parent_id ? "community_reply_created" : "community_post_created",
+    { scholarship_id: params.id, category },
+  );
 
   return NextResponse.json({ discussion: data }, { status: 201 });
 }

@@ -16,7 +16,19 @@ export type ScholarshipDiscussion = {
   helpful_count: number;
   reply_count: number;
   author_label: string;
+  author_name?: string | null;
+  author_avatar_url?: string | null;
+  author_role?: "founder" | "contributor" | "student" | null;
+  author_is_online?: boolean;
   user_helpful: boolean;
+};
+
+export type ScholarshipPrompt = {
+  id: string;
+  scholarship_id: string;
+  prompt_key: string;
+  prompt_text: string;
+  sort_order: number;
 };
 
 export type ScholarshipSocialProof = {
@@ -30,6 +42,7 @@ export type ScholarshipSocialProof = {
 
 export type ScholarshipCommunity = {
   discussions: ScholarshipDiscussion[];
+  prompts: ScholarshipPrompt[];
   socialProof: ScholarshipSocialProof;
 };
 
@@ -60,6 +73,26 @@ function normalizeSocialProof(value: unknown): ScholarshipSocialProof {
   };
 }
 
+function normalizePrompts(value: unknown): ScholarshipPrompt[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => item as Partial<ScholarshipPrompt>)
+    .filter(
+      (item) =>
+        typeof item.id === "string" &&
+        typeof item.scholarship_id === "string" &&
+        typeof item.prompt_text === "string",
+    )
+    .map((item) => ({
+      id: item.id as string,
+      scholarship_id: item.scholarship_id as string,
+      prompt_key: String(item.prompt_key ?? "community-prompt"),
+      prompt_text: String(item.prompt_text),
+      sort_order: Number(item.sort_order ?? 0),
+    }))
+    .sort((a, b) => a.sort_order - b.sort_order);
+}
+
 export async function loadScholarshipCommunity(
   supabase: any,
   scholarshipId: string,
@@ -73,6 +106,12 @@ export async function loadScholarshipCommunity(
     }),
     supabase.rpc("get_scholarship_social_proof", { p_scholarship_id: scholarshipId }),
   ]);
+  const promptsResult = await supabase
+    .from("scholarship_prompts")
+    .select("id, scholarship_id, prompt_key, prompt_text, sort_order")
+    .eq("scholarship_id", scholarshipId)
+    .order("sort_order", { ascending: true })
+    .limit(3);
 
   if (discussionsResult.error) {
     console.error("scholarship_discussions_read_failed", discussionsResult.error);
@@ -80,9 +119,13 @@ export async function loadScholarshipCommunity(
   if (proofResult.error) {
     console.error("scholarship_social_proof_read_failed", proofResult.error);
   }
+  if (promptsResult.error) {
+    console.error("scholarship_prompts_read_failed", promptsResult.error);
+  }
 
   return {
     discussions: (discussionsResult.data ?? []) as ScholarshipDiscussion[],
+    prompts: normalizePrompts(promptsResult.data),
     socialProof: normalizeSocialProof(proofResult.data),
   };
 }

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/ratelimit";
 import { dbErrorResponse } from "@/lib/errors";
 import { isUuid } from "@/lib/validate";
+import { trackServerEvent } from "@/lib/analytics-server";
 
 async function getUser(request: Request) {
   const supabase = createClient();
@@ -17,8 +18,11 @@ export async function POST(request: Request, { params }: { params: { id: string 
   if (!isUuid(params.id)) return NextResponse.json({ error: "Invalid discussion id" }, { status: 400 });
   const { supabase, user, response } = await getUser(request);
   if (response || !user) return response ?? NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  const { error } = await supabase.from("scholarship_discussion_reactions").insert({ discussion_id: params.id, profile_id: user.id });
+  const { error } = await supabase
+    .from("scholarship_discussion_reactions")
+    .insert({ discussion_id: params.id, profile_id: user.id });
   if (error && error.code !== "23505") return dbErrorResponse("scholarship_discussion_helpful", error);
+  if (!error) trackServerEvent(supabase, user.id, "community_helpful_reaction", { discussion_id: params.id });
   return NextResponse.json({ helpful: true });
 }
 

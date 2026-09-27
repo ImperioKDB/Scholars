@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/admin/access";
 import { createServiceClient } from "@/lib/supabase/service";
+import { CommunityRoleControl } from "@/components/admin/CommunityRoleControl";
 // app/admin/users/page.tsx
 // GET /admin/users -- Active Users board (Push E, restores the board that
 // was dropped when the admin overview was rewritten).
@@ -19,6 +20,7 @@ type Row = {
   full_name: string | null;
   email: string | null;
   profile_completeness: number;
+  community_role: "founder" | "contributor" | "student";
   last_seen_at: string | null;
   created_at: string;
 };
@@ -51,7 +53,7 @@ export default async function AdminUsersPage() {
   const [{ data: profiles }] = await Promise.all([
     service
       .from("profiles")
-      .select("id, full_name, profile_completeness, last_seen_at, created_at"),
+      .select("id, full_name, profile_completeness, community_role, last_seen_at, created_at"),
   ]);
   const emailById = new Map<string, string>();
   for (let page = 1; page <= 50; page++) {
@@ -103,6 +105,7 @@ export default async function AdminUsersPage() {
                 <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3 font-medium">Last seen</th>
                 <th className="px-5 py-3 font-medium">Profile</th>
+                <th className="px-5 py-3 font-medium">Community role</th>
               </tr>
             </thead>
             <tbody>
@@ -121,6 +124,9 @@ export default async function AdminUsersPage() {
                     </td>
                     <td className="px-5 py-3 text-navy-light">{agoLabel(r.last_seen_at, now)}</td>
                     <td className="px-5 py-3 text-navy-light font-mono">{r.profile_completeness}%</td>
+                    <td className="px-5 py-3">
+                      <CommunityRoleControl profileId={r.id} initialRole={r.community_role ?? "student"} />
+                    </td>
                   </tr>
                 );
               })}

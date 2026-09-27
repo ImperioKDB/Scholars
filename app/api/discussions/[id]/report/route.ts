@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/ratelimit";
 import { dbErrorResponse } from "@/lib/errors";
 import { isUuid } from "@/lib/validate";
+import { trackServerEvent } from "@/lib/analytics-server";
 
 const reportSchema = z.object({
   reason: z.enum(["misleading", "abusive", "outdated", "personal_information", "spam"]),
@@ -28,5 +29,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
     if (error.code === "23505") return NextResponse.json({ message: "Already reported" });
     return dbErrorResponse("scholarship_discussion_report", error);
   }
+  trackServerEvent(supabase, user.id, "community_reported", { discussion_id: params.id, reason: parsed.data.reason });
   return NextResponse.json({ report: data }, { status: 201 });
 }

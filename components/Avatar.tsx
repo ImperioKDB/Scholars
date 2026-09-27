@@ -28,11 +28,13 @@ const SIZE_CLASSES: Record<AvatarSize, string> = {
 export function Avatar({
   userId,
   fullName,
+  avatarUrl,
   size = "medium",
   className = "",
 }: {
   userId?: string;
   fullName?: string | null;
+  avatarUrl?: string | null;
   size?: AvatarSize;
   className?: string;
 }) {
@@ -51,7 +53,7 @@ export function Avatar({
         className,
       ].join(" ")}
     >
-      {initialsFor(name)}
+      {avatarUrl ? <img src={avatarUrl} alt="" className="h-full w-full rounded-full object-cover" /> : initialsFor(name)}
     </span>
   );
 }

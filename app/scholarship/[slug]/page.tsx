@@ -164,6 +164,7 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
           <ScholarshipCommunity
             scholarshipId={scholarship.id}
             initialDiscussions={community.discussions}
+            prompts={community.prompts}
             socialProof={community.socialProof}
             canInteract={false}
           />

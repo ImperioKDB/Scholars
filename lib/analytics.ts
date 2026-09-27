@@ -29,7 +29,11 @@ export type EventName =
   | "draft_confirmed"
   | "gap_nudge_clicked"
   | "whatsapp_opt_in"
-  | "whatsapp_opt_out";
+  | "whatsapp_opt_out"
+  | "community_post_created"
+  | "community_reply_created"
+  | "community_helpful_reaction"
+  | "community_reported";
 export type EventMeta = Record<string, string | number | boolean>;
 export function track(event: EventName, meta?: EventMeta): void {
   if (typeof window === "undefined") return;

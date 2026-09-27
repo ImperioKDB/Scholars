@@ -40,6 +40,10 @@ const CLIENT_EVENTS = [
   'gap_nudge_clicked',
   'whatsapp_opt_in',
   'whatsapp_opt_out',
+  'community_post_created',
+  'community_reply_created',
+  'community_helpful_reaction',
+  'community_reported',
 ] as const
 const metaSchema = z
   .record(z.union([z.string().max(200), z.number(), z.boolean()]))

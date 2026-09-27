@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchWithTimeout } from "@/lib/fetch";
-import type { DiscussionCategory, ScholarshipDiscussion, ScholarshipSocialProof as ScholarshipSocialProofData } from "@/lib/scholarship-community";
+import { Avatar } from "@/components/Avatar";
+import type { DiscussionCategory, ScholarshipDiscussion, ScholarshipPrompt, ScholarshipSocialProof as ScholarshipSocialProofData } from "@/lib/scholarship-community";
 import { ScholarshipSocialProof } from "@/components/ScholarshipSocialProof";
 
 const CATEGORY_LABELS: Record<DiscussionCategory, string> = {
@@ -47,14 +48,28 @@ function isDated(value: string) {
   return Date.now() - new Date(value).getTime() > 180 * 24 * 60 * 60 * 1000;
 }
 
+const ROLE_LABELS = {
+  founder: "Founder",
+  contributor: "Contributor",
+  student: "Student",
+} as const;
+
+const ROLE_STYLES = {
+  founder: "bg-amber-light text-amber",
+  contributor: "bg-emerald-light text-emerald",
+  student: "bg-navy-50 text-navy-light",
+} as const;
+
 export function ScholarshipCommunity({
   scholarshipId,
   initialDiscussions,
+  prompts,
   socialProof,
   canInteract,
 }: {
   scholarshipId: string;
   initialDiscussions: ScholarshipDiscussion[];
+  prompts?: ScholarshipPrompt[];
   socialProof: ScholarshipSocialProofData;
   canInteract: boolean;
 }) {
@@ -63,6 +78,7 @@ export function ScholarshipCommunity({
   const [discussions, setDiscussions] = useState(initialDiscussions);
   const [form, setForm] = useState<DiscussionFormState>(emptyForm);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [selectedPrompt, setSelectedPrompt] = useState<ScholarshipPrompt | null>(null);
   const [pending, setPending] = useState(false);
   const [activeReaction, setActiveReaction] = useState<string | null>(null);
   const [reportingId, setReportingId] = useState<string | null>(null);
@@ -70,6 +86,7 @@ export function ScholarshipCommunity({
   const [reportDetails, setReportDetails] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const officialPrompts = prompts ?? [];
 
   const visibleTopLevel = useMemo(() => {
     const posts = discussions.filter((discussion) => !discussion.parent_id);
@@ -87,13 +104,15 @@ export function ScholarshipCommunity({
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   }
 
-  function openComposer(parent?: ScholarshipDiscussion) {
+  function openComposer(parent?: ScholarshipDiscussion, prompt?: ScholarshipPrompt) {
     setError(null);
     setNotice(null);
+    setSelectedPrompt(prompt ?? null);
     setForm({
       ...emptyForm,
       category: parent ? "answer" : "question",
       parent_id: parent?.id ?? null,
+      body: prompt?.prompt_text ?? "",
     });
     setComposerOpen(true);
   }
@@ -122,6 +141,7 @@ export function ScholarshipCommunity({
         return;
       }
       setComposerOpen(false);
+      setSelectedPrompt(null);
       setForm(emptyForm);
       setNotice("Posted. Thanks for helping other students.");
       router.refresh();
@@ -201,6 +221,34 @@ export function ScholarshipCommunity({
         )}
       </div>
 
+      {officialPrompts.length > 0 && (
+        <div className="mt-4 rounded-2xl border border-navy/10 bg-navy-50/60 p-4 sm:p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-navy">Official prompts</p>
+              <p className="mt-1 text-sm text-navy-light">A few useful starting points from the Scholars editorial team.</p>
+            </div>
+            <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-navy-light">Editorial</span>
+          </div>
+          <div className="mt-3 grid gap-2 md:grid-cols-3">
+            {officialPrompts.map((prompt) => (
+              <article key={prompt.id} className="rounded-xl border border-white bg-white p-3 shadow-sm">
+                <p className="text-sm font-medium leading-relaxed text-navy">{prompt.prompt_text}</p>
+                {canInteract ? (
+                  <button type="button" onClick={() => openComposer(undefined, prompt)} className="mt-3 text-xs font-medium text-emerald hover:underline">
+                    Respond to this prompt →
+                  </button>
+                ) : (
+                  <Link href="/login" className="mt-3 inline-block text-xs font-medium text-emerald hover:underline">
+                    Log in to respond →
+                  </Link>
+                )}
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
+
       <ScholarshipSocialProof proof={socialProof} />
 
       {composerOpen && canInteract && (
@@ -212,6 +260,28 @@ export function ScholarshipCommunity({
             </div>
             <button type="button" onClick={() => setComposerOpen(false)} className="text-sm text-navy-light hover:text-navy">Cancel</button>
           </div>
+          {!form.parent_id && officialPrompts.length > 0 && (
+            <div className="mb-4 rounded-xl bg-navy-50/70 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-navy">Choose a starting prompt</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                {officialPrompts.map((prompt) => (
+                  <button
+                    key={prompt.id}
+                    type="button"
+                    disabled={pending}
+                    onClick={() => {
+                      setSelectedPrompt(prompt);
+                      setForm((current) => ({ ...current, body: prompt.prompt_text }));
+                    }}
+                    className={`rounded-lg border px-3 py-2 text-left text-xs leading-relaxed transition-colors ${selectedPrompt?.id === prompt.id ? "border-emerald bg-white text-navy" : "border-white bg-white/60 text-navy-light hover:border-emerald/40"}`}
+                  >
+                    {prompt.prompt_text}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-navy-light">You can edit the prompt text before publishing.</p>
+            </div>
+          )}
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1.5 block text-xs font-medium text-navy">Post type</span>
@@ -333,10 +403,16 @@ function DiscussionCard({
       </div>
       {discussion.title && <h3 className="mt-3 font-display text-lg font-semibold leading-snug text-navy">{discussion.title}</h3>}
       <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink">{discussion.body}</p>
-      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-navy-light">
-        <span>{discussion.author_label}</span>
-        <span aria-hidden="true">·</span>
-        <time dateTime={discussion.created_at}>{formatDate(discussion.created_at)}</time>
+      <div className="mt-4 flex items-center gap-3">
+        <Avatar userId={discussion.id} fullName={discussion.author_name ?? discussion.author_label} avatarUrl={discussion.author_avatar_url} size="small" />
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5 text-xs font-medium text-navy">
+            <span>{discussion.author_name ?? discussion.author_label}</span>
+            {discussion.author_role && <span className={`rounded-full px-2 py-0.5 text-[10px] ${ROLE_STYLES[discussion.author_role]}`}>{ROLE_LABELS[discussion.author_role]}</span>}
+            {discussion.author_is_online && <span className="inline-flex items-center gap-1 text-[10px] font-normal text-emerald"><span className="h-1.5 w-1.5 rounded-full bg-emerald" aria-hidden="true" />Online</span>}
+          </div>
+          <time dateTime={discussion.created_at} className="text-xs text-navy-light">{formatDate(discussion.created_at)}</time>
+        </div>
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-hairline pt-3">
         <button type="button" disabled={!canInteract || activeReaction === discussion.id} onClick={() => onHelpful(discussion)} className={`rounded-full border px-3 py-1.5 text-xs font-medium ${discussion.user_helpful ? "border-emerald bg-emerald-light text-emerald" : "border-hairline text-navy-light hover:border-navy/40"}`} aria-pressed={discussion.user_helpful}>
@@ -366,11 +442,16 @@ function DiscussionCard({
         <div className="mt-4 grid gap-2 border-l-2 border-emerald/20 pl-3 sm:pl-4">
           {replies.map((reply) => (
             <div key={reply.id} className="rounded-xl bg-parchment/70 p-3">
-              <div className="flex flex-wrap items-center gap-2 text-[11px] text-navy-light">
-                <span className="rounded-full bg-emerald-light px-2 py-1 font-medium text-emerald">Answer</span>
-                <span>{reply.author_label}</span>
-                <span aria-hidden="true">·</span>
-                <time dateTime={reply.created_at}>{formatDate(reply.created_at)}</time>
+              <div className="flex items-center gap-2.5">
+                <Avatar userId={reply.id} fullName={reply.author_name ?? reply.author_label} avatarUrl={reply.author_avatar_url} size="small" />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-medium text-navy">
+                    <span>{reply.author_name ?? reply.author_label}</span>
+                    {reply.author_role && <span className={`rounded-full px-2 py-0.5 text-[10px] ${ROLE_STYLES[reply.author_role]}`}>{ROLE_LABELS[reply.author_role]}</span>}
+                    {reply.author_is_online && <span className="inline-flex items-center gap-1 text-[10px] font-normal text-emerald"><span className="h-1.5 w-1.5 rounded-full bg-emerald" aria-hidden="true" />Online</span>}
+                  </div>
+                  <time dateTime={reply.created_at} className="text-[11px] text-navy-light">{formatDate(reply.created_at)}</time>
+                </div>
               </div>
               <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink">{reply.body}</p>
             </div>

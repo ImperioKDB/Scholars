@@ -298,6 +298,7 @@ export function ScholarshipDetailClient({
       <ScholarshipCommunity
         scholarshipId={scholarship.id}
         initialDiscussions={initialCommunity.discussions}
+        prompts={initialCommunity.prompts}
         socialProof={initialCommunity.socialProof}
         canInteract
       />

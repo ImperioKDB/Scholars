@@ -48,8 +48,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <Link href="/admin/feedback" className="text-navy-light hover:text-navy">
               Feedback
             </Link>
-            <Link href="/admin/discussions" className="text-navy-light hover:text-navy">
-              Discussions
+            <Link href="/admin/discussions" className="rounded-full bg-emerald-light px-3 py-1.5 font-medium text-emerald hover:bg-emerald/15">
+              Community moderation
             </Link>
             <Link href="/admin/testimonials" className="text-navy-light hover:text-navy">
               Testimonials

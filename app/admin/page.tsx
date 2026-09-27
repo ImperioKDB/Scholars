@@ -47,6 +47,7 @@ async function getStats() {
   ]);
   const summary = (metricsSummary ?? {}) as {
     activation?: Record<string, number>;
+    community?: Record<string, number>;
     monitoring?: {
       pageViews?: number;
       clientErrors?: number;
@@ -71,6 +72,13 @@ async function getStats() {
     clientErrors: summary.monitoring?.clientErrors ?? 0,
     vitals: summary.monitoring?.vitals ?? {},
   };
+  const community: Record<string, number> = {
+    posts: 0,
+    replies: 0,
+    helpful_reactions: 0,
+    reports: 0,
+  };
+  Object.assign(community, summary.community ?? {});
   const outcome: Record<string, number> = {
     in_progress: 0,
     submitted: 0,
@@ -99,6 +107,7 @@ async function getStats() {
       (lastNudge?.data?.[0]?.profile_reminder_last_sent_at as string | undefined) ?? null,
     activation,
     monitoring,
+    community,
     outcome,
     recent: recent ?? [],
   };
@@ -128,6 +137,12 @@ export default async function AdminOverviewPage() {
     { label: "Submitted", value: stats.outcome.submitted },
     { label: "Accepted", value: stats.outcome.accepted },
     { label: "Rejected", value: stats.outcome.rejected },
+  ];
+  const communityCards = [
+    { label: "New posts", value: stats.community.posts },
+    { label: "Replies", value: stats.community.replies },
+    { label: "Helpful reactions", value: stats.community.helpful_reactions },
+    { label: "Reports", value: stats.community.reports },
   ];
   const monitoringCards = [
     { label: "Authenticated page views", value: stats.monitoring.pageViews },
@@ -172,6 +187,23 @@ export default async function AdminOverviewPage() {
         </p>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {activationCards.map((c) => (
+            <div key={c.label} className="bg-parchment rounded-xl border border-hairline p-4">
+              <p className="font-mono text-2xl font-semibold text-navy">{c.value}</p>
+              <p className="text-xs text-navy-light mt-1">{c.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="bg-white rounded-xl border border-hairline p-5 mb-10">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-display text-lg font-semibold text-navy mb-1">Community activity, last {ACTIVATION_WINDOW_DAYS} days</h2>
+            <p className="text-sm text-navy-light">Posts, replies, helpful reactions, and reports from verified scholarship discussions.</p>
+          </div>
+          <Link href="/admin/discussions" className="text-sm font-medium text-navy hover:underline">Moderate discussions →</Link>
+        </div>
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+          {communityCards.map((c) => (
             <div key={c.label} className="bg-parchment rounded-xl border border-hairline p-4">
               <p className="font-mono text-2xl font-semibold text-navy">{c.value}</p>
               <p className="text-xs text-navy-light mt-1">{c.label}</p>
