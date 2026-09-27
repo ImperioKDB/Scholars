@@ -48,6 +48,13 @@ function isDated(value: string) {
   return Date.now() - new Date(value).getTime() > 180 * 24 * 60 * 60 * 1000;
 }
 
+function promptDisplayText(prompt: ScholarshipPrompt) {
+  if (prompt.prompt_key === "eligibility-check") return "What should applicants double-check before applying?";
+  if (prompt.prompt_key === "application-experience") return "What was your application experience like?";
+  if (prompt.prompt_key === "next-student-tip") return "What practical tip would you share with the next student?";
+  return prompt.prompt_text;
+}
+
 const ROLE_LABELS = {
   founder: "Founder",
   contributor: "Contributor",
@@ -79,6 +86,7 @@ export function ScholarshipCommunity({
   const [form, setForm] = useState<DiscussionFormState>(emptyForm);
   const [composerOpen, setComposerOpen] = useState(false);
   const [selectedPrompt, setSelectedPrompt] = useState<ScholarshipPrompt | null>(null);
+  const [showAllPrompts, setShowAllPrompts] = useState(false);
   const [pending, setPending] = useState(false);
   const [activeReaction, setActiveReaction] = useState<string | null>(null);
   const [reportingId, setReportingId] = useState<string | null>(null);
@@ -275,8 +283,8 @@ export function ScholarshipCommunity({
 
       {visibleTopLevel.length === 0 ? (
         <div className="mt-3 rounded-2xl border border-dashed border-hairline bg-white p-6 text-center">
-          <p className="text-sm font-medium text-navy">Be the first to ask a useful question.</p>
-          <p className="mt-1 text-xs leading-relaxed text-navy-light">Your experience can make this scholarship easier to understand for someone else.</p>
+          <p className="text-sm font-medium text-navy">No student discussions yet</p>
+          <p className="mt-1 text-xs leading-relaxed text-navy-light">Be the first to share an experience or answer one of these conversation starters.</p>
         </div>
       ) : (
         <div className="mt-3 grid gap-3">
@@ -312,10 +320,10 @@ export function ScholarshipCommunity({
             </div>
             <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-navy-light">Editorial</span>
           </div>
-          <div className="mt-3 grid gap-2 md:grid-cols-3">
-            {officialPrompts.map((prompt) => (
+          <div className="mt-3 grid gap-2">
+            {officialPrompts.slice(0, showAllPrompts ? officialPrompts.length : 1).map((prompt) => (
               <article key={prompt.id} className="rounded-xl border border-white bg-white p-3 shadow-sm">
-                <p className="text-sm font-medium leading-relaxed text-navy">{prompt.prompt_text}</p>
+                <p className="text-sm font-medium leading-relaxed text-navy">{promptDisplayText(prompt)}</p>
                 {canInteract ? (
                   <button type="button" onClick={() => openComposer(undefined, prompt)} className="mt-3 text-xs font-medium text-emerald hover:underline">
                     Respond to this prompt →
@@ -328,6 +336,11 @@ export function ScholarshipCommunity({
               </article>
             ))}
           </div>
+          {officialPrompts.length > 1 && (
+            <button type="button" onClick={() => setShowAllPrompts((current) => !current)} aria-expanded={showAllPrompts} className="mt-3 text-xs font-medium text-navy underline decoration-navy/30 underline-offset-4 hover:text-emerald">
+              {showAllPrompts ? "Show featured prompt only" : `See ${officialPrompts.length - 1} more prompts`}
+            </button>
+          )}
         </div>
       )}
 
