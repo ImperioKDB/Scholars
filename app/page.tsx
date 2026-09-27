@@ -64,12 +64,15 @@ export default async function LandingPage() {
             <Link href="#how-it-works" className="hover:text-navy">How it works</Link>
             <Link href="/login" className="hover:text-navy">Log in</Link>
           </nav>
+          <div className="flex items-center gap-2">
+          <Link href="/login" className="md:hidden inline-flex min-h-[44px] items-center text-sm font-medium text-navy-light">Log in</Link>
           <Link
             href="/signup"
             className="inline-flex min-h-[44px] items-center rounded-seal bg-navy text-white text-sm font-medium px-5 hover:bg-navy-light transition-colors"
           >
             Get started
           </Link>
+          </div>
         </div>
       </header>
       <main>

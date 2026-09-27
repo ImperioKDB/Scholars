@@ -211,10 +211,11 @@ useEffect(() => {
       </header>
       <div
         className={[
-          "md:hidden fixed inset-0 z-50 transition-opacity duration-200",
-          mobileOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
+          "md:hidden fixed inset-0 z-50 transition-opacity duration-200 motion-reduce:transition-none",
+          mobileOpen ? "opacity-100 pointer-events-auto" : "hidden opacity-0 pointer-events-none",
         ].join(" ")}
         aria-hidden={!mobileOpen}
+        inert={!mobileOpen}
       >
         <div className="absolute inset-0 bg-navy/40" onClick={() => setMobileOpen(false)} aria-hidden="true" />
         <div
@@ -224,7 +225,7 @@ useEffect(() => {
           aria-modal="true"
           aria-label="Student navigation"
           className={[
-            "absolute inset-y-0 left-0 w-80 max-w-[88%] bg-white flex flex-col shadow-card transition-transform duration-200",
+            "absolute inset-y-0 left-0 w-80 max-w-[88%] bg-white flex flex-col shadow-card transition-transform duration-200 motion-reduce:transition-none motion-reduce:transform-none",
             mobileOpen ? "translate-x-0" : "-translate-x-full",
           ].join(" ")}
         >
@@ -248,7 +249,7 @@ useEffect(() => {
       >
         <div className="grid grid-cols-3">
           {MOBILE_TABS.map(({ href, label, Icon }) => {
-            const active = pathname === href;
+            const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`));
             return (
               <Link
                 key={href}
@@ -306,7 +307,7 @@ export default function AdminSidebar() {
     <>
       <button
         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        className="md:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-white shadow-md"
+        className="md:hidden fixed top-4 left-4 z-50 p-2 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg bg-white shadow-md motion-reduce:transition-none"
         aria-label="Toggle menu"
       >
         <svg
@@ -334,7 +335,7 @@ export default function AdminSidebar() {
         </svg>
       </button>
       <aside
-        className={`fixed inset-y-0 left-0 transform md:transform-none md:relative w-64 bg-white shadow-md z-40 h-full overflow-y-auto transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"} md:block`}
+        className={`fixed inset-y-0 left-0 transform md:transform-none md:relative w-64 bg-white shadow-md z-40 h-full overflow-y-auto transition-transform duration-300 ease-in-out motion-reduce:transition-none motion-reduce:transform-none ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"} md:block`}
       >
         <div className="p-6">
           <Link href="/admin" className="flex items-center gap-2">
@@ -353,7 +354,7 @@ export default function AdminSidebar() {
                 <li key={item.href}>
                   <Link
                     href={item.href}
-                    className={`flex items-center gap-3 px-6 py-2.5 text-sm font-medium transition-colors ${isActive
+                    className={`flex min-h-[44px] items-center gap-3 px-6 py-2.5 text-sm font-medium transition-colors ${isActive
                       ? "text-navy bg-navy-50"
                       : "text-navy-light hover:text-navy hover:bg-gray-50"
                     }`}

@@ -23,6 +23,7 @@ export function FormField({
         id: child.props.id ?? fieldId,
         "aria-describedby": child.props["aria-describedby"] ?? describedBy,
         "aria-invalid": error ? true : child.props["aria-invalid"],
+        "aria-errormessage": error ? errorId : child.props["aria-errormessage"],
       } as Record<string, unknown>)
     : child;
   return (

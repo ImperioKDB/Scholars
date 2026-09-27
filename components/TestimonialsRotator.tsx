@@ -73,7 +73,7 @@ export function TestimonialsRotator({ items }: { items: TestimonialItem[] }) {
     };
   }, [items, expandedId]);
   function goTo(index: number) {
-    cardRefs.current[index]?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
+    cardRefs.current[index]?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", inline: "start", block: "nearest" });
   }
   return (
     <div>

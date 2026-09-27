@@ -222,7 +222,12 @@ animation has exactly one definition. */
   }
   /* Safety gate: any remaining animate-pulse (e.g. third-party) also
   stops under reduced motion. */
-  .animate-pulse {
+  .animate-pulse,
+  .animate-spin,
+  .confetti-piece {
     animation: none;
+  }
+  html {
+    scroll-behavior: auto;
   }
 }

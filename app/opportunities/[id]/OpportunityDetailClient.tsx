@@ -63,6 +63,15 @@ export function OpportunityDetailClient({
   const [saved, setSaved] = useState(initialSaved);
   const [savePending, setSavePending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [backHref, setBackHref] = useState("/opportunities");
+  useEffect(() => {
+    try {
+      const referrer = document.referrer ? new URL(document.referrer) : null;
+      if (referrer && referrer.origin === window.location.origin && ["/opportunities", "/discover"].some((prefix) => referrer.pathname === prefix || referrer.pathname.startsWith(`${prefix}/`))) {
+        setBackHref(referrer.pathname + referrer.search);
+      }
+    } catch { /* keep the safe opportunities fallback */ }
+  }, []);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -94,7 +103,7 @@ export function OpportunityDetailClient({
 
   return (
     <div>
-      <BackLink href="/opportunities" label="Back to opportunities" />
+      <BackLink href={backHref} label="Back to opportunities" />
       <div className="bg-white rounded-2xl border border-hairline shadow-card p-6 md:p-8">
         <div className="flex items-start gap-4 mb-6">
           <ProviderMonogram name={opportunity.provider_name} size={64} />

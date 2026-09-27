@@ -88,6 +88,15 @@ export function ScholarshipDetailClient({
   const { interceptApply } = useAde();
   const [saved, setSaved] = useState(initialSaved);
   const [application, setApplication] = useState(initialApplication);
+  const [backHref, setBackHref] = useState("/dashboard");
+  useEffect(() => {
+    try {
+      const referrer = document.referrer ? new URL(document.referrer) : null;
+      if (referrer && referrer.origin === window.location.origin && ["/dashboard", "/discover", "/scholarships"].some((prefix) => referrer.pathname === prefix || referrer.pathname.startsWith(`${prefix}/`))) {
+        setBackHref(referrer.pathname + referrer.search);
+      }
+    } catch { /* keep the safe dashboard fallback */ }
+  }, []);
   const [savePending, setSavePending] = useState(false);
   const [trackPending, setTrackPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -161,7 +170,7 @@ export function ScholarshipDetailClient({
 
   return (
     <div>
-      <BackLink href="/dashboard" label="Back to matches" />
+      <BackLink href={backHref} label="Back to matches" />
       <div className="bg-white rounded-2xl border border-hairline shadow-card p-6 md:p-8">
         <div className="flex items-start gap-4 mb-6">
           <MatchSeal score={scholarship.score} size={64} />

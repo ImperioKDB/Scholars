@@ -1,6 +1,7 @@
 "use client";
 import { StatusMessage } from "@/components/StatusMessage";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ScholarshipCard, type CardScholarship } from "@/components/ScholarshipCard";
 import { isCurrentlyOpen } from "@/lib/discovery";
 import { fetchWithTimeout, FetchTimeoutError, FetchNetworkError } from "@/lib/fetch";
@@ -15,9 +16,10 @@ const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 350;
 
 export function DiscoverClient({ userId, initialSavedIds }: { userId: string; initialSavedIds: string[] }) {
-  const [keyword, setKeyword] = useState("");
-  const [level, setLevel] = useState("");
-  const [discipline, setDiscipline] = useState("");
+  const searchParams = useSearchParams();
+  const [keyword, setKeyword] = useState(() => searchParams.get("q") ?? "");
+  const [level, setLevel] = useState(() => searchParams.get("level") ?? "");
+  const [discipline, setDiscipline] = useState(() => searchParams.get("discipline") ?? "");
   const [items, setItems] = useState<CardScholarship[]>([]);
   const [total, setTotal] = useState(0);
   const [nextOffset, setNextOffset] = useState(0);

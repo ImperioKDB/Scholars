@@ -26,7 +26,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </div>
           {/* flex-wrap: nav items plus the admin name overflowed on
               narrow screens once Health, Opportunities and Feedback were added. */}
-          <nav className="flex items-center gap-6 text-sm flex-wrap justify-end">
+          <nav className="flex max-w-full items-center gap-6 text-sm overflow-x-auto whitespace-nowrap justify-end pb-1">
             <Link href="/admin" className="text-navy-light hover:text-navy">
               Overview
             </Link>

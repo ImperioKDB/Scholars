@@ -43,7 +43,8 @@ export function Confetti({
     }))
   );
   useEffect(() => {
-    const t = setTimeout(() => setVisible(false), durationMs);
+    const maxPieceMs = pieces.reduce((max, piece) => Math.max(max, (piece.delay + piece.duration) * 1000), 0);
+    const t = setTimeout(() => setVisible(false), Math.max(durationMs, maxPieceMs + 200));
     return () => clearTimeout(t);
   }, [durationMs]);
   if (!visible) return null;
