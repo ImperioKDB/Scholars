@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { Avatar } from "@/components/Avatar";
@@ -94,6 +94,7 @@ export function ScholarshipCommunity({
   const [reportDetails, setReportDetails] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const composerRef = useRef<HTMLFormElement>(null);
   const officialPrompts = prompts ?? [];
 
   const visibleTopLevel = useMemo(() => {
@@ -120,9 +121,10 @@ export function ScholarshipCommunity({
       ...emptyForm,
       category: parent ? "answer" : "question",
       parent_id: parent?.id ?? null,
-      body: prompt?.prompt_text ?? "",
+      body: "",
     });
     setComposerOpen(true);
+    requestAnimationFrame(() => composerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
   async function submitPost(event: React.FormEvent<HTMLFormElement>) {
@@ -236,7 +238,7 @@ export function ScholarshipCommunity({
       </div>
 
       {composerOpen && canInteract && (
-        <form onSubmit={submitPost} className="mt-4 rounded-2xl border border-emerald/30 bg-white p-4 shadow-card sm:p-5">
+        <form ref={composerRef} onSubmit={submitPost} className="mt-4 scroll-mt-6 rounded-2xl border border-emerald/30 bg-white p-4 shadow-card sm:p-5">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <h3 className="font-display text-lg font-semibold text-navy">{form.parent_id ? "Add an answer" : "Ask the community"}</h3>
@@ -245,6 +247,12 @@ export function ScholarshipCommunity({
             </div>
             <button type="button" onClick={() => setComposerOpen(false)} className="text-sm text-navy-light hover:text-navy">Cancel</button>
           </div>
+          {selectedPrompt && !form.parent_id && (
+            <div className="mb-4 rounded-xl border border-emerald/20 bg-emerald-light/50 p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald">Responding to this prompt</p>
+              <p className="mt-1 text-sm font-medium leading-relaxed text-navy">{promptDisplayText(selectedPrompt)}</p>
+            </div>
+          )}
           {!form.parent_id && officialPrompts.length > 0 && (
             <div className="mb-4 rounded-xl bg-navy-50/70 p-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-navy">Need a way in?</p>
@@ -325,8 +333,9 @@ export function ScholarshipCommunity({
               <article key={prompt.id} className="rounded-xl border border-white bg-white p-3 shadow-sm">
                 <p className="text-sm font-medium leading-relaxed text-navy">{promptDisplayText(prompt)}</p>
                 {canInteract ? (
-                  <button type="button" onClick={() => openComposer(undefined, prompt)} className="mt-3 text-xs font-medium text-emerald hover:underline">
-                    Respond to this prompt →
+                  <button type="button" disabled={pending} onClick={() => openComposer(undefined, prompt)} className="mt-3 flex w-full items-center justify-between rounded-lg border border-emerald/20 bg-emerald-light/40 px-3 py-2.5 text-left text-xs font-semibold text-emerald transition-colors hover:border-emerald/40 hover:bg-emerald-light focus:outline-none focus:ring-2 focus:ring-emerald/30 disabled:cursor-not-allowed disabled:opacity-60">
+                    <span>Respond to this prompt</span>
+                    <span aria-hidden="true" className="text-sm">→</span>
                   </button>
                 ) : (
                   <Link href="/login" className="mt-3 inline-block text-xs font-medium text-emerald hover:underline">
