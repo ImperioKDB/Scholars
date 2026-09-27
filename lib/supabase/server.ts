@@ -16,9 +16,7 @@ import { cookies } from "next/headers";
 //   - RLS + server-side checks on every sensitive operation, so a stolen
 //     browser token still only sees what RLS allows that user.
 export function createClient() {
-  // Next 15 types cookies() as async but keeps the synchronous compatibility
-  // API for this release. Keep this adapter synchronous for shared helpers.
-  const cookieStore = cookies() as unknown as Awaited<ReturnType<typeof cookies>>;
+  const cookieStore = cookies();
   const hardened = (options: CookieOptions): CookieOptions => ({
     ...options,
     sameSite: "lax",

@@ -11,9 +11,8 @@ const reportSchema = z.object({
   details: z.string().trim().max(500).optional(),
 });
 
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  if (!isUuid(id)) return NextResponse.json({ error: "Invalid discussion id" }, { status: 400 });
+export async function POST(request: Request, { params }: { params: { id: string } }) {
+  if (!isUuid(params.id)) return NextResponse.json({ error: "Invalid discussion id" }, { status: 400 });
   const supabase = createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -23,13 +22,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!parsed.success) return NextResponse.json({ error: "Please choose a report reason" }, { status: 400 });
   const { data, error } = await supabase
     .from("scholarship_discussion_reports")
-    .insert({ discussion_id: id, reporter_id: user.id, ...parsed.data })
+    .insert({ discussion_id: params.id, reporter_id: user.id, ...parsed.data })
     .select("id")
     .single();
   if (error) {
     if (error.code === "23505") return NextResponse.json({ message: "Already reported" });
     return dbErrorResponse("scholarship_discussion_report", error);
   }
-  trackServerEvent(supabase, user.id, "community_reported", { discussion_id: id, reason: parsed.data.reason });
+  trackServerEvent(supabase, user.id, "community_reported", { discussion_id: params.id, reason: parsed.data.reason });
   return NextResponse.json({ report: data }, { status: 201 });
 }

@@ -42,7 +42,7 @@ export async function GET(request: Request) {
     const supabase = createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error && data.user) {
-      const cookieStore = cookies() as unknown as Awaited<ReturnType<typeof cookies>>;
+      const cookieStore = cookies();
       const refId = cookieStore.get(COOKIE_NAMES.REF)?.value;
       if (refId && isUuid(refId) && refId !== data.user.id) {
         const { error: attributionError } = await supabase

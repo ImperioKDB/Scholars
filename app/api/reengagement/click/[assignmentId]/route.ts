@@ -7,15 +7,14 @@ export const dynamic = 'force-dynamic'
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://scholars-eight.vercel.app'
 const ALLOWED_PATHS = new Set(['/onboarding', '/applications', '/dashboard'])
 
-export async function GET(request: Request, { params }: { params: Promise<{ assignmentId: string }> }) {
-  const { assignmentId } = await params
+export async function GET(request: Request, { params }: { params: { assignmentId: string } }) {
   const limited = await checkRateLimit(request, { route: 'reengagement-click', limit: 60 })
   if (limited) return limited
   const service = createServiceClient()
   const { data: assignment, error } = await service
     .from('reengagement_assignments')
     .select('id,experiment_id,deep_link')
-    .eq('id', assignmentId)
+    .eq('id', params.assignmentId)
     .maybeSingle()
 
   if (error || !assignment || !ALLOWED_PATHS.has(assignment.deep_link)) {
