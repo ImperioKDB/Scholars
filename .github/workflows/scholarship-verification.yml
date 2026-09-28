@@ -28,7 +28,7 @@ jobs:
           response=$(curl --fail-with-body --silent --show-error --location --max-time 30 -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/integrations/github/scholarship-verification")
           ids=$(echo "$response" | jq -c '.candidate_ids')
           echo "candidate_ids=$ids" >> "$GITHUB_OUTPUT"
-      - name: Verify source URLs
+      - name: Enqueue verification job
         if: steps.candidates.outputs.candidate_ids != '[]'
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
@@ -36,7 +36,27 @@ jobs:
           CANDIDATE_IDS: ${{ steps.candidates.outputs.candidate_ids }}
         run: |
           set -euo pipefail
-          payload=$(jq -cn --argjson ids "$CANDIDATE_IDS" '{candidate_ids: $ids}')
-          curl --fail-with-body --silent --show-error --max-time 120 \
+          payload=$(jq -cn --argjson ids "$CANDIDATE_IDS" --arg key "discovery-verification-${{ github.run_id }}" '{action:"enqueue", candidate_ids:$ids, job_key:$key}')
+          curl --fail-with-body --silent --show-error --max-time 30 \
             -X POST -H "Authorization: Bearer $CRON_SECRET" -H 'Content-Type: application/json' \
-            --data "$payload" "$APP_URL/api/integrations/github/scholarship-verification"
+            --data "$payload" "$APP_URL/api/integrations/github/discovery-jobs"
+      - name: Claim and run verification job
+        if: steps.candidates.outputs.candidate_ids != '[]'
+        id: worker
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ vars.APP_URL || 'https://www.scholars.com.ng' }}
+        run: |
+          set -euo pipefail
+          job=$(curl --fail-with-body --silent --show-error --max-time 30 -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/integrations/github/discovery-jobs")
+          job_id=$(echo "$job" | jq -r '.job.id // empty')
+          test -n "$job_id"
+          ids=$(echo "$job" | jq -c '.job.payload.candidate_ids')
+          payload=$(jq -cn --argjson ids "$ids" '{candidate_ids:$ids}')
+          result=$(curl --fail-with-body --silent --show-error --max-time 300 \
+            -X POST -H "Authorization: Bearer $CRON_SECRET" -H 'Content-Type: application/json' \
+            --data "$payload" "$APP_URL/api/integrations/github/scholarship-verification")
+          completion=$(jq -cn --arg id "$job_id" --argjson result "$result" '{action:"complete", job_id:$id, success:true, result:$result}')
+          curl --fail-with-body --silent --show-error --max-time 30 \
+            -X POST -H "Authorization: Bearer $CRON_SECRET" -H 'Content-Type: application/json' \
+            --data "$completion" "$APP_URL/api/integrations/github/discovery-jobs"
