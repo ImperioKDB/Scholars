@@ -124,7 +124,7 @@ def adapter_for(source: dict):
     return ADAPTERS.get(host, ("generic", KEYWORDS))
 
 
-def candidate(source: dict, page_url: str, title: str, content: str, adapter_name: str) -> dict:
+def candidate(source: dict, page_url: str, title: str, content: str, adapter_name: str, application_url: str | None = None) -> dict:
     normalized = re.sub(r"\s+", " ", content).strip()
     digest = hashlib.sha256(normalized[:200_000].encode()).hexdigest()
     level = "undergraduate" if UNDERGRADUATE.search(normalized) else "unclear"
@@ -132,7 +132,7 @@ def candidate(source: dict, page_url: str, title: str, content: str, adapter_nam
     return {
         "source_id": source["id"],
         "source_url": page_url,
-        "application_url": page_url,
+        "application_url": application_url or page_url,
         "canonical_url": page_url,
         "title": title[:300] or source["name"],
         "provider_name": source["name"][:300],
@@ -160,9 +160,20 @@ def collect_source(source: dict) -> list[dict]:
     parser.feed(raw)
     candidates: list[dict] = []
     page_text = " ".join(parser.text)
-    if KEYWORDS.search(page_text):
-        candidates.append(candidate(source, final_url, " ".join(parser.title).strip(), page_text, adapter_name))
     root_host = urllib.parse.urlparse(final_url).netloc.lower()
+    application_hosts = {host.lower().lstrip("*.").rstrip(".") for host in source.get("application_allowed_hosts", []) if host}
+    application_url = None
+    for href, anchor in parser.links:
+        absolute = urllib.parse.urljoin(final_url, href)
+        parsed = urllib.parse.urlparse(absolute)
+        host = (parsed.hostname or "").lower().rstrip(".")
+        if parsed.scheme == "https" and (host == root_host or any(host == allowed or host.endswith(f".{allowed}") for allowed in application_hosts)) and re.search(r"apply|application|register|submit", f"{anchor} {absolute}", re.I):
+            application_url = absolute
+            break
+    if KEYWORDS.search(page_text):
+        candidates.append(candidate(source, final_url, " ".join(parser.title).strip(), page_text, adapter_name, application_url))
+    if adapter_name == "mtn":
+        return candidates
     seen: set[str] = set()
     for href, anchor in parser.links[:120]:
         absolute = urllib.parse.urljoin(final_url, href)
@@ -178,7 +189,7 @@ def collect_source(source: dict) -> list[dict]:
             child.feed(page)
             child_text = " ".join(child.text)
             if KEYWORDS.search(child_text):
-                candidates.append(candidate(source, resolved, " ".join(child.title).strip(), child_text, adapter_name))
+                candidates.append(candidate(source, resolved, " ".join(child.title).strip(), child_text, adapter_name, application_url))
         except Exception as exc:
             print(f"warning: {adapter_name} child fetch failed for {absolute}: {exc}", file=sys.stderr)
     return candidates
