@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
 
 type ContributorProfile = {
+  profile_id: string;
   display_name: string;
   institution_name: string | null;
   bio: string | null;
@@ -108,6 +110,12 @@ export function ContributorProfileSheet({
             {!profile.institution_name && !profile.bio && (
               <p className="text-sm leading-relaxed text-navy-light">This contributor has not added school or bio details yet.</p>
             )}
+            <Link
+              href={`/community/contributors/${profile.profile_id}`}
+              className="inline-flex w-full items-center justify-center rounded-seal bg-navy px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-navy-light"
+            >
+              View full profile
+            </Link>
           </div>
         ) : null}
       </section>
