@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { Avatar } from "@/components/Avatar";
@@ -96,6 +96,13 @@ export function ScholarshipCommunity({
   const [error, setError] = useState<string | null>(null);
   const composerRef = useRef<HTMLFormElement>(null);
   const officialPrompts = prompts ?? [];
+
+  // router.refresh() updates the server-rendered props without remounting
+  // this client component. Keep the visible list aligned with that refreshed
+  // data so newly published posts appear without a full browser reload.
+  useEffect(() => {
+    setDiscussions(initialDiscussions);
+  }, [initialDiscussions]);
 
   const visibleTopLevel = useMemo(() => {
     const posts = discussions.filter((discussion) => !discussion.parent_id);
