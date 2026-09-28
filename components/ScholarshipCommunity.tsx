@@ -35,7 +35,7 @@ const emptyForm: DiscussionFormState = {
   category: "question",
   title: "",
   body: "",
-  is_anonymous: true,
+  is_anonymous: false,
   parent_id: null,
 };
 
