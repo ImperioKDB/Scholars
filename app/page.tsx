@@ -56,7 +56,7 @@ function levelLabel(level: LiveScholarship["level"]): string {
 export default async function LandingPage() {
   const live = await loadLiveScholarships();
   return (
-    <div className="min-h-screen overflow-y-auto scroll-smooth">
+    <div className="min-h-screen overflow-y-auto motion-safe:scroll-smooth">
       <header className="border-b border-hairline bg-parchment/95 backdrop-blur-sm">
         <div className="mx-auto max-w-6xl px-5 py-4 sm:px-6 sm:py-5 flex items-center justify-between">
           <Logo className="text-navy" />

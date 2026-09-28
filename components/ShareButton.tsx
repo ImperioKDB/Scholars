@@ -98,7 +98,7 @@ export function ShareButton({ scholarshipId, scholarshipSlug, opportunityId, opp
         // stays 30px; the ::after pseudo extends the hit area to 44px
         // without touching layout. Card corner spacing keeps the expanded
         // hit areas of share + save from overlapping.
-        className="relative shrink-0 rounded-full p-1.5 bg-white/90 backdrop-blur-sm text-navy-light hover:text-navy transition-colors after:absolute after:-inset-[7px] after:rounded-full after:content-['']"
+        className="relative shrink-0 rounded-full border border-hairline/70 bg-white p-1.5 text-navy-light hover:text-navy transition-colors after:absolute after:-inset-[7px] after:rounded-full after:content-['']"
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
           <circle cx="18" cy="5" r="3" />

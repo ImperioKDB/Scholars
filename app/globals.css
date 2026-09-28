@@ -203,7 +203,9 @@ reduced-motion fallback is a plain static block. */
     #EEF2F8 60%
   );
   background-size: 250% 100%;
-  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+  /* One pass is enough to communicate loading. Keeping placeholders static
+     after the pass avoids continuous gradient repaints on low-power phones. */
+  animation: skeleton-shimmer 1.6s ease-in-out 1 both;
 }
 
 /* NOTE: the save-pop keyframes live in app/motion.css (single source).

@@ -81,7 +81,7 @@ function SaveButton({
       aria-label={saved ? "Remove from saved opportunities" : "Save opportunity"}
       aria-pressed={saved}
       className={[
-        "relative z-10 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-white/90 backdrop-blur-sm transition-colors disabled:opacity-50",
+        "relative z-10 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-hairline/70 bg-white transition-colors disabled:opacity-50",
         saved ? "text-emerald" : "text-navy-light hover:text-navy",
       ].join(" ")}
     >

@@ -201,7 +201,7 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
               <p className="text-sm text-navy-light mb-4">
                 Verified scholarships that aren&apos;t accepting applications yet. Save one to keep it on your radar.
               </p>
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="below-fold grid md:grid-cols-2 gap-4">
                 {comingSoonItems.map((s) => (
                   <ScholarshipCard key={s.id} scholarship={s} saved={savedIds.has(s.id)} pending={pendingIds.has(s.id)} onToggleSave={() => toggleSave(s.id)} sharerId={userId} />
                 ))}

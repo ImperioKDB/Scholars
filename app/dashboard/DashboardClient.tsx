@@ -152,7 +152,7 @@ function DeadlineCard({ scholarship, days }: { scholarship: CardScholarship; day
         <p className="text-xs text-navy-light mt-1">{scholarship.provider_name}</p>
       </div>
       {showSpinner && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/70 backdrop-blur-[1px] pointer-events-none" aria-hidden="true">
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/90 pointer-events-none" aria-hidden="true">
           <Spinner className="h-4 w-4 text-navy" />
         </div>
       )}
