@@ -58,6 +58,7 @@ const BOOLEAN_DEFAULT_FIELDS = new Set([
 
 const FIELD_LABELS: Record<string, string> = {
   discipline: "Field of study",
+  academic_level: "Study level",
   gpa: "GPA / CGPA",
   nationality: "Nationality",
   gender: "Gender",
@@ -81,6 +82,12 @@ const INSTITUTION_TYPE_LABELS: Record<string, string> = {
   college_of_education: "College of Education",
 };
 
+const ACADEMIC_LEVEL_LABELS: Record<string, string> = {
+  undergrad: "undergraduate",
+  postgrad: "postgraduate",
+  both: "undergraduate or postgraduate",
+};
+
 function label(field: string): string {
   return FIELD_LABELS[field] ?? field;
 }
@@ -100,6 +107,9 @@ function computeAge(dateOfBirth: string): number {
 function displayValue(field: string, value: unknown): unknown {
   if (field === "institution_type" && typeof value === "string") {
     return INSTITUTION_TYPE_LABELS[value] ?? value;
+  }
+  if (field === "academic_level" && typeof value === "string") {
+    return ACADEMIC_LEVEL_LABELS[value] ?? value;
   }
   return value;
 }
@@ -178,7 +188,10 @@ function evaluateRule(
       operator,
       status: "unverifiable",
       requirement,
-      detail: "Not tracked in your profile yet -- verify on the provider's page.",
+      detail:
+        field === "academic_level"
+          ? "Study level is not tracked in your profile yet -- confirm it on the provider's page."
+          : "This detail is not tracked in your profile yet -- verify on the provider's page.",
       gating: false,
     };
   }
