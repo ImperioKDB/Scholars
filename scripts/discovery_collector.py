@@ -222,7 +222,8 @@ def post_candidates(url: str, payload: bytes, secret: str) -> str:
                 return response.read().decode()
         except urllib.error.HTTPError as exc:
             if exc.code not in {301, 302, 307, 308} or not exc.headers.get("Location"):
-                raise
+                detail = exc.read(2000).decode("utf-8", errors="replace")
+                raise RuntimeError(f"discovery_api_http_{exc.code}: {detail[:1800]}") from exc
             current_url = urllib.parse.urljoin(current_url, exc.headers["Location"])
     raise RuntimeError("Too many redirects while submitting discovery candidates")
 
