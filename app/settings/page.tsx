@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { INSTITUTION_TYPE_OPTIONS } from "@/lib/profile";
 import { levelForXp } from "@/lib/xp/level";
 import { AvatarUploader } from "@/components/AvatarUploader";
+import { CommunityBioEditor } from "@/components/CommunityBioEditor";
 import { DeleteAccountButton } from "@/components/DeleteAccountButton";
 
 // app/settings/page.tsx
@@ -38,6 +39,7 @@ type ProfileRow = {
   has_personal_statement: boolean;
   has_lga_certificate: boolean;
   avatar_url: string | null;
+  community_bio: string | null;
   profile_completeness: number;
   xp_total: number;
 };
@@ -153,6 +155,9 @@ export default async function SettingsPage() {
         <p className="text-xs text-navy-light mt-3">
           Shown next to your name instead of the initials avatar. JPG, PNG, or WebP, up to 2MB.
         </p>
+      </Section>
+      <Section title="Community profile">
+        <CommunityBioEditor initialBio={p.community_bio} />
       </Section>
       <Section title="Personal">
         <dl>

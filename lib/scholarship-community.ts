@@ -20,6 +20,7 @@ export type ScholarshipDiscussion = {
   author_avatar_url?: string | null;
   author_role?: "founder" | "contributor" | "student" | null;
   author_is_online?: boolean;
+  author_profile_available?: boolean;
   user_helpful: boolean;
 };
 

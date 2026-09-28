@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Avatar } from "@/components/Avatar";
+import { ContributorProfileSheet, type ContributorProfile } from "@/components/ContributorProfileSheet";
 import type { DiscussionCategory, ScholarshipDiscussion, ScholarshipPrompt, ScholarshipSocialProof as ScholarshipSocialProofData } from "@/lib/scholarship-community";
 import { ScholarshipSocialProof } from "@/components/ScholarshipSocialProof";
 
@@ -95,6 +96,8 @@ export function ScholarshipCommunity({
   const [reportDetails, setReportDetails] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [contributorProfile, setContributorProfile] = useState<ContributorProfile | null>(null);
+  const [contributorLoading, setContributorLoading] = useState(false);
   const composerRef = useRef<HTMLFormElement>(null);
   const officialPrompts = prompts ?? [];
 
@@ -159,6 +162,24 @@ export function ScholarshipCommunity({
     });
     setComposerOpen(true);
     requestAnimationFrame(() => composerRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }));
+  }
+
+  async function openContributorProfile(discussion: ScholarshipDiscussion) {
+    if (discussion.is_anonymous) return;
+    setContributorProfile(null);
+    setContributorLoading(true);
+    try {
+      const response = await fetch(`/api/community/contributors/${discussion.id}`, { cache: "no-store" });
+      const payload = await response.json().catch(() => null);
+      if (response.ok && payload?.profile) setContributorProfile(payload.profile as ContributorProfile);
+    } finally {
+      setContributorLoading(false);
+    }
+  }
+
+  function closeContributorProfile() {
+    setContributorProfile(null);
+    setContributorLoading(false);
   }
 
   async function submitPost(event: React.FormEvent<HTMLFormElement>) {
@@ -347,6 +368,7 @@ export function ScholarshipCommunity({
               onReportReason={setReportReason}
               onReportDetails={setReportDetails}
               onSubmitReport={submitReport}
+              onContributorClick={openContributorProfile}
             />
           ))}
         </div>
@@ -387,6 +409,7 @@ export function ScholarshipCommunity({
         </div>
       )}
 
+      <ContributorProfileSheet profile={contributorProfile} loading={contributorLoading} onClose={closeContributorProfile} />
     </section>
   );
 }
@@ -410,6 +433,7 @@ function DiscussionCard({
   onReportReason,
   onReportDetails,
   onSubmitReport,
+  onContributorClick,
 }: {
   discussion: ScholarshipDiscussion;
   replies: ScholarshipDiscussion[];
@@ -425,6 +449,7 @@ function DiscussionCard({
   onReportReason: (reason: string) => void;
   onReportDetails: (details: string) => void;
   onSubmitReport: (event: React.FormEvent<HTMLFormElement>, id: string) => void;
+  onContributorClick: (discussion: ScholarshipDiscussion) => void;
 }) {
   return (
     <article className={`rounded-2xl border bg-white p-4 shadow-card sm:p-5 ${discussion.is_pinned ? "border-emerald/40" : "border-hairline"}`}>
@@ -437,10 +462,22 @@ function DiscussionCard({
       {discussion.title && <h3 className="mt-3 font-display text-lg font-semibold leading-snug text-navy">{discussion.title}</h3>}
       <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink">{discussion.body}</p>
       <div className="mt-4 flex items-center gap-3">
-        <Avatar userId={discussion.id} fullName={discussion.author_name ?? discussion.author_label} avatarUrl={discussion.author_avatar_url} size="small" />
+        {discussion.is_anonymous ? (
+          <Avatar userId={discussion.id} fullName={discussion.author_name ?? discussion.author_label} avatarUrl={discussion.author_avatar_url} size="small" />
+        ) : (
+          <button type="button" onClick={() => onContributorClick(discussion)} aria-label={`View ${discussion.author_name ?? discussion.author_label}'s contributor profile`} className="rounded-full focus:outline-none focus:ring-2 focus:ring-emerald/40">
+            <Avatar userId={discussion.id} fullName={discussion.author_name ?? discussion.author_label} avatarUrl={discussion.author_avatar_url} size="small" />
+          </button>
+        )}
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-1.5 text-xs font-medium text-navy">
-            <span>{discussion.author_name ?? discussion.author_label}</span>
+            {discussion.is_anonymous ? (
+              <span>{discussion.author_name ?? discussion.author_label}</span>
+            ) : (
+              <button type="button" onClick={() => onContributorClick(discussion)} className="text-left underline decoration-navy/20 underline-offset-2 hover:text-emerald">
+                {discussion.author_name ?? discussion.author_label}
+              </button>
+            )}
             {discussion.author_role && <span className={`rounded-full px-2 py-0.5 text-[10px] ${ROLE_STYLES[discussion.author_role]}`}>{ROLE_LABELS[discussion.author_role]}</span>}
             {discussion.author_is_online && <span className="inline-flex items-center gap-1 text-[10px] font-normal text-emerald"><span className="h-1.5 w-1.5 rounded-full bg-emerald" aria-hidden="true" />Online</span>}
           </div>
@@ -476,10 +513,22 @@ function DiscussionCard({
           {replies.map((reply) => (
             <div key={reply.id} className="rounded-xl bg-parchment/70 p-3">
               <div className="flex items-center gap-2.5">
-                <Avatar userId={reply.id} fullName={reply.author_name ?? reply.author_label} avatarUrl={reply.author_avatar_url} size="small" />
+                {reply.is_anonymous ? (
+                  <Avatar userId={reply.id} fullName={reply.author_name ?? reply.author_label} avatarUrl={reply.author_avatar_url} size="small" />
+                ) : (
+                  <button type="button" onClick={() => onContributorClick(reply)} aria-label={`View ${reply.author_name ?? reply.author_label}'s contributor profile`} className="rounded-full focus:outline-none focus:ring-2 focus:ring-emerald/40">
+                    <Avatar userId={reply.id} fullName={reply.author_name ?? reply.author_label} avatarUrl={reply.author_avatar_url} size="small" />
+                  </button>
+                )}
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-medium text-navy">
-                    <span>{reply.author_name ?? reply.author_label}</span>
+                    {reply.is_anonymous ? (
+                      <span>{reply.author_name ?? reply.author_label}</span>
+                    ) : (
+                      <button type="button" onClick={() => onContributorClick(reply)} className="text-left underline decoration-navy/20 underline-offset-2 hover:text-emerald">
+                        {reply.author_name ?? reply.author_label}
+                      </button>
+                    )}
                     {reply.author_role && <span className={`rounded-full px-2 py-0.5 text-[10px] ${ROLE_STYLES[reply.author_role]}`}>{ROLE_LABELS[reply.author_role]}</span>}
                     {reply.author_is_online && <span className="inline-flex items-center gap-1 text-[10px] font-normal text-emerald"><span className="h-1.5 w-1.5 rounded-full bg-emerald" aria-hidden="true" />Online</span>}
                   </div>

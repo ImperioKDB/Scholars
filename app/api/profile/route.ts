@@ -40,6 +40,7 @@ const profileSchema = z.object({
   gender: z.string().trim().min(1).max(50).nullable().optional(),
   financial_need: z.boolean().optional(),
   career_goals: z.string().trim().max(2000).nullable().optional(),
+  community_bio: z.string().trim().max(280).nullable().optional(),
   date_of_birth: z
     .string()
     .refine((v) => !Number.isNaN(Date.parse(v)), 'Invalid date')
