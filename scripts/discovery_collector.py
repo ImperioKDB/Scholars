@@ -156,7 +156,7 @@ def candidate(source: dict, page_url: str, title: str, content: str, adapter_nam
         "discipline": None,
         "eligibility_notes": f"Pilot adapter: {adapter_name}. Public-source extraction; administrator verification required.",
         "evidence_excerpt": evidence,
-        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "fetched_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "content_hash": digest,
         "confidence": 0.6 if level == "undergraduate" else 0.35,
         "idempotency_key": f"discovery:{source['id']}:{digest}",
