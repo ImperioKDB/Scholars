@@ -17,15 +17,17 @@ export function FormField({
   const hintId = hint ? `${fieldId}-hint` : undefined;
   const errorId = error ? `${fieldId}-error` : undefined;
   const describedBy = [hintId, errorId].filter(Boolean).join(" ") || undefined;
-  const child = Children.only(children);
-  const field = isValidElement(child)
-    ? cloneElement(child, {
-        id: child.props.id ?? fieldId,
-        "aria-describedby": child.props["aria-describedby"] ?? describedBy,
-        "aria-invalid": error ? true : child.props["aria-invalid"],
-        "aria-errormessage": error ? errorId : child.props["aria-errormessage"],
-      } as Record<string, unknown>)
-    : child;
+  const childNodes = Children.toArray(children);
+  const controlIndex = childNodes.findIndex(isValidElement);
+  const field = childNodes.map((child, index) => {
+    if (index !== controlIndex || !isValidElement(child)) return child;
+    return cloneElement(child, {
+      id: child.props.id ?? fieldId,
+      "aria-describedby": child.props["aria-describedby"] ?? describedBy,
+      "aria-invalid": error ? true : child.props["aria-invalid"],
+      "aria-errormessage": error ? errorId : child.props["aria-errormessage"],
+    } as Record<string, unknown>);
+  });
   return (
     <div className="block mb-4">
       <label htmlFor={fieldId} className="block text-sm font-medium text-ink mb-1.5">{label}</label>
