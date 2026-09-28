@@ -16,12 +16,15 @@ export async function GET(request: Request) {
   const supabase = await createClient()
   const guard = await assertAdmin(supabase)
   if (!guard.ok) return guard.response
-  const [{ data: sources, error: sourcesError }, { data: candidates, error: candidatesError }] = await Promise.all([
+  const [{ data: sources, error: sourcesError }, { data: candidates, error: candidatesError }, { data: claims, error: claimsError }] = await Promise.all([
     supabase.from('discovery_sources').select('id,name,base_url,source_type,trust_tier,enabled,pilot_enabled,crawl_policy,last_crawled_at').order('name').limit(50),
-    supabase.from('scholarship_discovery_candidates').select('id,source_id,source_url,application_url,title,provider_name,description,amount,deadline,level,discipline,eligibility_notes,evidence_excerpt,fetched_at,confidence,status,rejection_reason,reviewed_at,published_scholarship_id,published_at,duplicate_of,duplicate_score,duplicate_reason,verification_status,verification_http_status,verification_final_url,verification_notes,last_verified_at,quality_status,quality_score,quality_issues,quality_scored_at,eligibility_review_status,eligibility_verdict,eligibility_confidence,eligibility_report,eligibility_reviewed_at,eligibility_review_error,created_at').order('created_at', { ascending: false }).limit(100),
+    supabase.from('scholarship_discovery_candidates').select('id,source_id,source_url,application_url,title,provider_name,description,amount,deadline,level,discipline,eligibility_notes,evidence_excerpt,fetched_at,confidence,status,rejection_reason,reviewed_at,published_scholarship_id,published_at,duplicate_of,duplicate_score,duplicate_reason,verification_status,verification_http_status,verification_final_url,verification_notes,last_verified_at,extraction_status,extractor_version,extraction_input_hash,quality_status,quality_score,quality_issues,quality_scored_at,eligibility_review_status,eligibility_verdict,eligibility_confidence,eligibility_report,eligibility_reviewed_at,eligibility_review_error,created_at').order('created_at', { ascending: false }).limit(100),
+    supabase.from('scholarship_discovery_candidate_claims').select('id,candidate_id,field,value_json,operator,source_url,evidence_quote,confidence,extraction_method,extractor_version,review_status,reviewed_at').order('created_at', { ascending: false }).limit(1000),
   ])
-  if (sourcesError || candidatesError) return NextResponse.json({ error: 'Could not load discovery data' }, { status: 500 })
-  return NextResponse.json({ sources: sources ?? [], candidates: candidates ?? [] })
+  if (sourcesError || candidatesError || claimsError) return NextResponse.json({ error: 'Could not load discovery data' }, { status: 500 })
+  const claimsByCandidate = new Map<string, unknown[]>()
+  for (const claim of claims ?? []) claimsByCandidate.set(claim.candidate_id, [...(claimsByCandidate.get(claim.candidate_id) ?? []), claim])
+  return NextResponse.json({ sources: sources ?? [], candidates: (candidates ?? []).map((candidate) => ({ ...candidate, claims: claimsByCandidate.get(candidate.id) ?? [] })) })
 }
 
 export async function PATCH(request: Request) {

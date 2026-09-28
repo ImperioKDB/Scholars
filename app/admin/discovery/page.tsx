@@ -10,6 +10,8 @@ type Candidate = {
   rejection_reason: string | null; reviewed_at: string | null; published_scholarship_id: string | null; duplicate_of: string | null
   duplicate_score: number | null; duplicate_reason: string | null; verification_status: string; verification_http_status: number | null
   verification_final_url: string | null; verification_notes: string | null; last_verified_at: string | null
+  extraction_status: string; extractor_version: string | null; extraction_input_hash: string | null
+  claims: { id: string; field: string; value_json: unknown; operator: string | null; source_url: string; evidence_quote: string; confidence: number | null; review_status: string }[]
   quality_status: string; quality_score: number | null; quality_issues: string[]; quality_scored_at: string | null
   eligibility_review_status: string; eligibility_verdict: string | null; eligibility_confidence: number | null
   eligibility_report: { reasons?: string[]; requirements?: string[]; contradictions?: string[]; evidence_quotes?: string[] } | null

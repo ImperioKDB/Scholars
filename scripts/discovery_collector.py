@@ -9,9 +9,11 @@ manual ingestion run.
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import os
 import re
+import socket
 import sys
 import urllib.error
 import urllib.parse
@@ -66,12 +68,55 @@ class PageParser(HTMLParser):
             self._anchor_text.append(clean)
 
 
-def fetch(url: str) -> tuple[str, str]:
-    request = urllib.request.Request(url, headers={"User-Agent": "ScholarsDiscovery/0.2 (+public scholarship indexing)"})
-    with urllib.request.urlopen(request, timeout=25) as response:
-        raw = response.read(MAX_BYTES)
-        charset = response.headers.get_content_charset() or "utf-8"
-        return raw.decode(charset, errors="replace"), response.geturl()
+def unsafe_ip(value: str) -> bool:
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError:
+        return True
+    return address.is_private or address.is_loopback or address.is_link_local or address.is_multicast or address.is_reserved or address.is_unspecified
+
+
+def validate_url(url: str, allowed_hosts: set[str]) -> str:
+    parsed = urllib.parse.urlparse(url)
+    host = (parsed.hostname or "").lower().rstrip(".")
+    if parsed.scheme != "https" or not host or parsed.username or parsed.password or parsed.port not in (None, 443):
+        raise ValueError("unsafe_url")
+    if not any(host == allowed or host.endswith(f".{allowed}") for allowed in allowed_hosts):
+        raise ValueError("host_not_allowed")
+    addresses = {item[4][0] for item in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)}
+    if not addresses or any(unsafe_ip(address) for address in addresses):
+        raise ValueError("private_address")
+    return urllib.parse.urlunparse(parsed._replace(fragment=""))
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        return None
+
+
+def fetch(url: str, allowed_hosts: set[str], max_bytes: int = MAX_BYTES) -> tuple[str, str]:
+    current = url
+    opener = urllib.request.build_opener(NoRedirect)
+    for _ in range(6):
+        current = validate_url(current, allowed_hosts)
+        request = urllib.request.Request(current, headers={"User-Agent": "ScholarsDiscovery/0.3 (+public scholarship indexing)"})
+        try:
+            response = opener.open(request, timeout=25)
+        except urllib.error.HTTPError as exc:
+            if exc.code not in {301, 302, 303, 307, 308} or not exc.headers.get("Location"):
+                raise
+            current = urllib.parse.urljoin(current, exc.headers["Location"])
+            continue
+        with response:
+            content_type = (response.headers.get_content_type() or "").lower()
+            if content_type not in {"text/html", "application/xhtml+xml", "text/plain"}:
+                raise ValueError("unsupported_content_type")
+            raw = response.read(max_bytes + 1)
+            if len(raw) > max_bytes:
+                raise ValueError("response_too_large")
+            charset = response.headers.get_content_charset() or "utf-8"
+            return raw.decode(charset, errors="replace"), current
+    raise ValueError("redirect_limit")
 
 
 def adapter_for(source: dict):
@@ -107,7 +152,10 @@ def candidate(source: dict, page_url: str, title: str, content: str, adapter_nam
 
 def collect_source(source: dict) -> list[dict]:
     adapter_name, link_pattern = adapter_for(source)
-    raw, final_url = fetch(source["base_url"])
+    configured_hosts = {host.lower().lstrip("*.").rstrip(".") for host in source.get("allowed_hosts", []) if host}
+    if not configured_hosts:
+        configured_hosts.add((urllib.parse.urlparse(source["base_url"]).hostname or "").lower())
+    raw, final_url = fetch(source["base_url"], configured_hosts, int(source.get("max_fetch_bytes") or MAX_BYTES))
     parser = PageParser()
     parser.feed(raw)
     candidates: list[dict] = []
@@ -125,7 +173,7 @@ def collect_source(source: dict) -> list[dict]:
             continue
         seen.add(absolute)
         try:
-            page, resolved = fetch(absolute)
+            page, resolved = fetch(absolute, configured_hosts, int(source.get("max_fetch_bytes") or MAX_BYTES))
             child = PageParser()
             child.feed(page)
             child_text = " ".join(child.text)
