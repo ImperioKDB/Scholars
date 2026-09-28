@@ -13,5 +13,8 @@ describe('source adapters', () => {
     expect(result.claims.some((claim) => claim.field === 'nationality' && claim.value === 'Nigerian')).toBe(true)
     expect(result.claims.some((claim) => claim.field === 'level' && claim.value === 'undergraduate')).toBe(true)
     expect(result.claims.some((claim) => claim.field === 'program_year' && claim.value === '2026')).toBe(true)
+    expect(result.claims.some((claim) => claim.field === 'amount' && claim.value === 'N300,000.00')).toBe(true)
+    expect(result.claims.some((claim) => claim.field === 'gender')).toBe(false)
+    expect(result.claims.some((claim) => claim.field === 'gpa')).toBe(false)
   })
 })
