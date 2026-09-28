@@ -282,18 +282,24 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function announceAchievement(achievementId: string) {
+    setBusy(true);
     try {
-      await fetchWithTimeout("/api/achievements/announce", {
+      const response = await fetchWithTimeout("/api/achievements/announce", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ achievement_id: achievementId }),
       });
+      if (!response.ok) return;
+      setPrompt(null);
+      setOpen(false);
+      lastKeyRef.current = null;
+      await poll();
     } catch {
-      // silent
+      // Keep the prompt open so the student can retry if acknowledgement
+      // fails; silently closing it makes the same achievement return later.
+    } finally {
+      setBusy(false);
     }
-    setOpen(false);
-    lastKeyRef.current = null;
-    poll();
   }
 
   function openPanel() {

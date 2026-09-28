@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Avatar } from "@/components/Avatar";
 import type { DiscussionCategory, ScholarshipDiscussion, ScholarshipPrompt, ScholarshipSocialProof as ScholarshipSocialProofData } from "@/lib/scholarship-community";
 import { ScholarshipSocialProof } from "@/components/ScholarshipSocialProof";
@@ -103,6 +104,32 @@ export function ScholarshipCommunity({
   useEffect(() => {
     setDiscussions(initialDiscussions);
   }, [initialDiscussions]);
+
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    const channel = supabase
+      .channel(`scholarship-community:${scholarshipId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "scholarship_discussions",
+          filter: `scholarship_id=eq.${scholarshipId}`,
+        },
+        () => {
+          // The realtime payload contains raw row data. Refresh the server
+          // component so the RPC can apply author privacy labels, roles,
+          // avatars, presence, replies, and the current helpful count.
+          router.refresh();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [router, scholarshipId]);
 
   const visibleTopLevel = useMemo(() => {
     const posts = discussions.filter((discussion) => !discussion.parent_id);
