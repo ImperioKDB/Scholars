@@ -41,9 +41,15 @@ class PageParser(HTMLParser):
         self._in_title = False
         self._anchor: str | None = None
         self._anchor_text: list[str] = []
+        self._ignored_depth = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attrs_dict = dict(attrs)
+        if tag in {"script", "style", "noscript", "template"}:
+            self._ignored_depth += 1
+            return
+        if self._ignored_depth:
+            return
         if tag == "title":
             self._in_title = True
         if tag == "a":
@@ -51,6 +57,11 @@ class PageParser(HTMLParser):
             self._anchor_text = []
 
     def handle_endtag(self, tag: str) -> None:
+        if tag in {"script", "style", "noscript", "template"} and self._ignored_depth:
+            self._ignored_depth -= 1
+            return
+        if self._ignored_depth:
+            return
         if tag == "title":
             self._in_title = False
         if tag == "a" and self._anchor:
@@ -58,6 +69,8 @@ class PageParser(HTMLParser):
             self._anchor = None
 
     def handle_data(self, data: str) -> None:
+        if self._ignored_depth:
+            return
         clean = " ".join(data.split())
         if not clean:
             return
