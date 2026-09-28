@@ -76,7 +76,14 @@ export async function POST(request: Request) {
       extractorVersion = `${extractedWithAdapter.adapter.key}/${extractedWithAdapter.adapter.version}`
       extractionStatus = extracted.status
       extractionInputHash = extracted.inputHash
-      extractionClaims = [extracted.title, extracted.providerName, extracted.description, extracted.applicationUrl, extracted.deadline, extracted.amount, extracted.level, extracted.discipline, ...extracted.claims].filter((claim): claim is Claim => Boolean(claim))
+      const claimKeys = new Set<string>()
+      extractionClaims = [extracted.title, extracted.providerName, extracted.description, extracted.applicationUrl, extracted.deadline, extracted.amount, extracted.level, extracted.discipline, ...extracted.claims].filter((claim): claim is Claim => {
+        if (!claim) return false
+        const key = `${claim.field}:${JSON.stringify(claim.value)}:${claim.operator ?? ''}`
+        if (claimKeys.has(key)) return false
+        claimKeys.add(key)
+        return true
+      })
       await service.from('scholarship_discovery_candidate_claims').delete().eq('candidate_id', candidate.id).eq('review_status', 'proposed')
       if (extractionClaims.length) await service.from('scholarship_discovery_candidate_claims').insert(extractionClaims.map((claim) => claimRow(candidate.id, claim, extracted?.inputHash ?? '', extractorVersion ?? 'generic-fallback-v1')))
     }
