@@ -104,6 +104,7 @@ function profilePayload(form: ProfileForm) {
     institution_type: form.institution_type || null,
     jamb_score: form.jamb_score ? Number(form.jamb_score) : null,
     waec_credit_count: form.waec_credit_count ? Number(form.waec_credit_count) : null,
+    has_english_maths_credit: form.has_english_maths_credit,
     disability_status: form.disability_status,
     has_valid_id: form.has_valid_id,
     has_transcript: form.has_transcript,
@@ -351,7 +352,6 @@ function OnboardingForm() {
     });
   }
   async function saveProfileAndGoDashboard() {
-    if (!matchingAuthorized) { setStep(STEPS.length - 1); setError(null); return; }
     setSaving(true);
     setError(null);
     try {
@@ -381,7 +381,6 @@ function OnboardingForm() {
     } finally { setSaving(false); }
   }
   async function handleSkip() {
-    if (!matchingAuthorized) { setStep(STEPS.length - 1); setError(null); return; }
     setSkipPending(true); setError(null);
     try {
       const res = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(profilePayload(form)) });
