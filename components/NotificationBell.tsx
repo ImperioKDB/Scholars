@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { Skeleton } from "@/components/Skeleton";
 
 type NotificationItem = {
   id: string;
@@ -23,23 +24,41 @@ function relativeDate(value: string) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+function NotificationListSkeleton() {
+  return (
+    <div aria-label="Loading notifications" aria-busy="true" className="space-y-3 px-4 py-4">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div key={index} className="space-y-2">
+          <Skeleton className="h-3.5 w-full" />
+          <Skeleton className="h-3.5 w-2/3" />
+          <Skeleton className="h-2.5 w-16" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   async function load() {
     setLoading(true);
+    setError(false);
     try {
       const response = await fetch("/api/notifications", { cache: "no-store" });
-      if (!response.ok) return;
+      if (!response.ok) throw new Error("notifications_load_failed");
       const payload = await response.json();
       setItems(payload.notifications ?? []);
       setUnread(payload.unreadCount ?? 0);
+    } catch {
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -102,7 +121,8 @@ export function NotificationBell() {
         ref={triggerRef}
         aria-expanded={open}
         aria-controls="notification-panel"
-        className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl text-navy-light hover:bg-navy-50 hover:text-navy"
+        aria-busy={loading}
+        className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl text-navy-light hover:bg-navy-50 hover:text-navy disabled:opacity-60"
       >
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 17H9m9-3V10a6 6 0 0 0-12 0v4l-1.5 2h15L18 14Zm-4 7a2.2 2.2 0 0 1-4 0" />
@@ -120,7 +140,12 @@ export function NotificationBell() {
           </div>
           <div className="max-h-80 overflow-y-auto">
             {loading && items.length === 0 ? (
-              <p className="px-4 py-5 text-sm text-navy-light">Checking for updates…</p>
+              <NotificationListSkeleton />
+            ) : error ? (
+              <div role="alert" className="px-4 py-5 text-sm text-navy-light">
+                <p>Notifications are temporarily unavailable.</p>
+                <button type="button" onClick={() => void load()} className="mt-2 font-medium text-emerald hover:underline">Try again</button>
+              </div>
             ) : items.length === 0 ? (
               <p className="px-4 py-5 text-sm text-navy-light">You’re all caught up.</p>
             ) : (
