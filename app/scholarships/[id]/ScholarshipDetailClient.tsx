@@ -114,6 +114,7 @@ export function ScholarshipDetailClient({
       scholarship_id: scholarship.id,
       score: scholarship.score,
       tier: scholarship.tier,
+      eligible: scholarship.tier !== "unlikely",
     });
   }, []);
 

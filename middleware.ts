@@ -31,6 +31,28 @@ function adminMfaRequired(): boolean {
 
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
+  const attributionResponse = NextResponse.next();
+  const attributionCookie = request.cookies.get(COOKIE_NAMES.ATTRIBUTION)?.value;
+  const params = request.nextUrl.searchParams;
+  const attribution = {
+    referral_source: params.get("referral_source") || (params.get("ref") ? "referral" : ""),
+    campaign_id: params.get("campaign_id") || "",
+    ambassador_code: params.get("ambassador_code") || "",
+    utm_source: params.get("utm_source") || "",
+    utm_medium: params.get("utm_medium") || "",
+    utm_campaign: params.get("utm_campaign") || "",
+  };
+  if (Object.values(attribution).some((value) => value.trim().length > 0) && !attributionCookie) {
+    const bounded = Object.fromEntries(
+      Object.entries(attribution).map(([key, value]) => [key, value.trim().slice(0, 120)])
+    );
+    attributionResponse.cookies.set(COOKIE_NAMES.ATTRIBUTION, encodeURIComponent(JSON.stringify(bounded)), {
+      maxAge: REF_COOKIE_MAX_AGE_S,
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+    });
+  }
 
   if (
     path.startsWith("/s/") ||
@@ -38,7 +60,7 @@ export async function middleware(request: NextRequest) {
     path.startsWith("/scholarship/") ||
     path.startsWith("/opportunity/")
   ) {
-    const shareResponse = NextResponse.next();
+    const shareResponse = attributionResponse;
     const ref = request.nextUrl.searchParams.get("ref");
     const alreadyHasRef = request.cookies.get(COOKIE_NAMES.REF)?.value;
     const consentChoice = request.cookies.get(COOKIE_NAMES.CONSENT)?.value;
@@ -119,6 +141,8 @@ export async function middleware(request: NextRequest) {
   if (isAuthPage && user) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
+  const attributionHeader = attributionResponse.cookies.get(COOKIE_NAMES.ATTRIBUTION);
+  if (attributionHeader) response.cookies.set(attributionHeader);
   return response;
 }
 

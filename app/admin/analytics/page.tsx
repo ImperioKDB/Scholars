@@ -1,0 +1,57 @@
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/admin/access";
+
+type FunnelRow = {
+  id: string;
+  title: string;
+  provider_name: string;
+  eligible_students: number;
+  views: number;
+  saves: number;
+  application_starts: number;
+  provider_clicks: number;
+  outcomes: Record<string, number>;
+};
+type Analytics = {
+  growth?: { total_registered?: number; wau?: number; mau?: number; returning_users?: number; daily_signups?: { day: string; signups: number }[] };
+  activation?: { signups?: number; completed_profiles?: number; viewed_match?: number; activated?: number };
+  retention?: { cohort_size?: number; day_1?: number; day_7?: number; day_30?: number };
+  demographics?: Record<string, Record<string, number>>;
+  acquisition?: { source: string; medium: string; campaign: string; signups: number; completed_profiles: number; activated: number; applications: number }[];
+  scholarship_funnel?: FunnelRow[];
+};
+
+const number = (value: number | undefined) => (value ?? 0).toLocaleString();
+const rate = (part: number | undefined, whole: number | undefined) => whole ? `${Math.round(((part ?? 0) / whole) * 100)}%` : "—";
+function Metric({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return <div className="rounded-xl border border-hairline bg-parchment p-4"><p className="font-mono text-2xl font-semibold text-navy">{value}</p><p className="mt-1 text-xs text-navy-light">{label}</p>{hint && <p className="mt-1 text-[11px] text-navy-light">{hint}</p>}</div>;
+}
+function Distribution({ title, values }: { title: string; values?: Record<string, number> }) {
+  const entries = Object.entries(values ?? {}).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const max = Math.max(1, ...entries.map(([, value]) => value));
+  return <div className="rounded-xl border border-hairline bg-white p-5"><h3 className="font-display text-base font-semibold text-navy">{title}</h3><div className="mt-4 space-y-3">{entries.length ? entries.map(([label, value]) => <div key={label}><div className="flex justify-between gap-3 text-xs"><span className="truncate text-ink">{label}</span><span className="font-mono text-navy-light">{value}</span></div><div className="mt-1 h-1.5 rounded-full bg-navy-50"><div className="h-1.5 rounded-full bg-emerald" style={{ width: `${(value / max) * 100}%` }} /></div></div>) : <p className="text-sm text-navy-light">No aggregate data in this period.</p>}</div></div>;
+}
+
+export default async function ProviderAnalyticsPage() {
+  await requireAdmin();
+  const supabase = createClient();
+  const until = new Date();
+  const since = new Date(until.getTime() - 30 * 86400000);
+  const { data, error } = await supabase.rpc("get_provider_analytics", { p_since: since.toISOString(), p_until: until.toISOString(), p_scholarship_id: null });
+  const analytics = (data ?? {}) as Analytics;
+  const growth = analytics.growth ?? {};
+  const activation = analytics.activation ?? {};
+  const retention = analytics.retention ?? {};
+  const funnel = analytics.scholarship_funnel ?? [];
+  const base = "/api/admin/analytics";
+  return <div>
+    <div className="mb-8 flex flex-wrap items-start justify-between gap-4"><div><h1 className="font-display text-2xl font-semibold text-navy">Provider Analytics</h1><p className="mt-1 max-w-2xl text-sm text-navy-light">Aggregate growth, activation, retention, acquisition, and scholarship funnel reporting for the last 30 days. No student names, contact details, or individual profiles are exposed.</p></div><div className="flex flex-wrap gap-2 text-xs"><Link href={`${base}?report=growth`} className="rounded-full border border-hairline bg-white px-3 py-2 text-navy hover:border-navy">Export growth</Link><Link href={`${base}?report=funnel`} className="rounded-full border border-hairline bg-white px-3 py-2 text-navy hover:border-navy">Export funnel</Link><Link href={`${base}?report=retention`} className="rounded-full border border-hairline bg-white px-3 py-2 text-navy hover:border-navy">Export retention</Link><Link href={`${base}?report=provider`} className="rounded-full bg-navy px-3 py-2 text-white hover:bg-navy-light">Export provider report</Link></div></div>
+    {error && <div className="mb-6 rounded-lg bg-rose-light px-4 py-3 text-sm text-rose">Analytics data could not be loaded. Apply migration 0072 and try again.</div>}
+    <section className="mb-8"><h2 className="mb-3 font-display text-lg font-semibold text-navy">Growth and activation</h2><div className="grid grid-cols-2 gap-3 md:grid-cols-6"><Metric label="Registered users" value={number(growth.total_registered)} /><Metric label="WAU" value={number(growth.wau)} /><Metric label="MAU" value={number(growth.mau)} /><Metric label="Returning users" value={number(growth.returning_users)} /><Metric label="Activated" value={number(activation.activated)} hint={`${rate(activation.activated, activation.signups)} of signups`} /><Metric label="Profile completed" value={number(activation.completed_profiles)} hint={`${rate(activation.completed_profiles, activation.signups)} of signups`} /></div></section>
+    <section className="mb-8 rounded-xl border border-hairline bg-white p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-display text-lg font-semibold text-navy">Retention cohorts</h2><p className="mt-1 text-sm text-navy-light">Signup cohort retention uses a returning first-party event in the day-1, day-7, or day-30 window.</p></div><span className="rounded-full bg-amber-light px-3 py-1 text-xs text-amber">Cohort: {number(retention.cohort_size)}</span></div><div className="mt-4 grid grid-cols-3 gap-3 md:max-w-lg"><Metric label="Day 1" value={rate(retention.day_1, retention.cohort_size)} /><Metric label="Day 7" value={rate(retention.day_7, retention.cohort_size)} /><Metric label="Day 30" value={rate(retention.day_30, retention.cohort_size)} /></div></section>
+    <section className="mb-8"><h2 className="mb-3 font-display text-lg font-semibold text-navy">Aggregate demographics</h2><div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"><Distribution title="Institutions" values={analytics.demographics?.institution} /><Distribution title="Disciplines" values={analytics.demographics?.discipline} /><Distribution title="Year level" values={analytics.demographics?.level} /><Distribution title="States" values={analytics.demographics?.state} /><Distribution title="Gender" values={analytics.demographics?.gender} /></div></section>
+    <section className="mb-8 rounded-xl border border-hairline bg-white p-5"><h2 className="font-display text-lg font-semibold text-navy">Acquisition performance</h2><p className="mt-1 text-sm text-navy-light">Attribution is stored at signup and shown only as grouped channel totals.</p><div className="mt-4 overflow-x-auto"><table className="w-full min-w-[720px] text-left text-sm"><thead><tr className="border-b border-hairline text-xs text-navy-light"><th className="px-3 py-2">Source</th><th className="px-3 py-2">Medium</th><th className="px-3 py-2">Campaign</th><th className="px-3 py-2">Signups</th><th className="px-3 py-2">Activated</th><th className="px-3 py-2">Applications</th></tr></thead><tbody>{(analytics.acquisition ?? []).map((row) => <tr key={`${row.source}-${row.medium}-${row.campaign}`} className="border-b border-hairline last:border-0"><td className="px-3 py-3">{row.source}</td><td className="px-3 py-3 text-navy-light">{row.medium}</td><td className="px-3 py-3 text-navy-light">{row.campaign}</td><td className="px-3 py-3 font-mono">{row.signups}</td><td className="px-3 py-3 font-mono">{row.activated}</td><td className="px-3 py-3 font-mono">{row.applications}</td></tr>)}</tbody></table></div></section>
+    <section className="rounded-xl border border-hairline bg-white p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-display text-lg font-semibold text-navy">Scholarship funnel</h2><p className="mt-1 text-sm text-navy-light">Eligible students are observed eligible match viewers from the existing match event. Saves and applications use their canonical tables.</p></div><span className="rounded-full bg-emerald-light px-3 py-1 text-xs text-emerald">{funnel.length} scholarships</span></div><div className="mt-4 overflow-x-auto"><table className="w-full min-w-[980px] text-left text-sm"><thead><tr className="border-b border-hairline text-xs text-navy-light"><th className="px-3 py-2">Scholarship</th><th className="px-3 py-2">Eligible</th><th className="px-3 py-2">Viewed</th><th className="px-3 py-2">Saved</th><th className="px-3 py-2">Started</th><th className="px-3 py-2">Provider clicks</th><th className="px-3 py-2">Outcomes</th></tr></thead><tbody>{funnel.map((row) => <tr key={row.id} className="border-b border-hairline last:border-0"><td className="max-w-[280px] px-3 py-3"><p className="truncate font-medium text-ink">{row.title}</p><p className="text-xs text-navy-light">{row.provider_name}</p></td><td className="px-3 py-3 font-mono">{row.eligible_students}</td><td className="px-3 py-3 font-mono">{row.views}</td><td className="px-3 py-3 font-mono">{row.saves}</td><td className="px-3 py-3 font-mono">{row.application_starts}</td><td className="px-3 py-3 font-mono">{row.provider_clicks}</td><td className="px-3 py-3 text-xs text-navy-light">{Object.entries(row.outcomes ?? {}).map(([key, value]) => `${key}: ${value}`).join(" · ") || "—"}</td></tr>)}</tbody></table>{!funnel.length && <p className="py-6 text-sm text-navy-light">No scholarship activity in this period.</p>}</div></section>
+  </div>;
+}

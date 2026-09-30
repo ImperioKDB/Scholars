@@ -44,6 +44,16 @@ export async function GET(request: Request) {
     if (!error && data.user) {
       const cookieStore = cookies();
       const refId = cookieStore.get(COOKIE_NAMES.REF)?.value;
+      const attributionCookie = cookieStore.get(COOKIE_NAMES.ATTRIBUTION)?.value;
+      let attribution: Record<string, string> = {};
+      try {
+        const parsed = JSON.parse(decodeURIComponent(attributionCookie || "{}"));
+        for (const key of ["referral_source", "campaign_id", "ambassador_code", "utm_source", "utm_medium", "utm_campaign"]) {
+          if (typeof parsed?.[key] === "string" && parsed[key].trim()) attribution[key] = parsed[key].trim().slice(0, 120);
+        }
+      } catch {
+        // Ignore malformed attribution cookies; auth must remain fail-open.
+      }
       if (refId && isUuid(refId) && refId !== data.user.id) {
         const { error: attributionError } = await supabase
           .from("profiles")
@@ -54,6 +64,16 @@ export async function GET(request: Request) {
           logError("auth/callback", "referral attribution failed", undefined, attributionError);
         }
         cookieStore.set(COOKIE_NAMES.REF, "", { maxAge: 0, path: "/" });
+      }
+      if (Object.keys(attribution).length > 0) {
+        const { error: attributionError } = await supabase
+          .from("profiles")
+          .update(attribution)
+          .eq("id", data.user.id)
+          .is("utm_source", null)
+          .is("referral_source", null);
+        if (attributionError) logError("auth/callback", "campaign attribution failed", undefined, attributionError);
+        cookieStore.set(COOKIE_NAMES.ATTRIBUTION, "", { maxAge: 0, path: "/" });
       }
       return NextResponse.redirect(origin + next);
     }

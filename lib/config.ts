@@ -7,6 +7,7 @@
 export const COOKIE_NAMES = {
   REF: "ref_id",
   CONSENT: "scholars_consent",
+  ATTRIBUTION: "scholars_attribution",
 } as const;
 export const REF_COOKIE_MAX_AGE_S = 60 * 60 * 24 * 30; // 30 days
 export const DEFAULT_APP_URL = "https://scholars-eight.vercel.app";
