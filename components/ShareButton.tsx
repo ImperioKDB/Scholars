@@ -43,10 +43,10 @@ function buildShareUrl(pathPrefix: string, id: string, sharerId?: string): strin
   return url.toString();
 }
 
-async function performShare(url: string, text: string) {
+async function performShare(url: string, text: string, title: string) {
   if (typeof navigator !== "undefined" && navigator.share) {
     try {
-      await navigator.share({ title: text, url });
+      await navigator.share({ title, text, url });
     } catch {
       // User cancelled the native share sheet -- not an error, nothing to do.
     }
@@ -83,9 +83,9 @@ export function ShareButton({ scholarshipId, scholarshipSlug, opportunityId, opp
       : `/s/${entityId}`;
     const url = buildShareUrl("", publicPath, sharerId);
     const text = isOpportunity
-      ? title + " -- find it on Scholars"
-      : title + " -- check if you qualify on Scholars";
-    await performShare(url, text);
+      ? `Check out ${title} on Scholars -- find the details here:`
+      : `Check out ${title} on Scholars -- see if you qualify:`;
+    await performShare(url, text, isOpportunity ? "Opportunity on Scholars" : "Scholarship on Scholars");
   }
 
   if (variant === "icon") {

@@ -78,7 +78,16 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       description,
       type: "article",
       url: `/scholarship/${slug}`,
-      images: [image],
+      siteName: "Scholars",
+      locale: "en_NG",
+      images: [
+        {
+          url: image,
+          width: 1200,
+          height: 630,
+          alt: `${title} -- scholarship opportunity on Scholars`,
+        },
+      ],
     },
     twitter: {
       card: "summary_large_image",

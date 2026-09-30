@@ -93,7 +93,16 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     openGraph: {
       title: opportunity.title,
       description,
-      images: [`${base}/opportunity/${slug}/opengraph-image`],
+      siteName: "Scholars",
+      locale: "en_NG",
+      images: [
+        {
+          url: `${base}/opportunity/${slug}/opengraph-image`,
+          width: 1200,
+          height: 630,
+          alt: `${opportunity.title} -- opportunity on Scholars`,
+        },
+      ],
       type: "website",
     },
     twitter: {
