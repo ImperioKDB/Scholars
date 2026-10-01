@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { StatusMessage } from "@/components/StatusMessage";
 import { DeadlineBadge } from "@/components/DeadlineBadge";
+import { SendIndependenceDayButton } from "@/components/admin/SendIndependenceDayButton";
 
 // app/admin/broadcast/page.tsx
 //
@@ -159,6 +160,8 @@ export default function AdminBroadcastPage() {
           Newest first. One email per student, never one per listing.
         </p>
       </div>
+
+      <SendIndependenceDayButton />
 
       {loadError && (
         <StatusMessage tone="error" className="mb-6">

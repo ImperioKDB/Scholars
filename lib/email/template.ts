@@ -93,6 +93,32 @@ return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin
 <a href="${esc(href)}" style="display:inline-block;padding:12px 22px;font-family:${SANS};font-size:14px;font-weight:700;color:#FFFFFF;text-decoration:none;">${esc(label)}</a>
 </td></tr></table>`;
 }
+export function renderNigeriaIndependenceDayGreeting(args: {
+firstName: string;
+baseUrl: string;
+}): { subject: string; html: string; text: string } {
+const { firstName, baseUrl } = args;
+const subject = "Happy Independence Day, Nigeria!";
+const body = `<h1 style="margin:0 0 6px 0;font-family:${DISPLAY};font-size:22px;line-height:28px;color:${NAVY};">Happy Independence Day, ${esc(firstName)}!</h1>
+<p style="margin:0 0 14px 0;font-family:${SANS};font-size:14px;line-height:22px;color:${INK};">Today, we celebrate Nigeria and the students building a brighter future for our country.</p>
+<p style="margin:0 0 14px 0;font-family:${SANS};font-size:14px;line-height:22px;color:${INK};">May your courage, curiosity and hard work open new opportunities. Keep learning, keep applying and keep believing in your path. Nigeria's future is being shaped by students like you.</p>
+<p style="margin:0 0 16px 0;font-family:${SANS};font-size:14px;line-height:22px;color:${INK};">Wishing you a joyful Independence Day.</p>
+${ctaHtml(baseUrl + "/dashboard", "Continue your Scholars journey")}`;
+const text = [
+`Happy Independence Day, ${firstName}!`,
+"",
+"Today, we celebrate Nigeria and the students building a brighter future for our country.",
+"",
+"May your courage, curiosity and hard work open new opportunities. Keep learning, keep applying and keep believing in your path. Nigeria's future is being shaped by students like you.",
+"",
+"Wishing you a joyful Independence Day.",
+"",
+`Continue your Scholars journey: ${baseUrl}/dashboard`,
+"",
+"- Ade, from Scholars",
+].join("\n");
+return { subject, html: shell(baseUrl, subject, body), text };
+}
 export function renderNewListingsDigest(args: {
 firstName: string;
 items: EmailListing[];
