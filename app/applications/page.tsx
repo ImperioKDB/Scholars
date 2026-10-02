@@ -81,6 +81,7 @@ export default async function ApplicationsPage() {
 
   return (
     <ApplicationsClient
+      userId={user.id}
       initialApplications={applications}
       initialSaved={saved}
       initialError={loadError}

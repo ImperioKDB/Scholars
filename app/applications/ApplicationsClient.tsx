@@ -44,7 +44,8 @@ function readinessFor(application: ApplicationApiItem) {
   return { score, items };
 }
 
-export function ApplicationsClient({ initialApplications, initialSaved, initialError, initialSavedError }: {
+export function ApplicationsClient({ userId, initialApplications, initialSaved, initialError, initialSavedError }: {
+  userId: string;
   initialApplications: ApplicationApiItem[]; initialSaved: SavedApiItem[]; initialError: string | null; initialSavedError?: string | null;
 }) {
   const router = useRouter();
@@ -382,7 +383,7 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
           ))}
         </div>
       )}
-      <MilestoneOnboarding context="applications" />
+      <MilestoneOnboarding context="applications" userId={userId} />
     </div>
   );
 }

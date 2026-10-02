@@ -230,7 +230,7 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
           )}
         </>
       )}
-      <MilestoneOnboarding context="discover" />
+      <MilestoneOnboarding context="discover" userId={userId} />
     </div>
   );
 }

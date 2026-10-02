@@ -16,7 +16,7 @@ type TourStep = {
   action: string;
 };
 
-const STORAGE_KEY = "scholars.onboarding.milestones.v1";
+const STORAGE_KEY_PREFIX = "scholars.onboarding.milestones.v1";
 const MILESTONE_EVENT = "scholars:milestone";
 
 const DASHBOARD_STEPS: TourStep[] = [
@@ -79,19 +79,23 @@ const CONTEXT_STEPS: Record<Context, TourStep> = {
   },
 };
 
-function readState(): Partial<Record<MilestoneId, boolean>> {
+function storageKey(userId: string) {
+  return `${STORAGE_KEY_PREFIX}:${userId}`;
+}
+
+function readState(userId: string): Partial<Record<MilestoneId, boolean>> {
   if (typeof window === "undefined") return {};
   try {
-    const value = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "{}");
+    const value = JSON.parse(window.localStorage.getItem(storageKey(userId)) ?? "{}");
     return value && typeof value === "object" ? value : {};
   } catch {
     return {};
   }
 }
 
-function writeState(state: Partial<Record<MilestoneId, boolean>>) {
+function writeState(userId: string, state: Partial<Record<MilestoneId, boolean>>) {
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    window.localStorage.setItem(storageKey(userId), JSON.stringify(state));
   } catch {
     // Onboarding remains usable when storage is blocked.
   }
@@ -115,7 +119,7 @@ function getTargetRect(target?: string): TargetRect | null {
   return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
 }
 
-export function MilestoneOnboarding({ context }: { context: Context }) {
+export function MilestoneOnboarding({ context, userId }: { context: Context; userId: string }) {
   const router = useRouter();
   const [state, setState] = useState<Partial<Record<MilestoneId, boolean>>>({});
   const [tourIndex, setTourIndex] = useState<number | null>(null);
@@ -128,7 +132,7 @@ export function MilestoneOnboarding({ context }: { context: Context }) {
   const stepCount = dashboardTour.length;
 
   useEffect(() => {
-    const initial = readState();
+    const initial = readState(userId);
     setState(initial);
     if (context === "dashboard" && !initial.welcome_tour) {
       setTourIndex(0);
@@ -139,7 +143,7 @@ export function MilestoneOnboarding({ context }: { context: Context }) {
     function handleMilestone(event: Event) {
       const milestone = (event as CustomEvent<Exclude<MilestoneId, "welcome_tour">>).detail;
       if (milestone !== "saved_tip" && milestone !== "application_tip") return;
-      const latest = readState();
+      const latest = readState(userId);
       if (latest[milestone] || (context === "dashboard" && tourIndex !== null)) return;
       setContextStep(CONTEXT_STEPS[context]);
     }
@@ -148,7 +152,7 @@ export function MilestoneOnboarding({ context }: { context: Context }) {
     return () => window.removeEventListener(MILESTONE_EVENT, handleMilestone);
     // The listener intentionally reads the state at event time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [context]);
+  }, [context, userId]);
 
   useEffect(() => {
     if (!activeStep) return;
@@ -207,7 +211,7 @@ export function MilestoneOnboarding({ context }: { context: Context }) {
     if (!id || id === "welcome" || id === "profile" || id === "matches" || id === "save" || id === "ready") return;
     const next = { ...state, [id]: true };
     setState(next);
-    writeState(next);
+    writeState(userId, next);
     setContextStep(null);
     track("onboarding_step_completed", { step: 0, label: id, path: "milestone" });
   }
@@ -215,7 +219,7 @@ export function MilestoneOnboarding({ context }: { context: Context }) {
   function finishDashboardTour() {
     const next = { ...state, welcome_tour: true };
     setState(next);
-    writeState(next);
+    writeState(userId, next);
     setTourIndex(null);
     track("onboarding_step_completed", { step: tourIndex ?? 0, label: activeStep?.id ?? "ready", path: "milestone" });
     if (activeStep?.id === "ready") router.push("/discover");
@@ -238,7 +242,7 @@ export function MilestoneOnboarding({ context }: { context: Context }) {
   function skip() {
     const nextState = { ...state, welcome_tour: true };
     setState(nextState);
-    writeState(nextState);
+    writeState(userId, nextState);
     setTourIndex(null);
     track("onboarding_abandoned", { step: tourIndex ?? 0, label: activeStep?.id ?? "unknown", reason: "skip_milestone_tour" });
   }

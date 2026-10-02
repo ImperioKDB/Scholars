@@ -413,7 +413,7 @@ export function DashboardClient({
           ))}
         </div>
       )}
-      <MilestoneOnboarding context="dashboard" />
+      <MilestoneOnboarding context="dashboard" userId={userId} />
     </div>
   );
 }
