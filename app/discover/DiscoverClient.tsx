@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { ScholarshipCard, type CardScholarship } from "@/components/ScholarshipCard";
 import { isCurrentlyOpen } from "@/lib/discovery";
 import { fetchWithTimeout, FetchTimeoutError, FetchNetworkError } from "@/lib/fetch";
+import { MilestoneOnboarding } from "@/components/MilestoneOnboarding";
 
 const LEVEL_OPTIONS = [
   { value: "", label: "All levels" },
@@ -189,7 +190,7 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
       ) : (
         <>
           {openNowItems.length > 0 && (
-            <div className="grid md:grid-cols-2 gap-4">
+            <div data-tour="scholarships-list" className="grid md:grid-cols-2 gap-4">
               {openNowItems.map((s) => (
                 <ScholarshipCard key={s.id} scholarship={s} saved={savedIds.has(s.id)} pending={pendingIds.has(s.id)} onToggleSave={() => toggleSave(s.id)} sharerId={userId} />
               ))}
@@ -229,6 +230,7 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
           )}
         </>
       )}
+      <MilestoneOnboarding context="discover" />
     </div>
   );
 }

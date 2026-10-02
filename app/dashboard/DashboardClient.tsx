@@ -10,6 +10,7 @@ import { daysUntil, formatDeadlineLabel } from "@/lib/dates";
 import { track } from "@/lib/analytics";
 import type { GapNudge } from "@/lib/matching/gaps";
 import { fetchWithTimeout, FetchTimeoutError, FetchNetworkError } from "@/lib/fetch";
+import { MilestoneOnboarding, announceMilestone } from "@/components/MilestoneOnboarding";
 type MatchTier = "excellent" | "good" | "possible" | "unlikely";
 type MatchApiItem = CardScholarship & {
   score: number;
@@ -271,6 +272,7 @@ export function DashboardClient({
         setSavedIds((prev) => { const n = new Set(prev); if (wasSaved) n.add(scholarshipId); else n.delete(scholarshipId); return n; });
       } else {
         await refreshSaved();
+        if (!wasSaved) announceMilestone("saved_tip");
       }
     } catch (err) {
       // Revert on network error
@@ -285,7 +287,7 @@ export function DashboardClient({
         <h1 className="font-display text-3xl leading-tight font-semibold text-navy">{greeting}{firstName ? `, ${firstName}` : ""}</h1>
         <p className="text-sm text-navy-light mt-1 mb-6">{openMatches.length} open scholarship{openMatches.length === 1 ? "" : "s"} you can apply to now.</p>
         {profileCompleteness < 100 && (
-          <div className="bg-white rounded-2xl border border-hairline p-5 mb-6 shadow-[0_1px_2px_rgba(11,30,61,0.03)]">
+          <div data-tour="profile" className="bg-white rounded-2xl border border-hairline p-5 mb-6 shadow-[0_1px_2px_rgba(11,30,61,0.03)]">
             <div className="flex items-center justify-between mb-2 gap-3">
               <p className="text-sm font-medium text-ink">Your profile is {profileCompleteness}% complete</p>
               <Link href="/onboarding" className="inline-flex min-h-10 shrink-0 items-center rounded-full bg-navy px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-navy/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald">Finish it <span aria-hidden="true" className="ml-2">&rarr;</span></Link>
@@ -305,7 +307,7 @@ export function DashboardClient({
           <StatTile value={saved.length} label="Saved" />
         </div>
       </div>
-      <div id="matches">
+      <div id="matches" data-tour="matches">
         <WeeklyFocus profileCompleteness={profileCompleteness} onboardingStep={onboardingStep} matches={matches} savedCount={saved.length} closingSoonCount={closingSoonCount} />
       </div>
       {loadError && (
@@ -374,7 +376,7 @@ export function DashboardClient({
             const total = m.requirements.filter((r) => r.status !== "unverifiable").length;
             const missingLabels = m.requirements.filter((r) => r.status === "missing_data").map((r) => r.label);
             return (
-              <div key={m.id} className="animate-card-in" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
+              <div key={m.id} data-tour={i === 0 ? "save" : undefined} className="animate-card-in" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
                 <ScholarshipCard scholarship={m} score={m.score} metCount={met} totalCount={total} missingLabels={missingLabels}
                   saved={savedIds.has(m.id)} pending={pendingIds.has(m.id)} onToggleSave={() => toggleSave(m.id)} sharerId={userId} />
               </div>
@@ -399,7 +401,7 @@ export function DashboardClient({
           </div>
         </div>
       )}
-      <h2 id="saved" className="font-display text-lg font-semibold text-navy mb-5 scroll-mt-20">Saved ({saved.length})</h2>
+      <h2 id="saved" data-tour="saved" className="font-display text-lg font-semibold text-navy mb-5 scroll-mt-20">Saved ({saved.length})</h2>
       {saved.length === 0 ? (
         <div className="bg-white rounded-xl border border-hairline p-8 text-center">
           <p className="text-sm text-navy-light">Save scholarships from your matches above to track their deadlines here.</p>
@@ -411,6 +413,7 @@ export function DashboardClient({
           ))}
         </div>
       )}
+      <MilestoneOnboarding context="dashboard" />
     </div>
   );
 }

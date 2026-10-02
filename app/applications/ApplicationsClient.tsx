@@ -12,6 +12,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useAde } from "@/components/ade/AdeProvider";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { track } from "@/lib/analytics";
+import { MilestoneOnboarding, announceMilestone } from "@/components/MilestoneOnboarding";
 
 type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected" | "not_applied";
 
@@ -118,7 +119,10 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scholarship_id: scholarshipId }),
       });
-      if (res.ok) await load();
+      if (res.ok) {
+        await load();
+        announceMilestone("application_tip");
+      }
       else setActionError("Couldn't start tracking. Try again.");
     } catch {
       setActionError("Couldn't start tracking. Check your connection and try again.");
@@ -269,7 +273,7 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
         </div>
       )}
 
-      <div className="flex items-end justify-between gap-3 mb-4">
+      <div data-tour="applications-list" className="flex items-end justify-between gap-3 mb-4">
         <div>
           <h2 className="font-display text-xl font-semibold text-navy">Tracked applications</h2>
           <p className="text-sm text-navy-light mt-1">Update each one as you move through the provider&apos;s process.</p>
@@ -378,6 +382,7 @@ export function ApplicationsClient({ initialApplications, initialSaved, initialE
           ))}
         </div>
       )}
+      <MilestoneOnboarding context="applications" />
     </div>
   );
 }
