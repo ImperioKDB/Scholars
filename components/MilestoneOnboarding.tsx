@@ -127,14 +127,12 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
   const [state, setState] = useState<Partial<Record<MilestoneId, boolean>>>({});
   const [tourIndex, setTourIndex] = useState<number | null>(null);
   const [contextStep, setContextStep] = useState<TourStep | null>(null);
-  const [helperStep, setHelperStep] = useState<TourStep | null>(null);
   const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   const dashboardTour = context === "dashboard" ? DASHBOARD_STEPS : [];
-  const activeStep = contextStep ?? (tourIndex === null ? null : dashboardTour[tourIndex]) ?? helperStep;
+  const activeStep = contextStep ?? (tourIndex === null ? null : dashboardTour[tourIndex]);
   const isDashboardTour = contextStep === null && tourIndex !== null;
-  const isSkippedStepHelper = helperStep !== null && tourIndex === null && contextStep === null;
   const stepCount = dashboardTour.length;
 
   useEffect(() => {
@@ -207,15 +205,14 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
     if (!activeStep) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      if (isSkippedStepHelper) dismissHelper();
-      else if (isDashboardTour) skip();
+      if (isDashboardTour) skip();
       else finishContextStep();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
     // The active step is the only value that needs to rebind the escape action.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeStep?.id, isDashboardTour, isSkippedStepHelper]);
+  }, [activeStep?.id, isDashboardTour]);
 
   const tooltipStyle = useMemo(() => {
     if (!targetRect) {
@@ -250,22 +247,6 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
     if (activeStep?.id === "ready") router.push("/discover");
   }
 
-  function dismissHelper() {
-    setHelperStep(null);
-    setTargetRect(null);
-  }
-
-  function reopenSkippedStep() {
-    if (!helperStep) return;
-    const skippedIndex = DASHBOARD_STEPS.findIndex((step) => step.id === helperStep.id);
-    if (skippedIndex < 0) {
-      dismissHelper();
-      return;
-    }
-    setHelperStep(null);
-    setTourIndex(skippedIndex);
-  }
-
   function next() {
     if (contextStep) {
       finishContextStep();
@@ -284,7 +265,6 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
     const nextState = { ...state, welcome_tour: true };
     setState(nextState);
     writeState(userId, nextState);
-    if (activeStep?.target) setHelperStep(activeStep);
     setTourIndex(null);
     track("onboarding_abandoned", { step: tourIndex ?? 0, label: activeStep?.id ?? "unknown", reason: "skip_milestone_tour" });
   }
@@ -295,40 +275,35 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
 
   return (
     <div className="tour-shell fixed inset-0 z-[90]" role="presentation">
-      {!isSkippedStepHelper && spotlightStyle ? (
+      {spotlightStyle ? (
         <div
           className="tour-spotlight absolute rounded-2xl border-2 border-white/90 shadow-[0_0_0_9999px_rgba(11,30,61,0.7)]"
           style={spotlightStyle}
           aria-hidden="true"
         />
-      ) : !isSkippedStepHelper ? (
+      ) : (
         <div className="tour-backdrop absolute inset-0 bg-navy/70" aria-hidden="true" />
-      ) : null}
+      )}
       <div
         role="dialog"
-        aria-modal={isSkippedStepHelper ? undefined : true}
+        aria-modal="true"
         aria-labelledby="milestone-onboarding-title"
-        className={`${isSkippedStepHelper ? "tour-helper-card" : "tour-card"} absolute w-[calc(100%-2rem)] max-w-[360px] rounded-2xl border border-white/20 bg-white p-5 text-ink shadow-2xl`}
+        className="tour-card absolute w-[calc(100%-2rem)] max-w-[360px] rounded-2xl border border-white/20 bg-white p-5 text-ink shadow-2xl"
         style={tooltipStyle}
       >
         <div key={activeStep.id} className="tour-card-content">
           {isDashboardTour && <TourProgress steps={DASHBOARD_PROGRESS_LABELS} currentStep={tourIndex ?? 0} />}
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
-              {isSkippedStepHelper && <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald">Quick tip for later</p>}
               {isDashboardTour && <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald">{(tourIndex ?? 0) + 1} of {stepCount}</p>}
               <h2 ref={headingRef} tabIndex={-1} id="milestone-onboarding-title" className="font-display text-xl font-semibold leading-tight text-navy outline-none">{activeStep.title}</h2>
             </div>
-            {isSkippedStepHelper ? (
-              <button type="button" onClick={dismissHelper} className="min-h-[44px] shrink-0 px-1 text-xs font-medium text-navy-light underline underline-offset-2">Dismiss</button>
-            ) : isDashboardTour ? (
-              <button type="button" onClick={skip} className="min-h-[44px] shrink-0 px-1 text-xs font-medium text-navy-light underline underline-offset-2">Skip tour</button>
-            ) : null}
+            {isDashboardTour && <button type="button" onClick={skip} className="min-h-[44px] shrink-0 px-1 text-xs font-medium text-navy-light underline underline-offset-2">Skip tour</button>}
           </div>
           <p className="text-sm leading-6 text-navy-light">{activeStep.body}</p>
           <div className="mt-5 flex items-center justify-between gap-3">
-            {isSkippedStepHelper ? <span className="text-xs text-navy-light">Pick up where you left off.</span> : !isDashboardTour ? <span className="text-xs text-navy-light">You can revisit this anytime.</span> : <span />}
-            <button type="button" onClick={isSkippedStepHelper ? reopenSkippedStep : next} className="inline-flex min-h-[44px] items-center justify-center rounded-seal bg-navy px-5 py-2.5 text-sm font-medium text-white hover:bg-navy-light">{isSkippedStepHelper ? "Show me" : activeStep.action}</button>
+            {!isDashboardTour ? <span className="text-xs text-navy-light">You can revisit this anytime.</span> : <span />}
+            <button type="button" onClick={next} className="inline-flex min-h-[44px] items-center justify-center rounded-seal bg-navy px-5 py-2.5 text-sm font-medium text-white hover:bg-navy-light">{activeStep.action}</button>
           </div>
         </div>
       </div>
