@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchWithTimeout } from "@/lib/fetch";
-import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Avatar } from "@/components/Avatar";
 import { ContributorProfileSheet, type ContributorProfile } from "@/components/ContributorProfileSheet";
 import type { DiscussionCategory, ScholarshipDiscussion, ScholarshipPrompt, ScholarshipSocialProof as ScholarshipSocialProofData } from "@/lib/scholarship-community";
@@ -43,7 +42,12 @@ const emptyForm: DiscussionFormState = {
 function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Recently";
-  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return date.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 function isDated(value: string) {
@@ -98,8 +102,13 @@ export function ScholarshipCommunity({
   const [error, setError] = useState<string | null>(null);
   const [contributorProfile, setContributorProfile] = useState<ContributorProfile | null>(null);
   const [contributorLoading, setContributorLoading] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
   const composerRef = useRef<HTMLFormElement>(null);
   const officialPrompts = prompts ?? [];
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
 
   // router.refresh() updates the server-rendered props without remounting
   // this client component. Keep the visible list aligned with that refreshed
@@ -109,28 +118,21 @@ export function ScholarshipCommunity({
   }, [initialDiscussions]);
 
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
-    const channel = supabase
-      .channel(`scholarship-community:${scholarshipId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "scholarship_discussions",
-          filter: `scholarship_id=eq.${scholarshipId}`,
-        },
-        () => {
-          // The realtime payload contains raw row data. Refresh the server
-          // component so the RPC can apply author privacy labels, roles,
-          // avatars, presence, replies, and the current helpful count.
-          router.refresh();
-        },
-      )
-      .subscribe();
+    // Do not open a Supabase Realtime socket here. Some mobile browsers,
+    // embedded webviews, and privacy networks reject the WebSocket handshake
+    // with SecurityError/"operation is insecure", which used to turn a
+    // non-essential live update into a route error. The initial server render
+    // is authoritative; a lightweight visible-page poll keeps the discussion
+    // list fresh without making the page depend on WebSocket support.
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible" && navigator.onLine) router.refresh();
+    };
+    const interval = window.setInterval(refreshIfVisible, 30_000);
+    document.addEventListener("visibilitychange", refreshIfVisible);
 
     return () => {
-      void supabase.removeChannel(channel);
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshIfVisible);
     };
   }, [router, scholarshipId]);
 
@@ -362,6 +364,7 @@ export function ScholarshipCommunity({
               reportReason={reportReason}
               reportDetails={reportDetails}
               pending={pending}
+              showOlderBadge={hydrated}
               onHelpful={toggleHelpful}
               onReply={openComposer}
               onReport={setReportingId}
@@ -427,6 +430,7 @@ function DiscussionCard({
   reportReason,
   reportDetails,
   pending,
+  showOlderBadge,
   onHelpful,
   onReply,
   onReport,
@@ -443,6 +447,7 @@ function DiscussionCard({
   reportReason: string;
   reportDetails: string;
   pending: boolean;
+  showOlderBadge: boolean;
   onHelpful: (discussion: ScholarshipDiscussion) => void;
   onReply: (discussion?: ScholarshipDiscussion) => void;
   onReport: (id: string | null) => void;
@@ -457,7 +462,7 @@ function DiscussionCard({
         <span className={`rounded-full px-2.5 py-1 font-medium ${CATEGORY_STYLES[discussion.category]}`}>{CATEGORY_LABELS[discussion.category]}</span>
         {discussion.is_pinned && <span className="rounded-full bg-amber-light px-2.5 py-1 font-medium text-amber">Pinned by Scholars</span>}
         {discussion.is_verified_contributor && <span className="rounded-full bg-emerald-light px-2.5 py-1 font-medium text-emerald">Verified contributor</span>}
-        {isDated(discussion.created_at) && <span className="text-navy-light">Older post · check details</span>}
+        {showOlderBadge && isDated(discussion.created_at) && <span className="text-navy-light">Older post · check details</span>}
       </div>
       {discussion.title && <h3 className="mt-3 font-display text-lg font-semibold leading-snug text-navy">{discussion.title}</h3>}
       <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink">{discussion.body}</p>
