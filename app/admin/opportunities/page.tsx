@@ -10,6 +10,7 @@ type Row = {
   title: string;
   provider_name: string;
   deadline: string | null;
+  deadline_passed_at: string | null;
   discipline: string | null;
   verified: boolean;
 };
@@ -170,6 +171,11 @@ export default function AdminOpportunitiesPage() {
                       >
                         {o.verified ? "Verified" : "Pending review"}
                       </button>
+                      {o.deadline_passed_at && (
+                        <span className="ml-2 inline-flex items-center rounded-full bg-rose-light px-2 py-1 text-xs font-medium text-rose">
+                          Deadline passed — review
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-right space-x-3">
                       <Link href={`/admin/opportunities/${o.id}/edit`} className="text-navy hover:underline">

@@ -18,7 +18,7 @@ export default async function NotificationsPage() {
           avatarUrl={profile?.avatar_url ?? null}
         />
         <main id="main" className="md:pl-60">
-          <div className="mx-auto max-w-7xl px-6 pt-20 pb-24 md:pt-10 md:pb-10"><NotificationInbox /></div>
+          <div className="mx-auto max-w-7xl px-6 pt-20 pb-24 md:pt-10 md:pb-10"><NotificationInbox isAdmin={Boolean(profile?.is_admin)} /></div>
         </main>
       </div>
     </AdeShell>

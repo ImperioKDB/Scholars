@@ -10,7 +10,11 @@ const readSchema = z.object({
   all: z.boolean().optional(),
 });
 
-function messageFor(type: string) {
+function messageFor(type: string, metadata: Record<string, unknown> | null | undefined) {
+  if (type === "opportunity_deadline_passed") {
+    const title = typeof metadata?.title === "string" ? metadata.title : "An opportunity";
+    return `Deadline passed — review ${title}.`;
+  }
   if (type === "discussion_reply") return "Someone replied to your community post.";
   if (type === "discussion_helpful") return "Someone marked your community post as helpful.";
   return "You have a new Scholars update.";
@@ -31,7 +35,7 @@ export async function GET() {
 
   const notifications = (data ?? []).map((item) => ({
     ...item,
-    message: messageFor(String(item.type)),
+    message: messageFor(String(item.type), item.metadata as Record<string, unknown> | null),
   }));
   return NextResponse.json({ notifications, unreadCount: notifications.filter((item) => !item.read_at).length });
 }

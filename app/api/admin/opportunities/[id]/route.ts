@@ -62,9 +62,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       { status: 400 }
     )
   }
+  const updatePayload = {
+    ...parsed.data,
+    ...(Object.prototype.hasOwnProperty.call(parsed.data, 'deadline')
+      ? { deadline_passed_at: null }
+      : {}),
+  }
   const { data: opportunity, error } = await supabase
     .from('opportunities')
-    .update(parsed.data)
+    .update(updatePayload)
     .eq('id', id)
     .select('*')
     .single()
