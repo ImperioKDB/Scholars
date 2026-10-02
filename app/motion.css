@@ -99,6 +99,17 @@
   box-shadow: 0 0 0 3px rgba(21, 112, 90, 0.12);
   transform: scale(1.08);
 }
+@media (max-width: 480px) {
+  .tour-progress-node {
+    width: 1.625rem;
+    height: 1.625rem;
+  }
+  .tour-progress-track {
+    top: 0.75rem;
+    right: 0.6875rem;
+    left: 0.6875rem;
+  }
+}
 
 @keyframes tour-shell-in {
   from { opacity: 0; }

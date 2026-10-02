@@ -218,15 +218,21 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
   }, [activeStep?.id, isDashboardTour, isSkippedStepHelper]);
 
   const tooltipStyle = useMemo(() => {
-    if (!targetRect) {
+    if (typeof window === "undefined") {
       return { top: "50%", left: "50%", transform: "translate(-50%, -50%)" } as const;
     }
-    const cardHeight = 220;
+    const viewportPadding = 16;
+    const cardWidth = Math.max(0, Math.min(360, window.innerWidth - viewportPadding * 2));
+    if (!targetRect) {
+      return { top: "50%", left: "50%", width: cardWidth, transform: "translate(-50%, -50%)" } as const;
+    }
+    const cardHeight = 300;
     const top = targetRect.top + targetRect.height + 18 + cardHeight < window.innerHeight
       ? targetRect.top + targetRect.height + 18
       : Math.max(18, targetRect.top - cardHeight - 18);
-    const left = Math.min(Math.max(16, targetRect.left), Math.max(16, window.innerWidth - 380));
-    return { top, left, transform: "none" } as const;
+    const maxLeft = Math.max(viewportPadding, window.innerWidth - cardWidth - viewportPadding);
+    const left = Math.min(Math.max(viewportPadding, targetRect.left), maxLeft);
+    return { top, left, width: cardWidth, transform: "none" } as const;
   }, [targetRect]);
 
   if (!activeStep) return null;
