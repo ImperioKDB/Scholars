@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { track } from "@/lib/analytics";
+import { TourProgress } from "@/components/TourProgress";
 
 type MilestoneId = "welcome_tour" | "discover_tip" | "saved_tip" | "application_tip";
 type Context = "dashboard" | "discover" | "applications";
@@ -54,6 +55,8 @@ const DASHBOARD_STEPS: TourStep[] = [
     action: "Find my opportunities",
   },
 ];
+
+const DASHBOARD_PROGRESS_LABELS = ["Welcome", "Profile", "Matches", "Shortlist", "Ready"] as const;
 
 const CONTEXT_STEPS: Record<Context, TourStep> = {
   discover: {
@@ -289,6 +292,7 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
         style={tooltipStyle}
       >
         <div key={activeStep.id} className="tour-card-content">
+          {isDashboardTour && <TourProgress steps={DASHBOARD_PROGRESS_LABELS} currentStep={tourIndex ?? 0} />}
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
               {isDashboardTour && <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald">{(tourIndex ?? 0) + 1} of {stepCount}</p>}
