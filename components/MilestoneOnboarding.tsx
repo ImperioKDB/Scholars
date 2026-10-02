@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { track } from "@/lib/analytics";
 
@@ -125,6 +125,7 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
   const [tourIndex, setTourIndex] = useState<number | null>(null);
   const [contextStep, setContextStep] = useState<TourStep | null>(null);
   const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
 
   const dashboardTour = context === "dashboard" ? DASHBOARD_STEPS : [];
   const activeStep = contextStep ?? (tourIndex === null ? null : dashboardTour[tourIndex]);
@@ -192,6 +193,24 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
     track("onboarding_step_viewed", { step: index, label: activeStep.id, path: "milestone" });
   }, [activeStep, isDashboardTour, tourIndex]);
 
+  useEffect(() => {
+    if (!activeStep) return;
+    headingRef.current?.focus({ preventScroll: true });
+  }, [activeStep?.id]);
+
+  useEffect(() => {
+    if (!activeStep) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (isDashboardTour) skip();
+      else finishContextStep();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+    // The active step is the only value that needs to rebind the escape action.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStep?.id, isDashboardTour]);
+
   const tooltipStyle = useMemo(() => {
     if (!targetRect) {
       return { top: "50%", left: "50%", transform: "translate(-50%, -50%)" } as const;
@@ -201,7 +220,7 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
       ? targetRect.top + targetRect.height + 18
       : Math.max(18, targetRect.top - cardHeight - 18);
     const left = Math.min(Math.max(16, targetRect.left), Math.max(16, window.innerWidth - 380));
-    return { top, left } as const;
+    return { top, left, transform: "none" } as const;
   }, [targetRect]);
 
   if (!activeStep) return null;
@@ -252,34 +271,36 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
     : undefined;
 
   return (
-    <div className="fixed inset-0 z-[90]" role="presentation">
+    <div className="tour-shell fixed inset-0 z-[90]" role="presentation">
       {spotlightStyle ? (
         <div
-          className="absolute rounded-2xl border-2 border-white/90 shadow-[0_0_0_9999px_rgba(11,30,61,0.7)]"
+          className="tour-spotlight absolute rounded-2xl border-2 border-white/90 shadow-[0_0_0_9999px_rgba(11,30,61,0.7)]"
           style={spotlightStyle}
           aria-hidden="true"
         />
       ) : (
-        <div className="absolute inset-0 bg-navy/70" aria-hidden="true" />
+        <div className="tour-backdrop absolute inset-0 bg-navy/70" aria-hidden="true" />
       )}
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="milestone-onboarding-title"
-        className="absolute w-[calc(100%-2rem)] max-w-[360px] rounded-2xl border border-white/20 bg-white p-5 text-ink shadow-2xl"
+        className="tour-card absolute w-[calc(100%-2rem)] max-w-[360px] rounded-2xl border border-white/20 bg-white p-5 text-ink shadow-2xl"
         style={tooltipStyle}
       >
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <div>
-            {isDashboardTour && <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald">{(tourIndex ?? 0) + 1} of {stepCount}</p>}
-            <h2 id="milestone-onboarding-title" className="font-display text-xl font-semibold leading-tight text-navy">{activeStep.title}</h2>
+        <div key={activeStep.id} className="tour-card-content">
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              {isDashboardTour && <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald">{(tourIndex ?? 0) + 1} of {stepCount}</p>}
+              <h2 ref={headingRef} tabIndex={-1} id="milestone-onboarding-title" className="font-display text-xl font-semibold leading-tight text-navy outline-none">{activeStep.title}</h2>
+            </div>
+            {isDashboardTour && <button type="button" onClick={skip} className="min-h-[44px] shrink-0 px-1 text-xs font-medium text-navy-light underline underline-offset-2">Skip tour</button>}
           </div>
-          {isDashboardTour && <button type="button" onClick={skip} className="min-h-[44px] shrink-0 px-1 text-xs font-medium text-navy-light underline underline-offset-2">Skip tour</button>}
-        </div>
-        <p className="text-sm leading-6 text-navy-light">{activeStep.body}</p>
-        <div className="mt-5 flex items-center justify-between gap-3">
-          {!isDashboardTour ? <span className="text-xs text-navy-light">You can revisit this anytime.</span> : <span />}
-          <button type="button" onClick={next} className="inline-flex min-h-[44px] items-center justify-center rounded-seal bg-navy px-5 py-2.5 text-sm font-medium text-white hover:bg-navy-light">{activeStep.action}</button>
+          <p className="text-sm leading-6 text-navy-light">{activeStep.body}</p>
+          <div className="mt-5 flex items-center justify-between gap-3">
+            {!isDashboardTour ? <span className="text-xs text-navy-light">You can revisit this anytime.</span> : <span />}
+            <button type="button" onClick={next} className="inline-flex min-h-[44px] items-center justify-center rounded-seal bg-navy px-5 py-2.5 text-sm font-medium text-white hover:bg-navy-light">{activeStep.action}</button>
+          </div>
         </div>
       </div>
     </div>
