@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { createPublicClient } from "@/lib/supabase/public";
+import { todayUtcIso } from "@/lib/dates";
 
 // app/sitemap.ts
 // Auto-served at /sitemap.xml. Lists the static public routes plus every
@@ -37,15 +38,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [{ data: scholarships }, { data: opportunities }] = await Promise.all([
     supabase
       .from("scholarships")
-      .select("id, slug, updated_at")
+      .select("id, slug, updated_at, deadline, last_cycle_closed_at")
       .eq("verified", true)
       .in("level", ["undergrad", "both"])
+      .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
+      .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`)
       .order("updated_at", { ascending: false })
       .limit(1000),
     supabase
       .from("opportunities")
-      .select("id, slug, updated_at")
+      .select("id, slug, updated_at, deadline")
       .eq("verified", true)
+      .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
       .order("updated_at", { ascending: false })
       .limit(1000),
   ]);

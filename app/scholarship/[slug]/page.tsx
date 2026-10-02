@@ -3,7 +3,7 @@ import { cache } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { createPublicClient } from "@/lib/supabase/public";
-import { formatVerifiedOn } from "@/lib/dates";
+import { formatVerifiedOn, todayUtcIso } from "@/lib/dates";
 import { Breadcrumbs, SeoJsonLd } from "@/components/SeoJsonLd";
 import { ScholarshipCommunity } from "@/components/ScholarshipCommunity";
 import { loadScholarshipCommunity } from "@/lib/scholarship-community";
@@ -30,7 +30,7 @@ export const revalidate = 300;
 // captured into a cookie by middleware.ts before this component ever
 // renders -- this file doesn't need to read or forward it.
 const PUBLIC_COLUMNS =
-  "id, slug, title, provider_name, description, amount, deadline, level, discipline, verified, last_verified_at";
+  "id, slug, title, provider_name, description, amount, deadline, last_cycle_closed_at, level, discipline, verified, last_verified_at";
 type PublicScholarship = {
   id: string;
   slug: string;
@@ -51,6 +51,8 @@ const loadScholarship = cache(async (slug: string): Promise<PublicScholarship | 
     .select(PUBLIC_COLUMNS)
     .eq("slug", slug)
     .eq("verified", true)
+    .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
+    .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`)
     .maybeSingle();
   return data as PublicScholarship | null;
 });

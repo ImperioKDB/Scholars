@@ -4,6 +4,7 @@ import { getCurrentUserAndProfile } from "@/lib/supabase/currentUser";
 import { createClient } from "@/lib/supabase/server";
 import { OpportunityDetailClient, type SimilarOpportunity } from "./OpportunityDetailClient";
 import type { CardOpportunity } from "@/components/OpportunityCard";
+import { todayUtcIso } from "@/lib/dates";
 
 // app/opportunities/[id]/page.tsx
 // GET /opportunities/[id]
@@ -34,6 +35,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
       .select(PUBLIC_COLUMNS)
       .eq("id", id)
       .eq("verified", true)
+      .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
       .maybeSingle(),
     supabase
       .from("saved_opportunities")
@@ -55,6 +57,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
     .select(SIMILAR_COLUMNS)
     .eq("verified", true)
     .eq("type", opportunity.type)
+    .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
     .neq("id", id)
     .order("deadline", { ascending: true, nullsFirst: false })
     .limit(3);
@@ -64,6 +67,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
       .from("opportunities")
       .select(SIMILAR_COLUMNS)
       .eq("verified", true)
+      .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
       .neq("id", id)
       .eq("discipline", opportunity.discipline)
       .order("deadline", { ascending: true, nullsFirst: false })

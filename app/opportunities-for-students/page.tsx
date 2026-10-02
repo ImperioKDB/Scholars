@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createPublicClient } from "@/lib/supabase/public";
+import { todayUtcIso } from "@/lib/dates";
 import { SeoJsonLd } from "@/components/SeoJsonLd";
 
 export const revalidate = 300;
@@ -50,6 +51,7 @@ export default async function OpportunitiesForStudentsPage() {
     .from("opportunities")
     .select("id, slug, type, title, provider_name, compensation, deadline, location")
     .eq("verified", true)
+    .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
     .order("deadline", { ascending: true, nullsFirst: false })
     .limit(50);
   const opportunities = (data ?? []) as Opportunity[];

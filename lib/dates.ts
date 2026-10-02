@@ -2,6 +2,21 @@
 // Small shared helpers for deadline math, used by the dashboard page and
 // ScholarshipCard. Kept UTC-based so "today" doesn't shift depending on the
 // server's local timezone vs. the student's.
+export function todayUtcIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export function isClosedListing(listing: {
+  deadline?: string | null;
+  last_cycle_closed_at?: string | null;
+}): boolean {
+  const today = todayUtcIso();
+  return Boolean(
+    (listing.deadline && listing.deadline < today) ||
+      (listing.last_cycle_closed_at && listing.last_cycle_closed_at <= today),
+  );
+}
+
 export function daysUntil(deadline: string | null | undefined): number | null {
   if (!deadline) return null;
   const target = new Date(`${deadline}T00:00:00Z`).getTime();

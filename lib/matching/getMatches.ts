@@ -6,6 +6,7 @@ import { getCachedCatalog, getCachedMatches, setCachedCatalog, setCachedMatches 
 import { predictNextCycle, type CycleEvent } from "../cycles";
 import { logError } from "@/lib/logging";
 import type { MatchableProfile, ScholarshipMatch, ScholarshipRule, ScholarshipRow } from "./types";
+import { todayUtcIso } from "../dates";
 
 // PERF (batch 1): list evaluation drops `description`. Cards and the
 // dashboard never render it, and pulling a large text column for every
@@ -96,7 +97,9 @@ export async function getMatchesForCurrentUser(): Promise<{
         .from("scholarships")
         .select(SCHOLARSHIP_LIST_COLUMNS)
         .eq("verified", true)
-        .in("level", ["undergrad", "both"]),
+        .in("level", ["undergrad", "both"])
+        .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
+        .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`),
       supabase.from("scholarship_rules").select("id, scholarship_id, field, operator, value"),
     ]);
     scholarships = (scholarshipsResult.data ?? null) as unknown as ScholarshipRow[] | null;
@@ -174,6 +177,8 @@ export async function getMatchForScholarship(scholarshipId: string): Promise<{
       .select(SCHOLARSHIP_DETAIL_COLUMNS)
       .eq("id", scholarshipId)
       .in("level", ["undergrad", "both"])
+      .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
+      .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`)
       .maybeSingle(),
     supabase
       .from("scholarship_rules")

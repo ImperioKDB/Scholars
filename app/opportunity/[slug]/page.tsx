@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { createPublicClient } from "@/lib/supabase/public";
+import { todayUtcIso } from "@/lib/dates";
 import { Breadcrumbs, SeoJsonLd } from "@/components/SeoJsonLd";
 
 // app/opportunity/[slug]/page.tsx
@@ -70,6 +71,7 @@ const loadOpportunity = cache(async (slug: string): Promise<PublicOpportunity | 
     .select(PUBLIC_COLUMNS)
     .eq("slug", slug)
     .eq("verified", true)
+    .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
     .maybeSingle();
   return data as PublicOpportunity | null;
 });

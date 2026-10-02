@@ -7,6 +7,7 @@ import { Footer } from "@/components/Footer";
 import { DeadlineBadge } from "@/components/DeadlineBadge";
 import { createPublicClient } from "@/lib/supabase/public";
 import { isCurrentlyOpen } from "@/lib/discovery";
+import { todayUtcIso } from "@/lib/dates";
 
 // PERF (batch 1): ISR. The live scholarship card hits Supabase at most
 // once per 5 minutes instead of on every landing-page visit. The data is
@@ -40,6 +41,8 @@ async function loadLiveScholarships(): Promise<LiveScholarship[]> {
     .select("id, title, provider_name, amount, deadline, opens_at, last_cycle_closed_at, discipline, level")
     .eq("verified", true)
     .in("level", ["undergrad", "both"])
+    .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
+    .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`)
     .order("deadline", { ascending: true })
     .limit(20);
   return (data ?? [])

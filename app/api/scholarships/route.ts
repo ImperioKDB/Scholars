@@ -19,6 +19,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { escapeLikePattern, sanitizeSearchText } from '@/lib/validate'
+import { todayUtcIso } from '@/lib/dates'
 
 const querySchema = z.object({
   level: z.enum(['undergrad', 'both']).optional(),
@@ -57,6 +58,8 @@ export async function GET(request: Request) {
     )
     .eq('verified', true)
     .in('level', ['undergrad', 'both'])
+    .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
+    .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`)
     .order('deadline', { ascending: true })
     .range(offset, offset + limit - 1)
 

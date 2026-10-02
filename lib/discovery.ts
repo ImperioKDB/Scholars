@@ -1,14 +1,14 @@
 import type { ScholarshipMatch } from "./matching/types";
+import { isClosedListing, todayUtcIso } from "./dates";
 
 export function isCurrentlyOpen(scholarship: {
   opens_at?: string | null;
   last_cycle_closed_at?: string | null;
   deadline: string | null;
 }): boolean {
-  const today = new Date().toISOString().slice(0, 10);
-  if (scholarship.deadline && scholarship.deadline < today) return false;
+  const today = todayUtcIso();
+  if (isClosedListing(scholarship)) return false;
   if (scholarship.opens_at) return scholarship.opens_at <= today;
-  if (scholarship.last_cycle_closed_at) return false;
   return true;
 }
 

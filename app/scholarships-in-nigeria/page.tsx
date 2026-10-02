@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { createPublicClient } from "@/lib/supabase/public";
 import { SeoJsonLd } from "@/components/SeoJsonLd";
+import { todayUtcIso } from "@/lib/dates";
 
 export const revalidate = 300;
 
@@ -46,9 +47,11 @@ export default async function ScholarshipsInNigeriaPage() {
   const supabase = createPublicClient();
   const { data } = await supabase
     .from("scholarships")
-    .select("id, slug, title, provider_name, amount, deadline, discipline")
+    .select("id, slug, title, provider_name, amount, deadline, last_cycle_closed_at, discipline")
     .eq("verified", true)
     .in("level", ["undergrad", "both"])
+    .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
+    .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`)
     .order("deadline", { ascending: true })
     .limit(50);
   const scholarships = (data ?? []) as Scholarship[];

@@ -24,6 +24,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { escapeLikePattern, sanitizeSearchText } from '@/lib/validate'
+import { todayUtcIso } from '@/lib/dates'
 
 const querySchema = z.object({
   type: z.enum(['fellowship', 'internship', 'competition', 'mentorship']).optional(),
@@ -66,6 +67,7 @@ export async function GET(request: Request) {
     .from('opportunities')
     .select(OPPORTUNITY_COLUMNS, { count: 'planned' })
     .eq('verified', true)
+    .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
     .order('deadline', { ascending: true, nullsFirst: false })
     .range(offset, offset + limit - 1)
 
