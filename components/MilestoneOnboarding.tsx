@@ -102,9 +102,14 @@ export function announceMilestone(milestone: Exclude<MilestoneId, "welcome_tour"
   window.dispatchEvent(new CustomEvent(MILESTONE_EVENT, { detail: milestone }));
 }
 
+function getTargetElement(target?: string): Element | null {
+  if (!target || typeof document === "undefined") return null;
+  return document.querySelector(`[data-tour="${target}"]`);
+}
+
 function getTargetRect(target?: string): TargetRect | null {
   if (!target || typeof document === "undefined") return null;
-  const element = document.querySelector(`[data-tour="${target}"]`);
+  const element = getTargetElement(target);
   if (!element) return null;
   const rect = element.getBoundingClientRect();
   return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
@@ -144,6 +149,18 @@ export function MilestoneOnboarding({ context }: { context: Context }) {
     // The listener intentionally reads the state at event time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context]);
+
+  useEffect(() => {
+    if (!activeStep) return;
+    const target = getTargetElement(activeStep.target);
+    if (!target) return;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    target.scrollIntoView({
+      behavior: reduceMotion ? "auto" : "smooth",
+      block: "center",
+      inline: "nearest",
+    });
+  }, [activeStep?.id]);
 
   useEffect(() => {
     if (!activeStep) {
@@ -232,8 +249,15 @@ export function MilestoneOnboarding({ context }: { context: Context }) {
 
   return (
     <div className="fixed inset-0 z-[90]" role="presentation">
-      <div className="absolute inset-0 bg-navy/70" aria-hidden="true" />
-      {spotlightStyle && <div className="absolute rounded-2xl border-2 border-white/90 shadow-[0_0_0_9999px_rgba(11,30,61,0.7)]" style={spotlightStyle} aria-hidden="true" />}
+      {spotlightStyle ? (
+        <div
+          className="absolute rounded-2xl border-2 border-white/90 shadow-[0_0_0_9999px_rgba(11,30,61,0.7)]"
+          style={spotlightStyle}
+          aria-hidden="true"
+        />
+      ) : (
+        <div className="absolute inset-0 bg-navy/70" aria-hidden="true" />
+      )}
       <div
         role="dialog"
         aria-modal="true"
