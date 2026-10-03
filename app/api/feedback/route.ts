@@ -3,31 +3,23 @@
 //
 // In-app feedback intake (components/FeedbackWidget.tsx FeedbackModal,
 // triggered from the Sidebar account block). Inserts a row into
-// public.feedback (migration 0014) and emails the support inbox via Brevo,
-// same dry-run-safe pattern as the deadline cron: missing BREVO_API_KEY /
-// REMINDER_FROM_EMAIL logs and skips the email instead of failing the
-// request, so feedback is never lost because email isn't configured yet.
+// public.feedback (migration 0014). Feedback is stored for admin review and
+// never sends email automatically; email delivery requires an explicit admin
+// action.
 //
 // Rate limited 5/hour per user on top of the IP bucket -- feedback is a
 // low-volume, high-intent action, so the cap is generous for humans and
 // still a brake on scripts.
 //
-// INPUT HARDENING: page_url comes straight from the Referer header and
-// was previously interpolated RAW into the support email HTML while only
-// `message` was escaped -- an HTML-injection path into the support inbox
-// via a crafted Referer. All three interpolated values (message,
-// page_url, contact_email) are now escaped with the shared escapeHtml.
 // The stored page_url is also truncated so an absurd header can't bloat
 // the row.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
-import { logError, logWarn } from '@/lib/logging'
-import { escapeHtml } from '@/lib/validate'
+import { logError } from '@/lib/logging'
 
 const ROUTE = '/api/feedback'
-const SUPPORT_INBOX = 'support.scholarsteam@gmail.com'
 const PAGE_URL_MAX = 2000
 
 const bodySchema = z.object({
@@ -35,55 +27,6 @@ const bodySchema = z.object({
   message: z.string().trim().min(10, 'Please write at least 10 characters.').max(2000),
   contact_email: z.string().email().nullish(),
 })
-
-const CATEGORY_LABELS: Record<string, string> = {
-  bug: 'Something is broken',
-  feature: 'Feature request',
-  scholarship: 'Scholarship issue',
-  other: 'Other',
-}
-
-async function sendFeedbackEmail(params: {
-  category: string
-  message: string
-  contactEmail: string | null
-  pageUrl: string | null
-}) {
-  const apiKey = process.env.BREVO_API_KEY
-  const from = process.env.REMINDER_FROM_EMAIL
-  if (!apiKey || !from) {
-    logWarn(ROUTE, 'email_skipped_dry_run', { category: params.category })
-    return
-  }
-
-  // INPUT HARDENING: every interpolated value is escaped -- message was
-  // already, pageUrl (raw Referer header) and contactEmail are now too.
-  const escapedMessage = escapeHtml(params.message)
-  const escapedPageUrl = params.pageUrl ? escapeHtml(params.pageUrl) : null
-  const escapedContact = params.contactEmail ? escapeHtml(params.contactEmail) : null
-
-  const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: { 'api-key': apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({
-      sender: { email: from, name: 'Scholars feedback' },
-      to: [{ email: SUPPORT_INBOX }],
-      replyTo: params.contactEmail ? { email: params.contactEmail } : undefined,
-      subject: `[Scholars feedback] ${CATEGORY_LABELS[params.category] ?? params.category}`,
-      htmlContent: `
-        <p><strong>Category:</strong> ${CATEGORY_LABELS[params.category] ?? params.category}</p>
-        ${escapedContact ? `<p><strong>Reply to:</strong> ${escapedContact}</p>` : ''}
-        ${escapedPageUrl ? `<p><strong>From page:</strong> ${escapedPageUrl}</p>` : ''}
-        <p><strong>Message:</strong></p>
-        <p style="white-space:pre-wrap">${escapedMessage}</p>
-      `,
-    }),
-  })
-  if (!resp.ok) {
-    const body = await resp.text().catch(() => '')
-    throw new Error(`Brevo API error ${resp.status}: ${body.slice(0, 300)}`)
-  }
-}
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -132,18 +75,6 @@ export async function POST(request: Request) {
         ? "We couldn't save your feedback yet because our database permissions are still being set up. Please try again shortly, or email support.scholarsteam@gmail.com directly."
         : 'We could not save your feedback. Please try again shortly.'
     return NextResponse.json({ error: friendly }, { status: 500 })
-  }
-
-  try {
-    await sendFeedbackEmail({
-      category: parsed.data.category,
-      message: parsed.data.message,
-      contactEmail: parsed.data.contact_email ?? null,
-      pageUrl,
-    })
-  } catch (err) {
-    // Row is already stored, so triage can still happen from the database.
-    logError(ROUTE, 'email_failed', undefined, err)
   }
 
   // Client (FeedbackModal) only checks res.ok, never reads the body, so
