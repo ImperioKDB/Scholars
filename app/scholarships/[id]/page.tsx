@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { loadScholarshipCommunity } from "@/lib/scholarship-community";
 import { ScholarshipDetailClient, type SimilarScholarship } from "./ScholarshipDetailClient";
 import { isUuid } from "@/lib/validate";
+import { todayUtcIso } from "@/lib/dates";
 
 type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected" | "not_applied";
 
@@ -88,6 +89,7 @@ export default async function ScholarshipDetailPage({ params }: { params: Promis
       .eq("verified", true)
       .neq("id", id)
       .eq("discipline", match.discipline)
+      .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
       .order("deadline", { ascending: true })
       .limit(3);
     similar = (data ?? []) as SimilarScholarship[];
@@ -99,6 +101,7 @@ export default async function ScholarshipDetailPage({ params }: { params: Promis
       .eq("verified", true)
       .neq("id", id)
       .eq("level", match.level)
+      .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
       .order("deadline", { ascending: true })
       .limit(3);
     similar = (data ?? []) as SimilarScholarship[];

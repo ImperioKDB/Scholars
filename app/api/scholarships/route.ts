@@ -19,6 +19,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { escapeLikePattern, sanitizeSearchText } from '@/lib/validate'
+import { getRetainedScholarshipIds, scholarshipVisibilityFilter } from '@/lib/scholarship-visibility'
 import { todayUtcIso } from '@/lib/dates'
 
 const querySchema = z.object({
@@ -36,6 +37,8 @@ export async function GET(request: Request) {
   const supabase = await createClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (authError || !user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+
+  const retainedIds = await getRetainedScholarshipIds(supabase, user.id)
 
   const { searchParams } = new URL(request.url)
   const parsed = querySchema.safeParse({
@@ -58,8 +61,12 @@ export async function GET(request: Request) {
     )
     .eq('verified', true)
     .in('level', ['undergrad', 'both'])
-    .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
-    .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`)
+    .or(scholarshipVisibilityFilter(retainedIds))
+    .or(
+      retainedIds.size === 0
+        ? `last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`
+        : `last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()},id.in.(${Array.from(retainedIds).join(',')})`
+    )
     .order('deadline', { ascending: true })
     .range(offset, offset + limit - 1)
 

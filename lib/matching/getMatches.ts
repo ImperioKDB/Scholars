@@ -7,6 +7,7 @@ import { predictNextCycle, type CycleEvent } from "../cycles";
 import { logError } from "@/lib/logging";
 import type { MatchableProfile, ScholarshipMatch, ScholarshipRule, ScholarshipRow } from "./types";
 import { todayUtcIso } from "../dates";
+import { getRetainedScholarshipIds, isVisibleToUser, scholarshipVisibilityFilter } from "../scholarship-visibility";
 
 // PERF (batch 1): list evaluation drops `description`. Cards and the
 // dashboard never render it, and pulling a large text column for every
@@ -62,23 +63,28 @@ export async function getMatchesForCurrentUser(): Promise<{
   if (!user) return { matches: [], profileCompleteness: 0, error: "not_authenticated" };
   if (!profileRow) return { matches: [], profileCompleteness: 0, error: "profile_not_found" };
 
+  const supabase = createClient();
+  const retainedIds = await getRetainedScholarshipIds(supabase, user.id);
+
   // PERF (batch 1): warm-cache path. Returns the exact same payload
   // shape, so callers (dashboard, POST /api/scholarships/match, gaps)
   // are unchanged. TTL bounds staleness at 10 minutes; profile and WAEC
   // writes invalidate explicitly. Defensive shape check: a corrupted
   // cache entry falls through to a fresh evaluation instead of crashing.
   const cached = await getCachedMatches(user.id);
-  if (cached && typeof cached === "object" && Array.isArray((cached as CachedMatchPayload).matches)) {
+  if (cached && retainedIds.size === 0 && typeof cached === "object" && Array.isArray((cached as CachedMatchPayload).matches)) {
     const payload = cached as CachedMatchPayload;
     return {
-      matches: payload.matches,
+      // Deadlines can pass while a user's match cache is warm. Re-check the
+      // visibility rule at read time so an expired card cannot leak back into
+      // the dashboard through the cache.
+      matches: payload.matches.filter((match) => isVisibleToUser(match, retainedIds)),
       profileCompleteness: payload.profileCompleteness,
       error: null,
     };
   }
 
   const profile: MatchableProfile = toMatchableProfile(profileRow);
-  const supabase = createClient();
   const cachedCatalog = await getCachedCatalog();
   const catalog =
     cachedCatalog &&
@@ -87,26 +93,46 @@ export async function getMatchesForCurrentUser(): Promise<{
     Array.isArray((cachedCatalog as CachedCatalogPayload).rules)
       ? (cachedCatalog as CachedCatalogPayload)
       : null;
-  let scholarships: ScholarshipRow[] | null = catalog?.scholarships ?? null;
+  let scholarships: ScholarshipRow[] | null = catalog?.scholarships?.filter((scholarship) => isVisibleToUser(scholarship, retainedIds)) ?? null;
   let rules: ScholarshipRule[] | null = catalog?.rules ?? null;
   let scholarshipsError: { code?: string; details?: string; hint?: string } | null = null;
   let rulesError: { code?: string; details?: string; hint?: string } | null = null;
-  if (!catalog) {
+  if (!catalog || retainedIds.size > 0) {
+    const retainedScholarshipQuery = retainedIds.size > 0
+      ? supabase
+          .from("scholarships")
+          .select(SCHOLARSHIP_LIST_COLUMNS)
+          .eq("verified", true)
+          .in("level", ["undergrad", "both"])
+          .in("id", Array.from(retainedIds))
+      : null;
     const [scholarshipsResult, rulesResult] = await Promise.all([
-      supabase
-        .from("scholarships")
-        .select(SCHOLARSHIP_LIST_COLUMNS)
-        .eq("verified", true)
-        .in("level", ["undergrad", "both"])
-        .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
-        .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`),
+      catalog
+        ? retainedScholarshipQuery
+        : supabase
+            .from("scholarships")
+            .select(SCHOLARSHIP_LIST_COLUMNS)
+            .eq("verified", true)
+            .in("level", ["undergrad", "both"])
+            .or(scholarshipVisibilityFilter(retainedIds))
+            .or(
+              retainedIds.size === 0
+                ? `last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`
+                : `last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()},id.in.(${Array.from(retainedIds).join(",")})`
+            ),
       supabase.from("scholarship_rules").select("id, scholarship_id, field, operator, value"),
     ]);
-    scholarships = (scholarshipsResult.data ?? null) as unknown as ScholarshipRow[] | null;
+    const fetchedScholarships = (scholarshipsResult?.data ?? null) as unknown as ScholarshipRow[] | null;
+    scholarships = catalog
+      ? [
+          ...(scholarships ?? []),
+          ...(fetchedScholarships ?? []).filter((scholarship) => !scholarships?.some((current) => current.id === scholarship.id)),
+        ]
+      : fetchedScholarships;
     rules = (rulesResult.data ?? null) as unknown as ScholarshipRule[] | null;
-    scholarshipsError = scholarshipsResult.error;
+    scholarshipsError = scholarshipsResult?.error ?? null;
     rulesError = rulesResult.error;
-    if (!scholarshipsError && !rulesError && scholarships && rules) {
+    if (!catalog && !scholarshipsError && !rulesError && scholarships && rules) {
       void setCachedCatalog({ scholarships, rules });
     }
   }
@@ -167,6 +193,7 @@ export async function getMatchForScholarship(scholarshipId: string): Promise<{
 
   const profile: MatchableProfile = toMatchableProfile(profileRow);
   const supabase = createClient();
+  const retainedIds = await getRetainedScholarshipIds(supabase, user.id);
   const [
     { data: scholarship, error: scholarshipError },
     { data: rules, error: rulesError },
@@ -177,8 +204,12 @@ export async function getMatchForScholarship(scholarshipId: string): Promise<{
       .select(SCHOLARSHIP_DETAIL_COLUMNS)
       .eq("id", scholarshipId)
       .in("level", ["undergrad", "both"])
-      .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
-      .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`)
+      .or(scholarshipVisibilityFilter(retainedIds))
+      .or(
+        retainedIds.size === 0
+          ? `last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`
+          : `last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()},id.in.(${Array.from(retainedIds).join(",")})`
+      )
       .maybeSingle(),
     supabase
       .from("scholarship_rules")
