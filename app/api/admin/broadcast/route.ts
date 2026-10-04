@@ -11,6 +11,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { assertAdmin } from '@/lib/admin/guard'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { logError, logWarn } from '@/lib/logging'
+import { sendEmail as sendTransactionalEmail } from '@/lib/email/send'
 import { renderBroadcastDigest, type EmailListing } from '@/lib/email/template'
 
 export const maxDuration = 300
@@ -53,38 +54,12 @@ async function sendEmail(params: {
   html: string
   text: string
 }): Promise<SendOutcome> {
-  const apiKey = process.env.BREVO_API_KEY
-  const from = process.env.REMINDER_FROM_EMAIL
-  if (!apiKey || !from) {
-    throw new Error('Missing BREVO_API_KEY or REMINDER_FROM_EMAIL env vars')
-  }
-
   let lastError: Error | null = null
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
-        method: 'POST',
-        headers: { 'api-key': apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({
-          sender: { email: from, name: 'Scholars' },
-          to: [{ email: params.to }],
-          subject: params.subject,
-          htmlContent: params.html,
-          textContent: params.text,
-        }),
-      })
-      const body = await resp.text().catch(() => '')
-      if (!resp.ok) {
-        throw new Error(`Brevo API error ${resp.status}: ${body.slice(0, 300)}`)
-      }
-      let messageId: string | null = null
-      try {
-        const parsed = JSON.parse(body) as { messageId?: string }
-        messageId = parsed.messageId ?? null
-      } catch {
-        // Brevo may return an empty body; the successful HTTP response is enough.
-      }
-      return { messageId, attempts: attempt }
+      const result = await sendTransactionalEmail({ ...params, manual: true })
+      if (result.dry) throw new Error('Email sending is not configured on the server.')
+      return { messageId: null, attempts: attempt }
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err))
       if (attempt < MAX_ATTEMPTS) await sleep(250 * 2 ** (attempt - 1))
