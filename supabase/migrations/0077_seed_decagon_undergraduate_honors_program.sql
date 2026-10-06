@@ -30,7 +30,7 @@ begin
       'Decagon Foundation',
       'A fully funded undergraduate programme for Nigerian students whose JAMB score is 250 or above and whose financial circumstances make university tuition unaffordable. The programme includes tuition funding, admission support, leadership training, career training, mentorship, community membership, and access to work opportunities.',
       '100% tuition covered for up to 4 years; additional programme benefits included',
-      null,
+      '2026-10-15',
       'https://www.decagonfoundation.org/apply',
       'undergrad',
       null,
