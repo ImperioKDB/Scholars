@@ -1,6 +1,5 @@
 import Link from "next/link";
-import Image from "next/image";
-import { Logo } from "@/components/Logo";
+import { Logo, LogoMark } from "@/components/Logo";
 
 // Modeled on the "large-type footer" pattern: brand + real nav links up top,
 // then an oversized wordmark as the closing visual instead of a thin
@@ -87,13 +86,7 @@ export function Footer() {
           centered so it can never bleed off just one edge on narrow screens */}
       <div className="border-t border-hairline">
         <div className="mx-auto max-w-6xl px-6 py-8 md:py-10 flex items-center justify-center gap-3 md:gap-6">
-          <Image
-            src="/logo.png"
-            alt=""
-            width={80}
-            height={80}
-            className="w-12 h-12 md:w-20 md:h-20 shrink-0"
-          />
+          <LogoMark className="w-12 h-12 md:w-20 md:h-20 shrink-0" />
           <span
             className="font-display font-semibold text-navy leading-none whitespace-nowrap"
             style={{ fontSize: "clamp(1.75rem, 13vw, 8rem)" }}
