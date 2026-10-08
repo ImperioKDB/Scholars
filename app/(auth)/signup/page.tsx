@@ -11,6 +11,7 @@ import { AuthConfirmation } from "@/components/AuthConfirmation";
 import { validatePasswordStrength } from "@/lib/auth/password";
 import { normalizeEmail } from "@/lib/auth/email";
 import { safeNextPath } from "@/lib/validate";
+import { AUTH_NEXT_COOKIE } from "@/components/AuthRescue";
 
 // REDIRECT FIX (test feedback): same canonical-origin rule as the login
 // page, applied to both the Google OAuth redirectTo and the email
@@ -19,6 +20,9 @@ import { safeNextPath } from "@/lib/validate";
 function appBase(): string {
   if (typeof window === "undefined") return process.env.NEXT_PUBLIC_APP_URL || "";
   return process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+}
+function rememberAuthNext(next: string) {
+  document.cookie = `${AUTH_NEXT_COOKIE}=${encodeURIComponent(next)}; Max-Age=600; Path=/; SameSite=Lax${window.location.protocol === "https:" ? "; Secure" : ""}`;
 }
 
 function SignupForm() {
@@ -44,6 +48,7 @@ function SignupForm() {
       return;
     }
     setLoading(true);
+    rememberAuthNext(next);
     let breached = false;
     try {
       const leakRes = await fetch("/api/auth/password-check", {

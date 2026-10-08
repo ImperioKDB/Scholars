@@ -11,6 +11,7 @@ import { normalizeEmail } from "@/lib/auth/email";
 import { Skeleton } from "@/components/Skeleton";
 import { AuthConfirmation } from "@/components/AuthConfirmation";
 import { safeNextPath } from "@/lib/validate";
+import { AUTH_NEXT_COOKIE } from "@/components/AuthRescue";
 
 // AUTH SECURITY AUDIT (brute-force brake, client side): progressive
 // lockout stored in localStorage. UX-level only -- the real brakes are
@@ -26,6 +27,9 @@ const LOCK_KEY = "scholars_login_lockout";
 function appBase(): string {
   if (typeof window === "undefined") return process.env.NEXT_PUBLIC_APP_URL || "";
   return process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+}
+function rememberAuthNext(next: string) {
+  document.cookie = `${AUTH_NEXT_COOKIE}=${encodeURIComponent(next)}; Max-Age=600; Path=/; SameSite=Lax${window.location.protocol === "https:" ? "; Secure" : ""}`;
 }
 
 type LockState = { count: number; until: number };
@@ -109,6 +113,7 @@ function LoginForm() {
   async function handleGoogle() {
     setError(null);
     setGoogleLoading(true);
+    rememberAuthNext(next);
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${appBase()}/auth/callback?next=${encodeURIComponent(next)}` },

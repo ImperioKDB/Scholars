@@ -3,6 +3,7 @@ import { useLayoutEffect, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/Logo";
+import { safeNextPath } from "@/lib/validate";
 
 // components/AuthRescue.tsx
 //
@@ -22,6 +23,34 @@ import { Logo } from "@/components/Logo";
 //   PASSWORD_RECOVERY -> /reset-password/update (handoff via sessionStorage)
 //   SIGNED_IN         -> /dashboard
 export const RECOVERY_REDIRECT_FLAG = "scholars.recovery_redirect";
+export const AUTH_NEXT_COOKIE = "scholars_auth_next";
+
+function readAuthNext(url: URL): string {
+  let cookieValue = "";
+  try {
+    cookieValue = document.cookie
+      .split("; ")
+      .find((part) => part.startsWith(`${AUTH_NEXT_COOKIE}=`))
+      ?.split("=")[1] ?? "";
+  } catch {
+    // Ignore blocked cookie access and use the URL/default below.
+  }
+  let decodedCookie = "";
+  try {
+    decodedCookie = decodeURIComponent(cookieValue);
+  } catch {
+    // Ignore malformed cookie values; safeNextPath will use the default.
+  }
+  return safeNextPath(url.searchParams.get("next") || decodedCookie, "/dashboard");
+}
+
+function clearAuthNext() {
+  try {
+    document.cookie = `${AUTH_NEXT_COOKIE}=; Max-Age=0; Path=/; SameSite=Lax`;
+  } catch {
+    // Ignore blocked cookie access.
+  }
+}
 
 export function AuthRescue() {
   const pathname = usePathname();
@@ -44,9 +73,12 @@ export function AuthRescue() {
     if (!rescuing) return;
     const supabase = createClient();
     let routed = false;
-    const routeTo = (path: "/dashboard" | "/reset-password/update") => {
+    const url = new URL(window.location.href);
+    const authNext = readAuthNext(url);
+    const routeTo = (path: string) => {
       if (routed) return;
       routed = true;
+      clearAuthNext();
       router.replace(path);
     };
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
@@ -58,21 +90,20 @@ export function AuthRescue() {
         }
         routeTo("/reset-password/update");
       } else if (event === "SIGNED_IN") {
-        routeTo("/dashboard");
+        routeTo(authNext);
       }
     });
-    const url = new URL(window.location.href);
     const code = url.searchParams.get("code");
     void (async () => {
       if (code) {
         const { data } = await supabase.auth.exchangeCodeForSession(code);
         if (data.session) {
-          routeTo("/dashboard");
+          routeTo(authNext);
           return;
         }
       }
       const { data } = await supabase.auth.getSession();
-      if (data.session) routeTo("/dashboard");
+      if (data.session) routeTo(authNext);
     })();
     // Exchange failed or never fired (expired code, revoked session):
     // drop the splash and strip the dead tokens so the landing renders

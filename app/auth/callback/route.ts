@@ -75,6 +75,10 @@ export async function GET(request: Request) {
         if (attributionError) logError("auth/callback", "campaign attribution failed", undefined, attributionError);
         cookieStore.set(COOKIE_NAMES.ATTRIBUTION, "", { maxAge: 0, path: "/" });
       }
+      // The browser sets this short-lived fallback marker before OAuth or
+      // signup. Remove it on the normal callback path so a later root-level
+      // auth rescue cannot inherit an old onboarding destination.
+      cookieStore.set("scholars_auth_next", "", { maxAge: 0, path: "/" });
       return NextResponse.redirect(origin + next);
     }
   }
