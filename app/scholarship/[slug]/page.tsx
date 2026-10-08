@@ -7,6 +7,7 @@ import { formatVerifiedOn, todayUtcIso } from "@/lib/dates";
 import { Breadcrumbs, SeoJsonLd } from "@/components/SeoJsonLd";
 import { ScholarshipCommunity } from "@/components/ScholarshipCommunity";
 import { loadScholarshipCommunity } from "@/lib/scholarship-community";
+import { isUuid } from "@/lib/validate";
 // app/scholarship/[slug]/page.tsx
 // GET /s/[id] -- public, unauthenticated share landing page for a single
 // verified scholarship. Deliberately outside app/scholarships/** (which
@@ -46,7 +47,7 @@ type PublicScholarship = {
 };
 const loadScholarship = cache(async (slug: string): Promise<PublicScholarship | null> => {
   const supabase = createPublicClient();
-  const { data } = await supabase
+  const { data: slugData } = await supabase
     .from("scholarships")
     .select(PUBLIC_COLUMNS)
     .eq("slug", slug)
@@ -54,7 +55,17 @@ const loadScholarship = cache(async (slug: string): Promise<PublicScholarship | 
     .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
     .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`)
     .maybeSingle();
-  return data as PublicScholarship | null;
+  if (slugData) return slugData as PublicScholarship;
+  if (!isUuid(slug)) return null;
+  const { data: idData } = await supabase
+    .from("scholarships")
+    .select(PUBLIC_COLUMNS)
+    .eq("id", slug)
+    .eq("verified", true)
+    .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
+    .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`)
+    .maybeSingle();
+  return idData as PublicScholarship | null;
 });
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -70,16 +81,17 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     " \u00b7 Deadline " +
     scholarship.deadline +
     ". See if you qualify on Scholars.";
-  const image = `${base}/scholarship/${slug}/opengraph-image`;
+  const canonicalSlug = scholarship.slug || slug;
+  const image = `${base}/scholarship/${canonicalSlug}/opengraph-image`;
   return {
     title,
     description,
-    alternates: { canonical: `/scholarship/${slug}` },
+    alternates: { canonical: `/scholarship/${canonicalSlug}` },
     openGraph: {
       title,
       description,
       type: "article",
-      url: `/scholarship/${slug}`,
+      url: `/scholarship/${canonicalSlug}`,
       siteName: "Scholars",
       locale: "en_NG",
       images: [
@@ -112,7 +124,7 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
   }
   const community = await loadScholarshipCommunity(createPublicClient(), scholarship.id);
   const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
-  const publicUrl = `${base}/scholarship/${slug}`;
+  const publicUrl = `${base}/scholarship/${scholarship.slug || slug}`;
   return (
     <div className="min-h-screen bg-parchment flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">

@@ -42,8 +42,9 @@ import {
 } from "@/components/icons";
 const MOBILE_TABS = [
   { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
+  { href: "/discover", label: "Browse", Icon: DiscoverIcon },
   { href: "/applications", label: "Applications", Icon: ApplicationsIcon },
-  { href: "/achievements", label: "Achievements", Icon: AchievementsIcon },
+  { href: "/settings", label: "Profile", Icon: SettingsIcon },
 ];
 function NotificationIcon() {
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M15 17H9m9-3V10a6 6 0 0 0-12 0v4l-1.5 2h15L18 14Zm-4 7a2.2 2.2 0 0 1-4 0" /></svg>;
@@ -253,7 +254,7 @@ export function Sidebar({
           "translate-y-0",
         ].join(" ")}
       >
-        <div className="grid grid-cols-3">
+        <div className="grid grid-cols-4">
           {MOBILE_TABS.map(({ href, label, Icon }) => {
             const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`));
             return (

@@ -409,7 +409,7 @@ function OnboardingForm() {
               </div>
             ))}
           </div>
-          <div className="bg-white rounded-2xl border border-hairline shadow-card p-8">
+          <div className="bg-white rounded-2xl border border-hairline shadow-card p-5 sm:p-8">
             <Skeleton className="h-7 w-48 mb-2" />
             <Skeleton className="h-4 w-64 mb-8" />
             <div className="space-y-4">
@@ -428,13 +428,13 @@ function OnboardingForm() {
   return (
     <div className="min-h-screen bg-parchment">
       <header className="border-b border-hairline bg-white">
-        <div className="mx-auto max-w-2xl px-6 py-5 flex items-center justify-between">
+        <div className="mx-auto max-w-2xl px-4 sm:px-6 py-5 flex items-center justify-between">
           <Logo className="text-navy" />
         </div>
       </header>
-      <main className="mx-auto max-w-2xl px-6 py-12">
+      <main className="mx-auto max-w-2xl px-4 sm:px-6 py-8 sm:py-12">
         <StepIndicator steps={STEPS} current={step} />
-        <form onSubmit={(event) => { event.preventDefault(); if (step < STEPS.length - 1) goNext(); else void handleFinish(); }} className="bg-white rounded-2xl border border-hairline shadow-card p-8">
+        <form onSubmit={(event) => { event.preventDefault(); if (step < STEPS.length - 1) goNext(); else void handleFinish(); }} className="bg-white rounded-2xl border border-hairline shadow-card p-5 sm:p-8">
           <h1 className="font-display text-2xl font-semibold text-navy mb-1">
             {step === 0 && "Core details"}
             {step === 1 && "Personal information"}
@@ -631,25 +631,25 @@ function OnboardingForm() {
             <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-3">
               {step > 0 && (
                 <button type="button" onClick={handleSkip} disabled={saving || skipPending}
-                  className="text-sm font-medium text-navy-light hover:text-navy px-3 py-2 disabled:opacity-60">
+                  className="inline-flex min-h-[44px] items-center text-sm font-medium text-navy-light hover:text-navy px-3 py-2 disabled:opacity-60">
                   {skipPending ? "Saving\u2026" : "Skip for now"}
                 </button>
               )}
               {step === 0 ? (
                 <>
                   <button type="button" onClick={goNext} disabled={saving || skipPending}
-                    className="w-full sm:w-auto rounded-seal border border-hairline bg-white text-navy text-sm font-medium px-5 py-2.5 hover:bg-navy-50 transition-colors disabled:opacity-60">
+                    className="w-full sm:w-auto min-h-[44px] rounded-seal border border-hairline bg-white text-navy text-sm font-medium px-5 py-2.5 hover:bg-navy-50 transition-colors disabled:opacity-60">
                     Continue
                   </button>
                   <button type="button" onClick={saveProfileAndGoDashboard} disabled={!coreValid || saving || skipPending}
                     aria-busy={saving}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60">
+                    className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60">
                     {saving ? "Saving…" : "See my provisional matches"}
                   </button>
                 </>
               ) : step < STEPS.length - 1 ? (
                 <button type="button" onClick={goNext} disabled={saving || skipPending}
-                  className="rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60">
+                  className="min-h-[44px] rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60">
                   Continue
                 </button>
               ) : (

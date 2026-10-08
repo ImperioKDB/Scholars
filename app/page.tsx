@@ -24,6 +24,7 @@ export const revalidate = 300;
 // nothing is live yet.
 type LiveScholarship = {
   id: string;
+  slug: string | null;
   title: string;
   provider_name: string;
   amount: string | null;
@@ -38,7 +39,7 @@ async function loadLiveScholarships(): Promise<LiveScholarship[]> {
   const supabase = createPublicClient();
   const { data } = await supabase
     .from("scholarships")
-    .select("id, title, provider_name, amount, deadline, opens_at, last_cycle_closed_at, discipline, level")
+    .select("id, slug, title, provider_name, amount, deadline, opens_at, last_cycle_closed_at, discipline, level")
     .eq("verified", true)
     .in("level", ["undergrad", "both"])
     .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
@@ -135,7 +136,7 @@ export default async function LandingPage() {
                     <li key={s.id} className="flex items-start gap-4 border-b border-hairline pb-4 last:border-0 last:pb-0">
                       <ProviderMonogram name={s.provider_name} size={48} />
                       <div className="min-w-0 flex-1">
-                        <Link href={`/scholarships/${s.id}`} className="font-medium text-ink text-sm leading-snug hover:text-navy hover:underline focus-visible:underline">
+                        <Link href={`/scholarship/${s.slug || s.id}`} className="font-medium text-ink text-sm leading-snug hover:text-navy hover:underline focus-visible:underline">
                           {s.title}
                         </Link>
                         <p className="text-xs text-navy-light mt-0.5">{s.provider_name}</p>
