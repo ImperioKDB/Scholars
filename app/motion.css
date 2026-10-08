@@ -48,6 +48,8 @@
   transition: top 280ms cubic-bezier(0.16, 1, 0.3, 1),
     left 280ms cubic-bezier(0.16, 1, 0.3, 1),
     transform 280ms cubic-bezier(0.16, 1, 0.3, 1);
+  /* Positioning transforms come from the inline tooltip style; do not animate
+     transform on this element or the centered mobile fallback will be lost. */
   animation: tour-card-in 260ms cubic-bezier(0.16, 1, 0.3, 1) 40ms both;
 }
 .tour-card-content {
@@ -67,8 +69,8 @@
   to { opacity: 1; transform: scale(1); }
 }
 @keyframes tour-card-in {
-  from { opacity: 0; transform: translateY(10px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 @keyframes tour-content-in {
   from { opacity: 0; transform: translateY(5px); }
