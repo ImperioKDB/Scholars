@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
+import { runDailyPushCampaign } from '@/lib/push/campaigns'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
 /**
- * Flags verified opportunities whose deadline has passed and creates one
- * in-app notification per admin and opportunity. Email delivery remains
- * disabled; this job only writes the admin-facing database alert.
+ * Flags expired opportunities and sends due, opted-in push alerts for new
+ * scholarship matches and saved-scholarship deadlines. Email delivery stays
+ * disabled; this cron never calls an email provider.
  */
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET
@@ -24,9 +25,11 @@ export async function GET(request: Request) {
     }
 
     const result = Array.isArray(data) ? data[0] : data
+    const pushCampaign = await runDailyPushCampaign(service)
     return NextResponse.json({
       deadline_flags: Number(result?.flagged_count ?? 0),
       admin_notifications: Number(result?.notification_count ?? 0),
+      push_campaign: pushCampaign,
       automatic_email_disabled: true,
       dry_run: false,
     })

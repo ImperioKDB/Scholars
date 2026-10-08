@@ -15,6 +15,16 @@ function messageFor(type: string, metadata: Record<string, unknown> | null | und
     const title = typeof metadata?.title === "string" ? metadata.title : "An opportunity";
     return `Deadline passed — review ${title}.`;
   }
+  if (type === "new_match") {
+    const title = typeof metadata?.title === "string" ? metadata.title : "A scholarship";
+    return `A new scholarship match is available: ${title}.`;
+  }
+  if (type === "deadline_reminder") {
+    const title = typeof metadata?.title === "string" ? metadata.title : "your saved scholarship";
+    const days = typeof metadata?.days_until === "number" ? metadata.days_until : null;
+    const when = days === 0 ? "today" : days === 1 ? "tomorrow" : days !== null && days > 1 ? `in ${days} days` : "soon";
+    return `Your saved scholarship deadline is ${when}: ${title}.`;
+  }
   if (type === "discussion_reply") return "Someone replied to your community post.";
   if (type === "discussion_helpful") return "Someone marked your community post as helpful.";
   return "You have a new Scholars update.";

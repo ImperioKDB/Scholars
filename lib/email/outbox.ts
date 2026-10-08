@@ -6,6 +6,7 @@ type DeliveryInput = {
   profileId: string
   scholarshipId?: string | null
   campaignKey: string
+  channel?: 'email' | 'whatsapp' | 'push'
   scheduleBucket: string
   dedupeKey: string
   templateVersion: string
@@ -27,7 +28,7 @@ export async function ensureNotificationDelivery(
         profile_id: input.profileId,
         scholarship_id: input.scholarshipId ?? null,
         campaign_key: input.campaignKey,
-        channel: 'email',
+        channel: input.channel ?? 'email',
         schedule_bucket: input.scheduleBucket,
         dedupe_key: input.dedupeKey,
         template_version: input.templateVersion,
