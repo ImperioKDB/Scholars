@@ -22,36 +22,37 @@ const ELIGIBLE_ROUTES = [
   "/notifications",
   "/settings",
 ];
-let lastShownInMemory = 0;
+const lastShownInMemory = new Map<string, number>();
 
 type StandaloneNavigator = Navigator & { standalone?: boolean };
 
-function readLastShown(): number {
+function readLastShown(storageKey: string): number {
+  const inMemoryValue = lastShownInMemory.get(storageKey) ?? 0;
   try {
-    const stored = Number(window.localStorage.getItem(PROMPT_KEY));
-    if (Number.isFinite(stored) && stored > 0) return Math.max(stored, lastShownInMemory);
+    const stored = Number(window.localStorage.getItem(storageKey));
+    if (Number.isFinite(stored) && stored > 0) return Math.max(stored, inMemoryValue);
   } catch {
     // Use the session fallback below when local storage is unavailable.
   }
   try {
-    const stored = Number(window.sessionStorage.getItem(PROMPT_KEY));
-    if (Number.isFinite(stored) && stored > 0) return Math.max(stored, lastShownInMemory);
+    const stored = Number(window.sessionStorage.getItem(storageKey));
+    if (Number.isFinite(stored) && stored > 0) return Math.max(stored, inMemoryValue);
   } catch {
     // In-memory state still prevents repeat prompts during this page session.
   }
-  return lastShownInMemory;
+  return inMemoryValue;
 }
 
-function saveLastShown(timestamp: number): void {
-  lastShownInMemory = timestamp;
+function saveLastShown(storageKey: string, timestamp: number): void {
+  lastShownInMemory.set(storageKey, timestamp);
   try {
-    window.localStorage.setItem(PROMPT_KEY, String(timestamp));
+    window.localStorage.setItem(storageKey, String(timestamp));
     return;
   } catch {
     // Private browsing modes can disable local storage; use session storage.
   }
   try {
-    window.sessionStorage.setItem(PROMPT_KEY, String(timestamp));
+    window.sessionStorage.setItem(storageKey, String(timestamp));
   } catch {
     // The prompt remains usable even when both storage mechanisms are blocked.
   }
@@ -104,7 +105,10 @@ export function PushNotificationPrompt({ publicKey, isAdmin }: Props) {
           return;
         }
 
-        const lastShown = readLastShown();
+        // Prompt cooldown belongs to the signed-in account, not this browser
+        // origin: a previous account must not hide first-time consent here.
+        const promptKey = `${PROMPT_KEY}:${data.user.id}`;
+        const lastShown = readLastShown(promptKey);
         const remainingCooldown = lastShown > 0
           ? PROMPT_COOLDOWN_MS - (Date.now() - lastShown)
           : 0;
@@ -113,18 +117,14 @@ export function PushNotificationPrompt({ publicKey, isAdmin }: Props) {
           return;
         }
 
-        saveLastShown(Date.now());
+        saveLastShown(promptKey, Date.now());
         setOpen(true);
       } catch {
         // Push opt-in is optional; never let a failed auth or browser check affect the app.
       }
     }
 
-    const lastShown = readLastShown();
-    const initialDelay = lastShown > 0
-      ? Math.max(1_000, PROMPT_COOLDOWN_MS - (Date.now() - lastShown))
-      : FIRST_PROMPT_DELAY_MS;
-    timer = window.setTimeout(() => void considerPrompt(), initialDelay);
+    timer = window.setTimeout(() => void considerPrompt(), FIRST_PROMPT_DELAY_MS);
 
     return () => {
       active = false;
