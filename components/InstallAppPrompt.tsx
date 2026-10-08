@@ -5,8 +5,13 @@ type BeforeInstallPromptEvent = Event & { prompt: () => Promise<void>; userChoic
 type InstallResult = "installed" | "dismissed" | "unavailable";
 type Controller = { request: () => Promise<InstallResult>; isAvailable: () => boolean };
 let controller: Controller | null = null;
+let resolveControllerReady: (() => void) | null = null;
+const controllerReady = new Promise<void>((resolve) => { resolveControllerReady = resolve; });
 export function isInstallPromptAvailable() { return controller?.isAvailable() ?? false; }
-export function requestInstallPrompt(): Promise<InstallResult> { return controller?.request() ?? Promise.resolve("unavailable"); }
+export async function requestInstallPrompt(): Promise<InstallResult> {
+  if (!controller && controllerReady) await controllerReady;
+  return controller?.request() ?? "unavailable";
+}
 const AUTO_DISMISS_MS = 10_000;
 export function InstallAppPrompt() {
   const deferredPrompt = useRef<BeforeInstallPromptEvent | null>(null);
@@ -38,6 +43,8 @@ export function InstallAppPrompt() {
       return new Promise<InstallResult>((resolve) => { settle.current = resolve; dismissTimer.current = setTimeout(() => finish("dismissed"), AUTO_DISMISS_MS); });
     };
     controller = { request, isAvailable: () => deferredPrompt.current !== null };
+    resolveControllerReady?.();
+    resolveControllerReady = null;
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
     window.addEventListener("appinstalled", onAppInstalled);
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => undefined);

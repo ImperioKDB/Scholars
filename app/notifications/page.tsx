@@ -6,11 +6,12 @@ import { getCurrentUserAndProfile } from "@/lib/supabase/currentUser";
 export const dynamic = "force-dynamic";
 
 export default async function NotificationsPage() {
-  const { profile } = await getCurrentUserAndProfile();
+  const { user, profile } = await getCurrentUserAndProfile();
   return (
     <AdeShell>
       <div className="min-h-screen bg-parchment">
         <Sidebar
+          userId={user?.id ?? ""}
           fullName={profile?.full_name ?? null}
           isAdmin={Boolean(profile?.is_admin)}
           profileCompleteness={profile?.profile_completeness ?? 0}

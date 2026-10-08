@@ -5,6 +5,7 @@ import { HowItWorksRotator } from "@/components/HowItWorksRotator";
 import { TestimonialsSection } from "@/components/TestimonialsSection";
 import { Footer } from "@/components/Footer";
 import { DeadlineBadge } from "@/components/DeadlineBadge";
+import { HomepageInstallPrompt } from "@/components/HomepageInstallPrompt";
 import { createPublicClient } from "@/lib/supabase/public";
 import { isCurrentlyOpen } from "@/lib/discovery";
 import { todayUtcIso } from "@/lib/dates";
@@ -61,6 +62,7 @@ export default async function LandingPage() {
   const live = await loadLiveScholarships();
   return (
     <div className="min-h-screen overflow-y-auto motion-safe:scroll-smooth">
+      <HomepageInstallPrompt />
       <header className="border-b border-hairline bg-parchment/95 backdrop-blur-sm">
         <div className="mx-auto max-w-6xl px-5 py-4 sm:px-6 sm:py-5 flex items-center justify-between">
           <Logo className="text-navy" />

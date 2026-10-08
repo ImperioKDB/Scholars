@@ -18,6 +18,7 @@ type TourStep = {
 
 const STORAGE_KEY_PREFIX = "scholars.onboarding.milestones.v1";
 const MILESTONE_EVENT = "scholars:milestone";
+const DASHBOARD_TOUR_READY_EVENT = "scholars:dashboard-tour-ready";
 
 const DASHBOARD_STEPS: TourStep[] = [
   {
@@ -240,6 +241,7 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
     setState(next);
     writeState(userId, next);
     setTourIndex(null);
+    window.dispatchEvent(new Event(DASHBOARD_TOUR_READY_EVENT));
     track("onboarding_step_completed", { step: tourIndex ?? 0, label: activeStep?.id ?? "ready", path: "milestone" });
     if (activeStep?.id === "ready") router.push("/discover");
   }
@@ -263,6 +265,7 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
     setState(nextState);
     writeState(userId, nextState);
     setTourIndex(null);
+    window.dispatchEvent(new Event(DASHBOARD_TOUR_READY_EVENT));
     track("onboarding_abandoned", { step: tourIndex ?? 0, label: activeStep?.id ?? "unknown", reason: "skip_milestone_tour" });
   }
 
