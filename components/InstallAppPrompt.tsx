@@ -1,174 +1,56 @@
 "use client";
-
 import { useEffect, useRef, useState } from "react";
-
-type BeforeInstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
-};
-
-const SESSION_SHOWN_KEY = "scholars:install-prompt-shown";
-const INSTALL_ATTEMPTED_KEY = "scholars:install-prompt-attempted";
+import { recordPromptAction } from "@/lib/onboarding-prompt-client";
+type BeforeInstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }> };
+type InstallResult = "installed" | "dismissed" | "unavailable";
+type Controller = { request: () => Promise<InstallResult>; isAvailable: () => boolean };
+let controller: Controller | null = null;
+export function isInstallPromptAvailable() { return controller?.isAvailable() ?? false; }
+export function requestInstallPrompt(): Promise<InstallResult> { return controller?.request() ?? Promise.resolve("unavailable"); }
 const AUTO_DISMISS_MS = 10_000;
-
-function wasInstallAttempted(): boolean {
-  try {
-    return window.localStorage.getItem(INSTALL_ATTEMPTED_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function markInstallAttempted(): void {
-  try {
-    window.localStorage.setItem(INSTALL_ATTEMPTED_KEY, "1");
-  } catch {
-    // Storage may be unavailable; the in-memory and session guards still apply.
-  }
-}
-
-function wasPromptShownThisSession(): boolean {
-  try {
-    return window.sessionStorage.getItem(SESSION_SHOWN_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function markPromptShownThisSession(): void {
-  try {
-    window.sessionStorage.setItem(SESSION_SHOWN_KEY, "1");
-  } catch {
-    // The component-level guard still prevents repeat events until unmount.
-  }
-}
-
 export function InstallAppPrompt() {
   const deferredPrompt = useRef<BeforeInstallPromptEvent | null>(null);
+  const settle = useRef<((result: InstallResult) => void) | null>(null);
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const promptHandled = useRef(false);
   const [isVisible, setIsVisible] = useState(false);
-
+  const isVisibleRef = useRef(false);
   useEffect(() => {
-    if (
-      window.matchMedia("(display-mode: standalone)").matches ||
-      window.navigator.standalone ||
-      wasInstallAttempted()
-    ) {
-      return;
-    }
-
-    // Registering the service worker makes the manifest eligible for the
-    // browser's install event without changing the app's network behavior.
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {
-        // Installation is an enhancement; a registration failure must not
-        // affect the rest of the app.
-      });
-    }
-
-    if (wasPromptShownThisSession()) {
-      promptHandled.current = true;
-      return;
-    }
-
-    const handleBeforeInstallPrompt = (event: Event) => {
-      event.preventDefault();
-      // The listener stays mounted after the first event. Re-check here as
-      // browsers can dispatch another install event during the same session.
-      if (promptHandled.current || wasInstallAttempted()) return;
-
-      promptHandled.current = true;
-      deferredPrompt.current = event as BeforeInstallPromptEvent;
-      markPromptShownThisSession();
-      setIsVisible(true);
-
-      dismissTimer.current = setTimeout(() => {
-        setIsVisible(false);
-        deferredPrompt.current = null;
-      }, AUTO_DISMISS_MS);
-    };
-
-    const handleAppInstalled = () => {
-      markInstallAttempted();
-      promptHandled.current = true;
-      deferredPrompt.current = null;
-      setIsVisible(false);
-    };
-
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    window.addEventListener("appinstalled", handleAppInstalled);
-
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-      window.removeEventListener("appinstalled", handleAppInstalled);
+    const finish = (result: InstallResult) => {
       if (dismissTimer.current) clearTimeout(dismissTimer.current);
+      isVisibleRef.current = false;
+      setIsVisible(false);
+      const resolve = settle.current;
+      settle.current = null;
+      resolve?.(result);
     };
+    const onBeforeInstallPrompt = (event: Event) => { event.preventDefault(); deferredPrompt.current = event as BeforeInstallPromptEvent; };
+    const onAppInstalled = () => { deferredPrompt.current = null; void recordPromptAction("pwa_installed"); finish("installed"); };
+    const request = () => {
+      if (!deferredPrompt.current || isVisibleRef.current) return Promise.resolve("unavailable" as const);
+      isVisibleRef.current = true;
+      setIsVisible(true);
+      return new Promise<InstallResult>((resolve) => { settle.current = resolve; dismissTimer.current = setTimeout(() => finish("dismissed"), AUTO_DISMISS_MS); });
+    };
+    controller = { request, isAvailable: () => deferredPrompt.current !== null };
+    window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+    window.addEventListener("appinstalled", onAppInstalled);
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    return () => { window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt); window.removeEventListener("appinstalled", onAppInstalled); if (dismissTimer.current) clearTimeout(dismissTimer.current); controller = null; };
   }, []);
-
   async function installApp() {
     const promptEvent = deferredPrompt.current;
-    if (!promptEvent) return;
-
+    if (!promptEvent || !settle.current) return;
     if (dismissTimer.current) clearTimeout(dismissTimer.current);
-    // The user explicitly chose the install action. Do not ask again in a
-    // later browser session, even if they cancel Chrome's native dialog.
-    markInstallAttempted();
-    promptHandled.current = true;
     deferredPrompt.current = null;
-    setIsVisible(false);
-
     try {
       await promptEvent.prompt();
-      await promptEvent.userChoice;
-    } catch {
-      // The browser can reject a prompt if install state changes mid-flow.
-      // The app should remain usable either way.
-    }
+      const choice = await promptEvent.userChoice;
+      const resolve = settle.current; settle.current = null; isVisibleRef.current = false; setIsVisible(false);
+      if (choice.outcome === "accepted") resolve?.("installed"); else resolve?.("dismissed");
+    } catch { const resolve = settle.current; settle.current = null; isVisibleRef.current = false; setIsVisible(false); resolve?.("dismissed"); }
   }
-
-  function dismiss() {
-    if (dismissTimer.current) clearTimeout(dismissTimer.current);
-    deferredPrompt.current = null;
-    setIsVisible(false);
-  }
-
+  function dismiss() { if (dismissTimer.current) clearTimeout(dismissTimer.current); isVisibleRef.current = false; setIsVisible(false); settle.current?.("dismissed"); settle.current = null; }
   if (!isVisible) return null;
-
-  return (
-    <div className="fixed inset-x-4 bottom-4 z-[70] sm:left-auto sm:right-6 sm:max-w-sm" role="dialog" aria-modal="false" aria-labelledby="install-app-title">
-      <div className="rounded-2xl border border-hairline bg-white p-5 shadow-[0_18px_50px_rgba(11,30,61,0.18)]">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-navy text-white" aria-hidden="true">
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 17v1.5A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V17" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
-          <div className="min-w-0 flex-1">
-            <h2 id="install-app-title" className="font-display text-lg font-semibold leading-tight text-navy">
-              Add Scholars to your home screen
-            </h2>
-            <p className="mt-1.5 text-sm leading-5 text-navy-light">
-              Get a faster, more convenient experience whenever you return to find your next opportunity.
-            </p>
-          </div>
-          <button type="button" onClick={dismiss} className="-mr-1 -mt-1 rounded-full p-2 text-navy-light hover:bg-parchment hover:text-navy" aria-label="Dismiss install prompt">
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="m7 7 10 10M17 7 7 17" strokeLinecap="round" />
-            </svg>
-          </button>
-        </div>
-        <button type="button" onClick={installApp} className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-seal bg-navy px-4 text-sm font-semibold text-white transition-colors hover:bg-navy-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2">
-          Add to home screen
-        </button>
-      </div>
-    </div>
-  );
+  return <div className="fixed inset-x-4 bottom-4 z-[70] sm:left-auto sm:right-6 sm:max-w-sm" role="dialog" aria-modal="false" aria-labelledby="install-app-title"><div className="rounded-2xl border border-hairline bg-white p-5 shadow-[0_18px_50px_rgba(11,30,61,0.18)]"><div className="flex items-start gap-3"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-navy text-white" aria-hidden="true">⇩</div><div className="min-w-0 flex-1"><h2 id="install-app-title" className="font-display text-lg font-semibold leading-tight text-navy">Add Scholars to your home screen</h2><p className="mt-1.5 text-sm leading-5 text-navy-light">Get a faster, more convenient experience whenever you return to find your next opportunity.</p></div><button type="button" onClick={dismiss} className="-mr-1 -mt-1 rounded-full p-2 text-navy-light hover:bg-parchment hover:text-navy" aria-label="Dismiss install prompt">×</button></div><button type="button" onClick={() => void installApp()} className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-seal bg-navy px-4 text-sm font-semibold text-white hover:bg-navy-light">Add to home screen</button></div></div>;
 }
-
-
-declare global {
-  interface Navigator {
-    standalone?: boolean;
-  }
-}
+declare global { interface Navigator { standalone?: boolean } }

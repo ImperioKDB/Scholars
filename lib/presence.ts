@@ -1,38 +1,8 @@
-// lib/presence.ts
-// Client presence heartbeat hook (Push E). Pings POST /api/presence/
-// heartbeat on mount, every 5 minutes, and on window focus (throttled by
-// the in-flight guard so refocus spam can't stack requests). Best-effort:
-// a failed ping is swallowed, presence is a nicety not a gate.
-//
-// Mounted once in components/Sidebar.tsx so every authenticated surface
-// that renders the shell reports presence without each page opting in.
 "use client";
 import { useEffect } from "react";
 import { fetchWithTimeout } from "@/lib/fetch";
 const HEARTBEAT_MS = 5 * 60_000;
-export function usePresenceHeartbeat() {
-  useEffect(() => {
-    let stopped = false;
-    let inFlight = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    async function ping() {
-      if (stopped || inFlight) return;
-      inFlight = true;
-      try {
-        await fetchWithTimeout("/api/presence/heartbeat", { method: "POST", timeoutMs: 5000 });
-      } catch {
-        // presence is best-effort
-      }
-      inFlight = false;
-      if (!stopped) timer = setTimeout(ping, HEARTBEAT_MS);
-    }
-    ping();
-    function onFocus() { ping(); }
-    window.addEventListener("focus", onFocus);
-    return () => {
-      stopped = true;
-      if (timer) clearTimeout(timer);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, []);
+type PresenceTransition = () => void;
+export function usePresenceHeartbeat(onOnlineTransition?: PresenceTransition) {
+  useEffect(() => { let stopped = false; let inFlight = false; let timer: ReturnType<typeof setTimeout> | null = null; let online = false; let lastSuccessAt = 0; async function ping() { if (stopped || inFlight) return; inFlight = true; try { const response = await fetchWithTimeout("/api/presence/heartbeat", { method: "POST", timeoutMs: 5000 }); const successful = response.ok; const stale = lastSuccessAt > 0 && Date.now() - lastSuccessAt > HEARTBEAT_MS * 2.5; if (successful && (!online || stale)) onOnlineTransition?.(); if (successful) { online = true; lastSuccessAt = Date.now(); } else online = false; } catch { online = false; } finally { inFlight = false; if (!stopped) timer = setTimeout(ping, HEARTBEAT_MS); } } void ping(); function onFocus() { void ping(); } function onVisibilityChange() { if (document.visibilityState === "visible") void ping(); } window.addEventListener("focus", onFocus); document.addEventListener("visibilitychange", onVisibilityChange); return () => { stopped = true; if (timer) clearTimeout(timer); window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onVisibilityChange); }; }, [onOnlineTransition]);
 }

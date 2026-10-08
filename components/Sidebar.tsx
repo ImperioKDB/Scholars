@@ -9,7 +9,7 @@
 // All icons live in components/icons.tsx so the two shells share one set
 // without redefining component names in this scope.
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -18,6 +18,8 @@ import { FeedbackModal } from "@/components/FeedbackWidget";
 import { levelForXp } from "@/lib/xp/level";
 import { initialsFor } from "@/lib/text/initials";
 import { usePresenceHeartbeat } from "@/lib/presence";
+import { getPromptState, recordPromptAction } from "@/lib/onboarding-prompt-client";
+import { isInstallPromptAvailable, requestInstallPrompt } from "@/components/InstallAppPrompt";
 import { useOverlayAccessibility } from "@/lib/useOverlayAccessibility";
 import { NotificationBell } from "@/components/NotificationBell";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
@@ -62,40 +64,31 @@ export function Sidebar({
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
-  usePresenceHeartbeat();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [pushPromptRequest, setPushPromptRequest] = useState(0);
   const closeMobileMenu = useCallback(() => setMobileOpen(false), []);
   const drawerRef = useOverlayAccessibility(mobileOpen, closeMobileMenu);
-
-  // PRESENCE HEARTBEAT: update profiles.last_seen_at on mount and every
-// 60 seconds while the app is open. Powers the Active/Idle/Offline
-// buckets on /admin/users. Fire-and-forget with keepalive so it survives
-// tab navigation and never blocks the UI. A missed tick is harmless --
-// the next one still lands.
-useEffect(() => {
-  let cancelled = false;
-  async function beat() {
-    if (cancelled) return;
+  const coordinatingTransition = useRef(false);
+  const handleOnlineTransition = useCallback(async () => {
+    if (isAdmin || coordinatingTransition.current) return;
+    coordinatingTransition.current = true;
     try {
-      await fetch("/api/heartbeat", { method: "POST", keepalive: true });
+      const state = await getPromptState();
+      if (!state) return;
+      const standalone = window.matchMedia("(display-mode: standalone)").matches || Boolean(window.navigator.standalone);
+      const pwaInstalled = Boolean(state.pwaInstalledAt) || standalone;
+      if (standalone && !state.pwaInstalledAt) void recordPromptAction("pwa_installed");
+      if (!pwaInstalled && isInstallPromptAvailable()) await requestInstallPrompt();
+      setPushPromptRequest((request) => request + 1);
     } catch {
-      // presence must never break the shell -- swallow silently
+      // Prompt onboarding is optional and must never affect the shell.
+    } finally {
+      coordinatingTransition.current = false;
     }
-  }
-  beat();
-  const id = window.setInterval(beat, 60_000);
-  function onVisible() {
-    if (document.visibilityState === "visible") beat();
-  }
-  document.addEventListener("visibilitychange", onVisible);
-  return () => {
-    cancelled = true;
-    window.clearInterval(id);
-    document.removeEventListener("visibilitychange", onVisible);
-  };
-}, []);
+  }, [isAdmin]);
+  usePresenceHeartbeat(handleOnlineTransition);
   const { level } = levelForXp(xpTotal);
   const navItems = [
     { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
@@ -281,6 +274,7 @@ useEffect(() => {
         <PushNotificationPrompt
           isAdmin={isAdmin}
           publicKey={process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY ?? null}
+          requestId={pushPromptRequest}
         />
       )}
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
