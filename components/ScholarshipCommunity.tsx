@@ -54,11 +54,31 @@ function isDated(value: string) {
   return Date.now() - new Date(value).getTime() > 180 * 24 * 60 * 60 * 1000;
 }
 
+function promptLabel(prompt: ScholarshipPrompt) {
+  if (prompt.prompt_key === "eligibility-check") return "Eligibility check";
+  if (prompt.prompt_key === "application-experience") return "Your experience";
+  if (prompt.prompt_key === "next-student-tip") return "A tip for others";
+  return "Community prompt";
+}
+
 function promptDisplayText(prompt: ScholarshipPrompt) {
-  if (prompt.prompt_key === "eligibility-check") return "What should applicants double-check before applying?";
-  if (prompt.prompt_key === "application-experience") return "What was your application experience like?";
-  if (prompt.prompt_key === "next-student-tip") return "What practical tip would you share with the next student?";
-  return prompt.prompt_text;
+  if (prompt.prompt_key === "eligibility-check") return "Which requirement should applicants check first?";
+  if (prompt.prompt_key === "application-experience") return "How did the application process go for you?";
+  if (prompt.prompt_key === "next-student-tip") return "What do you wish you knew before applying?";
+  return prompt.prompt_text.length > 110 ? `${prompt.prompt_text.slice(0, 107).trimEnd()}…` : prompt.prompt_text;
+}
+
+function promptCategory(prompt: ScholarshipPrompt): DiscussionFormState["category"] {
+  if (prompt.prompt_key === "application-experience") return "experience";
+  if (prompt.prompt_key === "next-student-tip") return "update";
+  return "question";
+}
+
+function promptPlaceholder(prompt: ScholarshipPrompt) {
+  if (prompt.prompt_key === "eligibility-check") return "Name the requirement and what students should confirm.";
+  if (prompt.prompt_key === "application-experience") return "Share one step that was easy or difficult.";
+  if (prompt.prompt_key === "next-student-tip") return "Share one practical thing you wish you knew.";
+  return "Share a clear, helpful note for the next student.";
 }
 
 const ROLE_LABELS = {
@@ -92,7 +112,6 @@ export function ScholarshipCommunity({
   const [form, setForm] = useState<DiscussionFormState>(emptyForm);
   const [composerOpen, setComposerOpen] = useState(false);
   const [selectedPrompt, setSelectedPrompt] = useState<ScholarshipPrompt | null>(null);
-  const [showAllPrompts, setShowAllPrompts] = useState(false);
   const [pending, setPending] = useState(false);
   const [activeReaction, setActiveReaction] = useState<string | null>(null);
   const [reportingId, setReportingId] = useState<string | null>(null);
@@ -158,7 +177,7 @@ export function ScholarshipCommunity({
     setSelectedPrompt(prompt ?? null);
     setForm({
       ...emptyForm,
-      category: parent ? "answer" : "question",
+      category: parent ? "answer" : prompt ? promptCategory(prompt) : "question",
       parent_id: parent?.id ?? null,
       body: "",
     });
@@ -279,11 +298,11 @@ export function ScholarshipCommunity({
         </div>
         {canInteract ? (
           <button type="button" onClick={() => openComposer()} className="w-full rounded-seal bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy-light sm:w-auto">
-            Ask the community
+            Share with students
           </button>
         ) : (
           <Link href="/login" className="rounded-seal border border-hairline bg-white px-4 py-2.5 text-center text-sm font-medium text-navy hover:border-navy/40">
-            Log in to join
+            Log in to contribute
           </Link>
         )}
       </div>
@@ -298,37 +317,41 @@ export function ScholarshipCommunity({
         <form ref={composerRef} onSubmit={submitPost} className="mt-4 scroll-mt-6 rounded-2xl border border-emerald/30 bg-white p-4 shadow-card sm:p-5">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <h3 className="font-display text-lg font-semibold text-navy">{form.parent_id ? "Add an answer" : "Ask the community"}</h3>
-              <p className="mt-0.5 text-xs text-navy-light">Keep it specific, kind, and useful to the next student.</p>
-              <p className="mt-1 text-xs text-navy-light">Your response will be posted publicly in this scholarship’s community.</p>
+              <h3 className="font-display text-lg font-semibold text-navy">{form.parent_id ? "Add an answer" : selectedPrompt ? promptLabel(selectedPrompt) : "Add to the conversation"}</h3>
+              <p className="mt-0.5 text-xs text-navy-light">One clear detail can help the next student.</p>
             </div>
             <button type="button" onClick={() => setComposerOpen(false)} className="text-sm text-navy-light hover:text-navy">Cancel</button>
           </div>
           {selectedPrompt && !form.parent_id && (
             <div className="mb-4 rounded-xl border border-emerald/20 bg-emerald-light/50 p-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald">Responding to this prompt</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald">{promptLabel(selectedPrompt)}</p>
               <p className="mt-1 text-sm font-medium leading-relaxed text-navy">{promptDisplayText(selectedPrompt)}</p>
             </div>
           )}
-          {!form.parent_id && officialPrompts.length > 0 && (
-            <div className="mb-4 rounded-xl bg-navy-50/70 p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-navy">Need a way in?</p>
-              <p className="mt-1 text-xs text-navy-light">Choose a conversation starter or write your own question.</p>
-              <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                {officialPrompts.map((prompt) => (
-                  <button key={prompt.id} type="button" disabled={pending} onClick={() => { setSelectedPrompt(prompt); setForm((current) => ({ ...current, body: prompt.prompt_text })); }} className={`rounded-lg border px-3 py-2 text-left text-xs leading-relaxed transition-colors ${selectedPrompt?.id === prompt.id ? "border-emerald bg-white text-navy" : "border-white bg-white/60 text-navy-light hover:border-emerald/40"}`}>{prompt.prompt_text}</button>
+          {!form.parent_id && (
+            <fieldset className="mb-3">
+              <legend className="mb-1.5 text-xs font-medium text-navy">What are you sharing?</legend>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { value: "question", label: "Ask a question" },
+                  { value: "experience", label: "My experience" },
+                  { value: "update", label: "A useful tip" },
+                ] as const).map((option) => (
+                  <button key={option.value} type="button" disabled={pending} aria-pressed={form.category === option.value} onClick={() => { setSelectedPrompt(null); setForm((current) => ({ ...current, category: option.value })); }} className={`min-h-10 rounded-lg border px-2 py-2 text-xs font-medium transition-colors ${form.category === option.value ? "border-emerald bg-emerald-light/50 text-emerald" : "border-hairline bg-white text-navy-light hover:border-emerald/40"}`}>
+                    {option.label}
+                  </button>
                 ))}
               </div>
-            </div>
+            </fieldset>
           )}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block"><span className="mb-1.5 block text-xs font-medium text-navy">Post type</span><select value={form.category} disabled={Boolean(form.parent_id) || pending} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value as DiscussionFormState["category"] }))} className="w-full rounded-lg border border-hairline bg-white px-3 py-2.5 text-sm text-ink"><option value="question">Question</option><option value="experience">Experience</option><option value="update">Update</option>{form.parent_id && <option value="answer">Answer</option>}</select></label>
-            <label className="flex items-end gap-2 pb-2.5 text-sm text-navy-light"><input type="checkbox" checked={form.is_anonymous} disabled={pending} onChange={(event) => setForm((current) => ({ ...current, is_anonymous: event.target.checked }))} className="h-4 w-4 accent-emerald" />Post anonymously</label>
-          </div>
-          <label className="mt-3 block"><span className="mb-1.5 block text-xs font-medium text-navy">Headline <span className="font-normal text-navy-light">(optional for answers)</span></span><input value={form.title} disabled={pending} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} maxLength={140} placeholder={form.parent_id ? "What are you answering?" : "e.g. Has anyone applied with a polytechnic transcript?"} className="w-full rounded-lg border border-hairline bg-white px-3 py-2.5 text-sm text-ink" /></label>
-          <label className="mt-3 block"><span className="mb-1.5 block text-xs font-medium text-navy">Your note</span><textarea required minLength={10} maxLength={2000} value={form.body} disabled={pending} onChange={(event) => setForm((current) => ({ ...current, body: event.target.value }))} placeholder="Share what you know, what you tried, or what you need clarified." className="min-h-[130px] w-full resize-y rounded-lg border border-hairline bg-white px-3 py-2.5 text-sm leading-relaxed text-ink" /></label>
+          <label className="mb-3 inline-flex items-center gap-2 text-xs text-navy-light"><input type="checkbox" checked={form.is_anonymous} disabled={pending} onChange={(event) => setForm((current) => ({ ...current, is_anonymous: event.target.checked }))} className="h-4 w-4 accent-emerald" />Post anonymously</label>
+          <details className="mb-3 rounded-lg border border-hairline px-3 py-2">
+            <summary className="cursor-pointer text-xs font-medium text-navy-light">Add a headline (optional)</summary>
+            <input value={form.title} disabled={pending} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} maxLength={140} placeholder="A short title, if you want one" className="mt-2 w-full rounded-lg border border-hairline bg-white px-3 py-2.5 text-sm text-ink" />
+          </details>
+          <label className="block"><span className="mb-1.5 block text-xs font-medium text-navy">Your note</span><textarea required minLength={10} maxLength={2000} value={form.body} disabled={pending} onChange={(event) => setForm((current) => ({ ...current, body: event.target.value }))} placeholder={selectedPrompt ? promptPlaceholder(selectedPrompt) : form.parent_id ? "Share the answer you wish you’d had." : form.category === "question" ? "What would you like to know? Add a little context." : form.category === "experience" ? "What happened when you applied?" : "Share one practical thing students should know."} className="min-h-[130px] w-full resize-y rounded-lg border border-hairline bg-white px-3 py-2.5 text-sm leading-relaxed text-ink" /></label>
           {error && <p className="mt-3 text-sm text-rose" role="alert">{error}</p>}
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-[11px] leading-relaxed text-navy-light">Do not share phone numbers, passwords, or private documents.</p><button type="submit" disabled={pending || form.body.trim().length < 10} className="rounded-seal bg-emerald px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald/90 disabled:opacity-60">{pending ? "Posting…" : "Publish post"}</button></div>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-[11px] leading-relaxed text-navy-light">Your post is public. Keep private details out.</p><button type="submit" disabled={pending || form.body.trim().length < 10} className="rounded-seal bg-emerald px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald/90 disabled:opacity-60">{pending ? "Posting…" : form.parent_id ? "Post answer" : form.category === "question" ? "Post question" : "Share note"}</button></div>
         </form>
       )}
 
@@ -336,6 +359,32 @@ export function ScholarshipCommunity({
 
       {notice && <p className="mt-4 rounded-lg bg-emerald-light px-3 py-2.5 text-sm text-emerald" role="status">{notice}</p>}
       {error && !composerOpen && <p className="mt-4 rounded-lg bg-rose-light px-3 py-2.5 text-sm text-rose" role="alert">{error}</p>}
+
+      {officialPrompts.length > 0 && (
+        <div className="mt-6" aria-labelledby="community-prompts-title">
+          <div className="mb-3">
+            <h3 id="community-prompts-title" className="text-sm font-semibold text-navy">Quick ways to help</h3>
+            <p className="mt-1 text-xs text-navy-light">Choose a starter. A few sentences are enough.</p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {officialPrompts.map((prompt) => (
+              <article key={prompt.id} className="flex flex-col rounded-xl border border-hairline bg-white p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald">{promptLabel(prompt)}</p>
+                <p className="mt-1 flex-1 text-sm font-medium leading-snug text-navy">{promptDisplayText(prompt)}</p>
+                {canInteract ? (
+                  <button type="button" disabled={pending} onClick={() => openComposer(undefined, prompt)} className="mt-3 min-h-10 rounded-lg bg-emerald-light/50 px-3 py-2 text-left text-xs font-semibold text-emerald transition-colors hover:bg-emerald-light focus:outline-none focus:ring-2 focus:ring-emerald/30 disabled:cursor-not-allowed disabled:opacity-60">
+                    Write about this →
+                  </button>
+                ) : (
+                  <Link href="/login" className="mt-3 inline-flex min-h-10 items-center rounded-lg bg-emerald-light/50 px-3 py-2 text-xs font-semibold text-emerald hover:bg-emerald-light">
+                    Log in to contribute →
+                  </Link>
+                )}
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mt-6 flex items-center justify-between gap-3">
         <div><p className="text-sm font-medium text-navy">Recent conversations</p><p className="text-xs text-navy-light">{socialProof.discussion_post_count > 0 ? `${socialProof.discussion_post_count} ${socialProof.discussion_post_count === 1 ? "discussion" : "discussions"} about this scholarship` : "No discussions about this scholarship yet"}</p></div>
@@ -374,41 +423,6 @@ export function ScholarshipCommunity({
               onContributorClick={openContributorProfile}
             />
           ))}
-        </div>
-      )}
-
-      {officialPrompts.length > 0 && (
-        <div className="mt-4 rounded-2xl border border-navy/10 bg-navy-50/60 p-4 sm:p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-navy">Official prompts</p>
-              <p className="mt-1 text-sm text-navy-light">A few useful starting points from the Scholars editorial team.</p>
-              <p className="mt-1 text-xs text-navy-light">Responses are public and specific to this scholarship.</p>
-            </div>
-            <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-navy-light">Editorial</span>
-          </div>
-          <div className="mt-3 grid gap-2">
-            {officialPrompts.slice(0, showAllPrompts ? officialPrompts.length : 1).map((prompt) => (
-              <article key={prompt.id} className="rounded-xl border border-white bg-white p-3 shadow-sm">
-                <p className="text-sm font-medium leading-relaxed text-navy">{promptDisplayText(prompt)}</p>
-                {canInteract ? (
-                  <button type="button" disabled={pending} onClick={() => openComposer(undefined, prompt)} className="mt-3 flex w-full items-center justify-between rounded-lg border border-emerald/20 bg-emerald-light/40 px-3 py-2.5 text-left text-xs font-semibold text-emerald transition-colors hover:border-emerald/40 hover:bg-emerald-light focus:outline-none focus:ring-2 focus:ring-emerald/30 disabled:cursor-not-allowed disabled:opacity-60">
-                    <span>Respond to this prompt</span>
-                    <span aria-hidden="true" className="text-sm">→</span>
-                  </button>
-                ) : (
-                  <Link href="/login" className="mt-3 inline-block text-xs font-medium text-emerald hover:underline">
-                    Log in to respond →
-                  </Link>
-                )}
-              </article>
-            ))}
-          </div>
-          {officialPrompts.length > 1 && (
-            <button type="button" onClick={() => setShowAllPrompts((current) => !current)} aria-expanded={showAllPrompts} className="mt-3 text-xs font-medium text-navy underline decoration-navy/30 underline-offset-4 hover:text-emerald">
-              {showAllPrompts ? "Show featured prompt only" : `See ${officialPrompts.length - 1} more prompts`}
-            </button>
-          )}
         </div>
       )}
 
