@@ -20,6 +20,7 @@ import { initialsFor } from "@/lib/text/initials";
 import { usePresenceHeartbeat } from "@/lib/presence";
 import { useOverlayAccessibility } from "@/lib/useOverlayAccessibility";
 import { NotificationBell } from "@/components/NotificationBell";
+import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
 import {
   DashboardIcon,
   ApplicationsIcon,
@@ -276,6 +277,12 @@ useEffect(() => {
           })}
         </div>
       </nav>
+      {!isAdmin && (
+        <PushNotificationPrompt
+          isAdmin={isAdmin}
+          publicKey={process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY ?? null}
+        />
+      )}
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </>
   );
