@@ -6,6 +6,8 @@ import { checkRateLimit } from "@/lib/ratelimit";
 import { logError, logWarn } from "@/lib/logging";
 import { renderNigeriaIndependenceDayGreeting } from "@/lib/email/template";
 import { sendEmail } from "@/lib/email/send";
+import { listEnabledPushProfileIds, sendAdminBroadcastPush } from "@/lib/push/adminBroadcast";
+import { INDEPENDENCE_DAY_PUSH_MESSAGE } from "@/lib/push/broadcastContent";
 
 export const maxDuration = 300;
 
@@ -87,12 +89,19 @@ export async function GET() {
   } catch {
     // The button can still render with an unknown count; POST reports failures honestly.
   }
+  let pushRecipientCount: number | null = null;
+  try {
+    pushRecipientCount = (await listEnabledPushProfileIds(service)).length;
+  } catch {
+    // Keep the email status visible; POST will fail before sending if the push audience cannot be loaded.
+  }
 
   return NextResponse.json({
     available: isIndependenceDay(),
     alreadySent: (count ?? 0) > 0,
     sent: count ?? 0,
     recipientCount,
+    pushRecipientCount,
   });
 }
 
@@ -120,8 +129,12 @@ export async function POST(request: Request) {
   if ((alreadySent ?? 0) > 0) return NextResponse.json({ error: "The Independence Day email has already been sent." }, { status: 409 });
 
   let recipients: Recipient[];
+  let pushProfileIds: string[];
   try {
-    recipients = await listRecipients(service);
+    [recipients, pushProfileIds] = await Promise.all([
+      listRecipients(service),
+      listEnabledPushProfileIds(service),
+    ]);
   } catch (error) {
     logError(ROUTE, "recipient_load_failed", {}, error);
     return NextResponse.json({ error: "Couldn't load registered student emails." }, { status: 500 });
@@ -166,7 +179,19 @@ export async function POST(request: Request) {
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(SEND_CONCURRENCY, recipients.length) }, () => worker()));
-  logWarn(ROUTE, "campaign_complete", { campaign: "nigeria-independence-day-2026", sent, failed, recipients: recipients.length });
-  return NextResponse.json({ sent, failed, recipients: recipients.length });
+  const emailWork = Promise.all(
+    Array.from({ length: Math.min(SEND_CONCURRENCY, recipients.length) }, () => worker()),
+  );
+  const [pushSummary] = await Promise.all([
+    sendAdminBroadcastPush(service, pushProfileIds, CAMPAIGN_ID, {
+      ...INDEPENDENCE_DAY_PUSH_MESSAGE,
+    }),
+    emailWork,
+  ]);
+  logWarn(ROUTE, "campaign_complete", {
+    campaign: "nigeria-independence-day-2026", sent, failed, recipients: recipients.length,
+    push_recipients: pushSummary.recipients, push_accepted_profiles: pushSummary.acceptedProfiles,
+    push_failed_profiles: pushSummary.failedProfiles, push_suppressed_profiles: pushSummary.suppressedProfiles,
+  });
+  return NextResponse.json({ sent, failed, recipients: recipients.length, push: pushSummary });
 }

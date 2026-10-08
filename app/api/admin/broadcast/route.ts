@@ -1,8 +1,8 @@
 // app/api/admin/broadcast/route.ts
-// GET  /api/admin/broadcast -- { recipientCount }
-// POST /api/admin/broadcast { scholarship_ids?, opportunity_ids? }
-// Sends one personalized email per registered user and records every delivery
-// attempt so partial sends are visible and retryable.
+// GET  /api/admin/broadcast -- { recipientCount, pushRecipientCount }
+// POST /api/admin/broadcast { scholarship_ids?, opportunity_ids?, broadcast_id? }
+// Sends one email per registered user and one push per opted-in profile,
+// recording email attempts and idempotent push delivery outcomes separately.
 import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -13,6 +13,8 @@ import { checkRateLimit } from '@/lib/ratelimit'
 import { logError, logWarn } from '@/lib/logging'
 import { sendEmail as sendTransactionalEmail } from '@/lib/email/send'
 import { renderBroadcastDigest, type EmailListing } from '@/lib/email/template'
+import { listEnabledPushProfileIds, sendAdminBroadcastPush } from '@/lib/push/adminBroadcast'
+import { buildListingBroadcastPushMessage } from '@/lib/push/broadcastContent'
 
 export const maxDuration = 300
 
@@ -22,6 +24,7 @@ const SEND_CONCURRENCY = 5
 const bodySchema = z.object({
   scholarship_ids: z.array(z.string().uuid()).optional().default([]),
   opportunity_ids: z.array(z.string().uuid()).optional().default([]),
+  broadcast_id: z.string().uuid().optional(),
 }).refine(
   (obj) => obj.scholarship_ids.length > 0 || obj.opportunity_ids.length > 0,
   'Pick at least one scholarship or opportunity (max 10 total per broadcast).'
@@ -95,8 +98,12 @@ export async function GET() {
   const guard = await assertAdmin(supabase)
   if (!guard.ok) return guard.response
   try {
-    const recipients = await listRecipients(createServiceClient())
-    return NextResponse.json({ recipientCount: recipients.length })
+    const service = createServiceClient()
+    const [recipients, pushProfileIds] = await Promise.all([
+      listRecipients(service),
+      listEnabledPushProfileIds(service),
+    ])
+    return NextResponse.json({ recipientCount: recipients.length, pushRecipientCount: pushProfileIds.length })
   } catch {
     return NextResponse.json({ error: "Couldn't count recipients" }, { status: 500 })
   }
@@ -118,6 +125,7 @@ export async function POST(request: Request) {
     )
   }
   const input = parsed.data
+  const broadcastId = input.broadcast_id ?? crypto.randomUUID()
 
   const service = createServiceClient()
   const baseUrl = baseUrlOf()
@@ -153,9 +161,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'None of the selected listings are verified, so there is nothing to link to.' }, { status: 400 })
   }
 
+  const broadcastOrder = new Map<string, number>()
+  input.scholarship_ids.forEach((id, index) => broadcastOrder.set(`scholarship:${id}`, index))
+  input.opportunity_ids.forEach((id, index) => broadcastOrder.set(`opportunity:${id}`, input.scholarship_ids.length + index))
+  const orderedPushItems = [...items].sort((a, b) => {
+    const orderFor = (item: EmailListing) => broadcastOrder.get(`${item.kind_label === 'Scholarship' ? 'scholarship' : 'opportunity'}:${item.id}`) ?? Number.MAX_SAFE_INTEGER
+    return orderFor(a) - orderFor(b)
+  })
+
   let recipients: Recipient[]
+  let pushProfileIds: string[]
   try {
-    recipients = await listRecipients(service)
+    [recipients, pushProfileIds] = await Promise.all([
+      listRecipients(service),
+      listEnabledPushProfileIds(service),
+    ])
   } catch {
     return NextResponse.json({ error: "Couldn't load recipients" }, { status: 500 })
   }
@@ -163,7 +183,6 @@ export async function POST(request: Request) {
 
   const { data: profileRows } = await service.from('profiles').select('id')
   const profileIds = new Set((profileRows ?? []).map((p) => p.id as string))
-  const broadcastId = crypto.randomUUID()
   let sent = 0
   let failed = 0
   let attempted = 0
@@ -209,10 +228,29 @@ export async function POST(request: Request) {
       await processRecipient(recipients[index])
     }
   }
-  await Promise.all(Array.from({ length: Math.min(SEND_CONCURRENCY, recipients.length) }, () => worker()))
+
+  const pushMessage = buildListingBroadcastPushMessage(orderedPushItems)
+
+  const emailWork = Promise.all(
+    Array.from({ length: Math.min(SEND_CONCURRENCY, recipients.length) }, () => worker()),
+  )
+  const [pushSummary] = await Promise.all([
+    sendAdminBroadcastPush(service, pushProfileIds, broadcastId, pushMessage),
+    emailWork,
+  ])
 
   logWarn(ROUTE, 'broadcast_complete', {
     broadcast_id: broadcastId, sent, failed, attempted, recipients: recipients.length, listings: items.length,
+    push_recipients: pushSummary.recipients, push_accepted_profiles: pushSummary.acceptedProfiles,
+    push_failed_profiles: pushSummary.failedProfiles, push_suppressed_profiles: pushSummary.suppressedProfiles,
   })
-  return NextResponse.json({ broadcast_id: broadcastId, sent, failed, attempted, recipients: recipients.length, listings: items.length })
+  return NextResponse.json({
+    broadcast_id: broadcastId,
+    sent,
+    failed,
+    attempted,
+    recipients: recipients.length,
+    listings: items.length,
+    push: pushSummary,
+  })
 }
