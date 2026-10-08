@@ -67,7 +67,7 @@ export function Sidebar({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const [pushPromptRequest, setPushPromptRequest] = useState(1);
+  const [pushPromptRequest, setPushPromptRequest] = useState(0);
   const closeMobileMenu = useCallback(() => setMobileOpen(false), []);
   const drawerRef = useOverlayAccessibility(mobileOpen, closeMobileMenu);
   const coordinatingTransition = useRef(false);
@@ -89,18 +89,6 @@ export function Sidebar({
     }
   }, [isAdmin]);
   usePresenceHeartbeat(handleOnlineTransition);
-  useEffect(() => {
-    if (isAdmin) return;
-    const retryInstallPrompt = () => {
-      void handleOnlineTransition();
-    };
-    window.addEventListener("scholars:install-available", retryInstallPrompt);
-    const timer = window.setTimeout(() => void handleOnlineTransition(), 1200);
-    return () => {
-      window.removeEventListener("scholars:install-available", retryInstallPrompt);
-      window.clearTimeout(timer);
-    };
-  }, [handleOnlineTransition, isAdmin]);
   const { level } = levelForXp(xpTotal);
   const navItems = [
     { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
