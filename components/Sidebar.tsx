@@ -18,8 +18,6 @@ import { FeedbackModal } from "@/components/FeedbackWidget";
 import { levelForXp } from "@/lib/xp/level";
 import { initialsFor } from "@/lib/text/initials";
 import { usePresenceHeartbeat } from "@/lib/presence";
-import { getPromptState, recordPromptAction } from "@/lib/onboarding-prompt-client";
-import { requestInstallPrompt } from "@/components/InstallAppPrompt";
 import { useOverlayAccessibility } from "@/lib/useOverlayAccessibility";
 import { NotificationBell } from "@/components/NotificationBell";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
@@ -49,12 +47,14 @@ function NotificationIcon() {
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M15 17H9m9-3V10a6 6 0 0 0-12 0v4l-1.5 2h15L18 14Zm-4 7a2.2 2.2 0 0 1-4 0" /></svg>;
 }
 export function Sidebar({
+  userId,
   fullName,
   isAdmin,
   profileCompleteness,
   xpTotal,
   avatarUrl,
 }: {
+  userId: string;
   fullName: string | null;
   isAdmin: boolean;
   profileCompleteness: number;
@@ -68,6 +68,7 @@ export function Sidebar({
   const [loggingOut, setLoggingOut] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [pushPromptRequest, setPushPromptRequest] = useState(0);
+  const [presenceReady, setPresenceReady] = useState(false);
   const closeMobileMenu = useCallback(() => setMobileOpen(false), []);
   const drawerRef = useOverlayAccessibility(mobileOpen, closeMobileMenu);
   const coordinatingTransition = useRef(false);
@@ -75,20 +76,28 @@ export function Sidebar({
     if (isAdmin || coordinatingTransition.current) return;
     coordinatingTransition.current = true;
     try {
-      const state = await getPromptState();
-      if (!state) return;
-      const standalone = window.matchMedia("(display-mode: standalone)").matches || Boolean(window.navigator.standalone);
-      const pwaInstalled = Boolean(state.pwaInstalledAt) || standalone;
-      if (standalone && !state.pwaInstalledAt) void recordPromptAction("pwa_installed");
-      if (!pwaInstalled) await requestInstallPrompt();
-      setPushPromptRequest((request) => request + 1);
+      setPresenceReady(true);
+      try {
+        const tourState = JSON.parse(window.localStorage.getItem(`scholars.onboarding.milestones.v1:${userId}`) ?? "{}");
+        if (tourState?.welcome_tour === true) setPushPromptRequest((request) => request + 1);
+      } catch {
+        // The dashboard tour completion event remains the fallback when storage is blocked.
+      }
     } catch {
       // Prompt onboarding is optional and must never affect the shell.
     } finally {
       coordinatingTransition.current = false;
     }
-  }, [isAdmin]);
+  }, [isAdmin, userId]);
   usePresenceHeartbeat(handleOnlineTransition);
+  useEffect(() => {
+    if (isAdmin) return;
+    const onDashboardTourReady = () => {
+      if (presenceReady) setPushPromptRequest((request) => request + 1);
+    };
+    window.addEventListener("scholars:dashboard-tour-ready", onDashboardTourReady);
+    return () => window.removeEventListener("scholars:dashboard-tour-ready", onDashboardTourReady);
+  }, [isAdmin, presenceReady]);
   const { level } = levelForXp(xpTotal);
   const navItems = [
     { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
