@@ -8,15 +8,53 @@ type BeforeInstallPromptEvent = Event & {
 };
 
 const SESSION_SHOWN_KEY = "scholars:install-prompt-shown";
+const INSTALL_ATTEMPTED_KEY = "scholars:install-prompt-attempted";
 const AUTO_DISMISS_MS = 10_000;
+
+function wasInstallAttempted(): boolean {
+  try {
+    return window.localStorage.getItem(INSTALL_ATTEMPTED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markInstallAttempted(): void {
+  try {
+    window.localStorage.setItem(INSTALL_ATTEMPTED_KEY, "1");
+  } catch {
+    // Storage may be unavailable; the in-memory and session guards still apply.
+  }
+}
+
+function wasPromptShownThisSession(): boolean {
+  try {
+    return window.sessionStorage.getItem(SESSION_SHOWN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markPromptShownThisSession(): void {
+  try {
+    window.sessionStorage.setItem(SESSION_SHOWN_KEY, "1");
+  } catch {
+    // The component-level guard still prevents repeat events until unmount.
+  }
+}
 
 export function InstallAppPrompt() {
   const deferredPrompt = useRef<BeforeInstallPromptEvent | null>(null);
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const promptHandled = useRef(false);
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    if (window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone) {
+    if (
+      window.matchMedia("(display-mode: standalone)").matches ||
+      window.navigator.standalone ||
+      wasInstallAttempted()
+    ) {
       return;
     }
 
@@ -29,14 +67,20 @@ export function InstallAppPrompt() {
       });
     }
 
-    if (window.sessionStorage.getItem(SESSION_SHOWN_KEY) === "1") {
+    if (wasPromptShownThisSession()) {
+      promptHandled.current = true;
       return;
     }
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
+      // The listener stays mounted after the first event. Re-check here as
+      // browsers can dispatch another install event during the same session.
+      if (promptHandled.current || wasInstallAttempted()) return;
+
+      promptHandled.current = true;
       deferredPrompt.current = event as BeforeInstallPromptEvent;
-      window.sessionStorage.setItem(SESSION_SHOWN_KEY, "1");
+      markPromptShownThisSession();
       setIsVisible(true);
 
       dismissTimer.current = setTimeout(() => {
@@ -45,10 +89,19 @@ export function InstallAppPrompt() {
       }, AUTO_DISMISS_MS);
     };
 
+    const handleAppInstalled = () => {
+      markInstallAttempted();
+      promptHandled.current = true;
+      deferredPrompt.current = null;
+      setIsVisible(false);
+    };
+
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleAppInstalled);
 
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleAppInstalled);
       if (dismissTimer.current) clearTimeout(dismissTimer.current);
     };
   }, []);
@@ -58,6 +111,10 @@ export function InstallAppPrompt() {
     if (!promptEvent) return;
 
     if (dismissTimer.current) clearTimeout(dismissTimer.current);
+    // The user explicitly chose the install action. Do not ask again in a
+    // later browser session, even if they cancel Chrome's native dialog.
+    markInstallAttempted();
+    promptHandled.current = true;
     deferredPrompt.current = null;
     setIsVisible(false);
 
