@@ -19,7 +19,7 @@ import { levelForXp } from "@/lib/xp/level";
 import { initialsFor } from "@/lib/text/initials";
 import { usePresenceHeartbeat } from "@/lib/presence";
 import { getPromptState, recordPromptAction } from "@/lib/onboarding-prompt-client";
-import { isInstallPromptAvailable, requestInstallPrompt } from "@/components/InstallAppPrompt";
+import { requestInstallPrompt } from "@/components/InstallAppPrompt";
 import { useOverlayAccessibility } from "@/lib/useOverlayAccessibility";
 import { NotificationBell } from "@/components/NotificationBell";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
@@ -67,7 +67,7 @@ export function Sidebar({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const [pushPromptRequest, setPushPromptRequest] = useState(0);
+  const [pushPromptRequest, setPushPromptRequest] = useState(1);
   const closeMobileMenu = useCallback(() => setMobileOpen(false), []);
   const drawerRef = useOverlayAccessibility(mobileOpen, closeMobileMenu);
   const coordinatingTransition = useRef(false);
@@ -80,7 +80,7 @@ export function Sidebar({
       const standalone = window.matchMedia("(display-mode: standalone)").matches || Boolean(window.navigator.standalone);
       const pwaInstalled = Boolean(state.pwaInstalledAt) || standalone;
       if (standalone && !state.pwaInstalledAt) void recordPromptAction("pwa_installed");
-      if (!pwaInstalled && isInstallPromptAvailable()) await requestInstallPrompt();
+      if (!pwaInstalled) await requestInstallPrompt();
       setPushPromptRequest((request) => request + 1);
     } catch {
       // Prompt onboarding is optional and must never affect the shell.
@@ -89,6 +89,18 @@ export function Sidebar({
     }
   }, [isAdmin]);
   usePresenceHeartbeat(handleOnlineTransition);
+  useEffect(() => {
+    if (isAdmin) return;
+    const retryInstallPrompt = () => {
+      void handleOnlineTransition();
+    };
+    window.addEventListener("scholars:install-available", retryInstallPrompt);
+    const timer = window.setTimeout(() => void handleOnlineTransition(), 1200);
+    return () => {
+      window.removeEventListener("scholars:install-available", retryInstallPrompt);
+      window.clearTimeout(timer);
+    };
+  }, [handleOnlineTransition, isAdmin]);
   const { level } = levelForXp(xpTotal);
   const navItems = [
     { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },

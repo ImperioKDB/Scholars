@@ -13,6 +13,7 @@ export function InstallAppPrompt() {
   const settle = useRef<((result: InstallResult) => void) | null>(null);
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isVisible, setIsVisible] = useState(false);
+  const [nativePromptAvailable, setNativePromptAvailable] = useState(false);
   const isVisibleRef = useRef(false);
   useEffect(() => {
     const finish = (result: InstallResult) => {
@@ -23,11 +24,16 @@ export function InstallAppPrompt() {
       settle.current = null;
       resolve?.(result);
     };
-    const onBeforeInstallPrompt = (event: Event) => { event.preventDefault(); deferredPrompt.current = event as BeforeInstallPromptEvent; };
+    const onBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      deferredPrompt.current = event as BeforeInstallPromptEvent;
+      window.dispatchEvent(new CustomEvent("scholars:install-available"));
+    };
     const onAppInstalled = () => { deferredPrompt.current = null; void recordPromptAction("pwa_installed"); finish("installed"); };
     const request = () => {
-      if (!deferredPrompt.current || isVisibleRef.current) return Promise.resolve("unavailable" as const);
+      if (isVisibleRef.current) return Promise.resolve("unavailable" as const);
       isVisibleRef.current = true;
+      setNativePromptAvailable(Boolean(deferredPrompt.current));
       setIsVisible(true);
       return new Promise<InstallResult>((resolve) => { settle.current = resolve; dismissTimer.current = setTimeout(() => finish("dismissed"), AUTO_DISMISS_MS); });
     };
@@ -45,12 +51,12 @@ export function InstallAppPrompt() {
     try {
       await promptEvent.prompt();
       const choice = await promptEvent.userChoice;
-      const resolve = settle.current; settle.current = null; isVisibleRef.current = false; setIsVisible(false);
+      const resolve = settle.current; settle.current = null; isVisibleRef.current = false; setNativePromptAvailable(false); setIsVisible(false);
       if (choice.outcome === "accepted") resolve?.("installed"); else resolve?.("dismissed");
-    } catch { const resolve = settle.current; settle.current = null; isVisibleRef.current = false; setIsVisible(false); resolve?.("dismissed"); }
+    } catch { const resolve = settle.current; settle.current = null; isVisibleRef.current = false; setNativePromptAvailable(false); setIsVisible(false); resolve?.("dismissed"); }
   }
-  function dismiss() { if (dismissTimer.current) clearTimeout(dismissTimer.current); isVisibleRef.current = false; setIsVisible(false); settle.current?.("dismissed"); settle.current = null; }
+  function dismiss() { if (dismissTimer.current) clearTimeout(dismissTimer.current); isVisibleRef.current = false; setNativePromptAvailable(false); setIsVisible(false); settle.current?.("dismissed"); settle.current = null; }
   if (!isVisible) return null;
-  return <div className="fixed inset-x-4 bottom-4 z-[70] sm:left-auto sm:right-6 sm:max-w-sm" role="dialog" aria-modal="false" aria-labelledby="install-app-title"><div className="rounded-2xl border border-hairline bg-white p-5 shadow-[0_18px_50px_rgba(11,30,61,0.18)]"><div className="flex items-start gap-3"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-navy text-white" aria-hidden="true">⇩</div><div className="min-w-0 flex-1"><h2 id="install-app-title" className="font-display text-lg font-semibold leading-tight text-navy">Add Scholars to your home screen</h2><p className="mt-1.5 text-sm leading-5 text-navy-light">Get a faster, more convenient experience whenever you return to find your next opportunity.</p></div><button type="button" onClick={dismiss} className="-mr-1 -mt-1 rounded-full p-2 text-navy-light hover:bg-parchment hover:text-navy" aria-label="Dismiss install prompt">×</button></div><button type="button" onClick={() => void installApp()} className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-seal bg-navy px-4 text-sm font-semibold text-white hover:bg-navy-light">Add to home screen</button></div></div>;
+  return <div className="fixed inset-x-4 bottom-4 z-[70] sm:left-auto sm:right-6 sm:max-w-sm" role="dialog" aria-modal="false" aria-labelledby="install-app-title"><div className="rounded-2xl border border-hairline bg-white p-5 shadow-[0_18px_50px_rgba(11,30,61,0.18)]"><div className="flex items-start gap-3"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-navy text-white" aria-hidden="true">⇩</div><div className="min-w-0 flex-1"><h2 id="install-app-title" className="font-display text-lg font-semibold leading-tight text-navy">Add Scholars to your home screen</h2><p className="mt-1.5 text-sm leading-5 text-navy-light">{nativePromptAvailable ? "Get a faster, more convenient experience whenever you return to find your next opportunity." : "Use your browser menu and choose Add to home screen for faster access to Scholars."}</p></div><button type="button" onClick={dismiss} className="-mr-1 -mt-1 rounded-full p-2 text-navy-light hover:bg-parchment hover:text-navy" aria-label="Dismiss install prompt">×</button></div><button type="button" onClick={nativePromptAvailable ? () => void installApp() : dismiss} className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-seal bg-navy px-4 text-sm font-semibold text-white hover:bg-navy-light">{nativePromptAvailable ? "Add to home screen" : "Got it"}</button></div></div>;
 }
 declare global { interface Navigator { standalone?: boolean } }

@@ -12,6 +12,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "Scholars",
     description:
       "One profile, honest eligibility matching, and every deadline in one place. Built for students in Nigeria.",
+    id: "/",
     start_url: "/",
     scope: "/",
     display: "standalone",
@@ -19,9 +20,15 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#0B1E3D",
     icons: [
       {
-        src: "/logo.svg",
-        sizes: "any",
-        type: "image/svg+xml",
+        src: "/icons/icon-192.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: "/icons/icon-512.png",
+        sizes: "512x512",
+        type: "image/png",
         purpose: "any",
       },
     ],
