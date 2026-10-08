@@ -5,6 +5,7 @@ import { INSTITUTION_TYPE_OPTIONS } from "@/lib/profile";
 import { levelForXp } from "@/lib/xp/level";
 import { AvatarUploader } from "@/components/AvatarUploader";
 import { CommunityBioEditor } from "@/components/CommunityBioEditor";
+import { PushNotificationSettings } from "@/components/PushNotificationSettings";
 import { DeleteAccountButton } from "@/components/DeleteAccountButton";
 
 // app/settings/page.tsx
@@ -158,6 +159,9 @@ export default async function SettingsPage() {
       </Section>
       <Section title="Community profile">
         <CommunityBioEditor initialBio={p.community_bio} />
+      </Section>
+      <Section title="Push notifications">
+        <PushNotificationSettings publicKey={process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY ?? null} />
       </Section>
       <Section title="Personal">
         <dl>

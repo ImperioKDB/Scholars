@@ -6,6 +6,8 @@ import { dbErrorResponse } from "@/lib/errors";
 import { isUuid } from "@/lib/validate";
 import { loadScholarshipCommunity } from "@/lib/scholarship-community";
 import { trackServerEvent } from "@/lib/analytics-server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { sendPushForProfile } from "@/lib/push/deliver";
 
 export const dynamic = "force-dynamic";
 
@@ -77,16 +79,18 @@ export async function POST(
   if (scholarshipError) return dbErrorResponse("scholarship_discussion_scholarship_check", scholarshipError);
   if (!scholarship) return NextResponse.json({ error: "Scholarship not found" }, { status: 404 });
 
+  let parentAuthorId: string | null = null;
   if (parent_id) {
     const { data: parent, error: parentError } = await supabase
       .from("scholarship_discussions")
-      .select("id, scholarship_id, status")
+      .select("id, scholarship_id, status, author_id")
       .eq("id", parent_id)
       .maybeSingle();
     if (parentError) return dbErrorResponse("scholarship_discussion_parent_check", parentError);
     if (!parent || parent.scholarship_id !== params.id || parent.status !== "published") {
       return NextResponse.json({ error: "That discussion is no longer available" }, { status: 409 });
     }
+    parentAuthorId = parent.author_id;
   }
 
   const { data, error } = await supabase
@@ -109,6 +113,19 @@ export async function POST(
     parent_id ? "community_reply_created" : "community_post_created",
     { scholarship_id: params.id, category },
   );
+  if (parent_id && parentAuthorId && parentAuthorId !== user.id) {
+    try {
+      await sendPushForProfile(createServiceClient(), parentAuthorId, {
+        title: "You got a reply on Scholars",
+        body: "Someone replied to your scholarship community post.",
+        data: { url: "/notifications" },
+      });
+    } catch (pushError) {
+      console.warn("community_reply_push_failed", {
+        errorName: pushError instanceof Error ? pushError.name : "UnknownError",
+      });
+    }
+  }
 
   return NextResponse.json({ discussion: data }, { status: 201 });
 }

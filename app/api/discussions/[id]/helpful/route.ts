@@ -4,6 +4,8 @@ import { checkRateLimit } from "@/lib/ratelimit";
 import { dbErrorResponse } from "@/lib/errors";
 import { isUuid } from "@/lib/validate";
 import { trackServerEvent } from "@/lib/analytics-server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { sendPushForProfile } from "@/lib/push/deliver";
 
 async function getUser(request: Request) {
   const supabase = createClient();
@@ -22,7 +24,27 @@ export async function POST(request: Request, { params }: { params: { id: string 
     .from("scholarship_discussion_reactions")
     .insert({ discussion_id: params.id, profile_id: user.id });
   if (error && error.code !== "23505") return dbErrorResponse("scholarship_discussion_helpful", error);
-  if (!error) trackServerEvent(supabase, user.id, "community_helpful_reaction", { discussion_id: params.id });
+  if (!error) {
+    trackServerEvent(supabase, user.id, "community_helpful_reaction", { discussion_id: params.id });
+    try {
+      const { data: discussion } = await supabase
+        .from("scholarship_discussions")
+        .select("author_id")
+        .eq("id", params.id)
+        .maybeSingle();
+      if (discussion && discussion.author_id !== user.id) {
+        await sendPushForProfile(createServiceClient(), discussion.author_id, {
+          title: "Your post helped a student",
+          body: "Someone marked your scholarship community post as helpful.",
+          data: { url: "/notifications" },
+        });
+      }
+    } catch (pushError) {
+      console.warn("community_helpful_push_failed", {
+        errorName: pushError instanceof Error ? pushError.name : "UnknownError",
+      });
+    }
+  }
   return NextResponse.json({ helpful: true });
 }
 
