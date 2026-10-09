@@ -12,6 +12,7 @@ import { validatePasswordStrength } from "@/lib/auth/password";
 import { normalizeEmail } from "@/lib/auth/email";
 import { safeNextPath } from "@/lib/validate";
 import { AUTH_NEXT_COOKIE } from "@/components/AuthRescue";
+import { getAuthCookieDomain } from "@/lib/auth/cookie-domain";
 
 // REDIRECT FIX (test feedback): same canonical-origin rule as the login
 // page, applied to both the Google OAuth redirectTo and the email
@@ -22,7 +23,9 @@ function appBase(): string {
   return process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
 }
 function rememberAuthNext(next: string) {
-  document.cookie = `${AUTH_NEXT_COOKIE}=${encodeURIComponent(next)}; Max-Age=600; Path=/; SameSite=Lax${window.location.protocol === "https:" ? "; Secure" : ""}`;
+  const domain = getAuthCookieDomain(window.location.hostname);
+  const domainAttribute = domain ? `; Domain=${domain}` : "";
+  document.cookie = `${AUTH_NEXT_COOKIE}=${encodeURIComponent(next)}; Max-Age=600; Path=/; SameSite=Lax${domainAttribute}${window.location.protocol === "https:" ? "; Secure" : ""}`;
 }
 
 function SignupForm() {

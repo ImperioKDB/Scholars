@@ -34,6 +34,7 @@ import { createClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/logging";
 import { safeNextPath, isUuid } from "@/lib/validate";
 import { COOKIE_NAMES } from "@/lib/config";
+import { getAuthCookieDomain } from "@/lib/auth/cookie-domain";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
@@ -78,7 +79,15 @@ export async function GET(request: Request) {
       // The browser sets this short-lived fallback marker before OAuth or
       // signup. Remove it on the normal callback path so a later root-level
       // auth rescue cannot inherit an old onboarding destination.
-      cookieStore.set("scholars_auth_next", "", { maxAge: 0, path: "/" });
+      const authCookieDomain =
+        process.env.VERCEL_ENV === "production"
+          ? getAuthCookieDomain("www.scholars.com.ng")
+          : undefined;
+      cookieStore.set("scholars_auth_next", "", {
+        maxAge: 0,
+        path: "/",
+        ...(authCookieDomain ? { domain: authCookieDomain } : {}),
+      });
       return NextResponse.redirect(origin + next);
     }
   }

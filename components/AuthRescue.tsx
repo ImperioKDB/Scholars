@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/Logo";
 import { safeNextPath } from "@/lib/validate";
+import { getAuthCookieDomain } from "@/lib/auth/cookie-domain";
 
 // components/AuthRescue.tsx
 //
@@ -46,7 +47,10 @@ function readAuthNext(url: URL): string {
 
 function clearAuthNext() {
   try {
-    document.cookie = `${AUTH_NEXT_COOKIE}=; Max-Age=0; Path=/; SameSite=Lax`;
+    const domain = getAuthCookieDomain(window.location.hostname);
+    const domainAttribute = domain ? `; Domain=${domain}` : "";
+    const secureAttribute = window.location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `${AUTH_NEXT_COOKIE}=; Max-Age=0; Path=/; SameSite=Lax${domainAttribute}${secureAttribute}`;
   } catch {
     // Ignore blocked cookie access.
   }
@@ -71,10 +75,21 @@ export function AuthRescue() {
 
   useEffect(() => {
     if (!rescuing) return;
-    const supabase = createClient();
     let routed = false;
     const url = new URL(window.location.href);
     const authNext = readAuthNext(url);
+    const code = url.searchParams.get("code");
+    if (code) {
+      // Supabase's SSR cookie bridge owns the PKCE verifier. Send rescued
+      // codes through the same server callback as the normal flow so it can
+      // exchange the code using the verifier cookie, including in PWAs.
+      const callbackUrl = new URL("/auth/callback", url.origin);
+      callbackUrl.searchParams.set("code", code);
+      callbackUrl.searchParams.set("next", authNext);
+      window.location.replace(callbackUrl.toString());
+      return;
+    }
+    const supabase = createClient();
     const routeTo = (path: string) => {
       if (routed) return;
       routed = true;
@@ -93,15 +108,7 @@ export function AuthRescue() {
         routeTo(authNext);
       }
     });
-    const code = url.searchParams.get("code");
     void (async () => {
-      if (code) {
-        const { data } = await supabase.auth.exchangeCodeForSession(code);
-        if (data.session) {
-          routeTo(authNext);
-          return;
-        }
-      }
       const { data } = await supabase.auth.getSession();
       if (data.session) routeTo(authNext);
     })();

@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/Skeleton";
 import { AuthConfirmation } from "@/components/AuthConfirmation";
 import { safeNextPath } from "@/lib/validate";
 import { AUTH_NEXT_COOKIE } from "@/components/AuthRescue";
+import { getAuthCookieDomain } from "@/lib/auth/cookie-domain";
 
 // AUTH SECURITY AUDIT (brute-force brake, client side): progressive
 // lockout stored in localStorage. UX-level only -- the real brakes are
@@ -29,7 +30,9 @@ function appBase(): string {
   return process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
 }
 function rememberAuthNext(next: string) {
-  document.cookie = `${AUTH_NEXT_COOKIE}=${encodeURIComponent(next)}; Max-Age=600; Path=/; SameSite=Lax${window.location.protocol === "https:" ? "; Secure" : ""}`;
+  const domain = getAuthCookieDomain(window.location.hostname);
+  const domainAttribute = domain ? `; Domain=${domain}` : "";
+  document.cookie = `${AUTH_NEXT_COOKIE}=${encodeURIComponent(next)}; Max-Age=600; Path=/; SameSite=Lax${domainAttribute}${window.location.protocol === "https:" ? "; Secure" : ""}`;
 }
 
 type LockState = { count: number; until: number };

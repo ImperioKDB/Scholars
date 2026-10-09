@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { getAuthCookieDomain } from "@/lib/auth/cookie-domain";
 
 // Server-side client using the anon key, respects the caller's session (RLS applies).
 //
@@ -26,6 +27,11 @@ export function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookieOptions: {
+        ...(process.env.VERCEL_ENV === "production"
+          ? { domain: getAuthCookieDomain("www.scholars.com.ng") }
+          : {}),
+      },
       cookies: {
         get(name: string) {
           return cookieStore.get(name)?.value;

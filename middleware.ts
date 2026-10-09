@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { COOKIE_NAMES, REF_COOKIE_MAX_AGE_S } from "@/lib/config";
+import { getAuthCookieDomain } from "@/lib/auth/cookie-domain";
 
 const PROTECTED_PREFIXES = [
   "/dashboard",
@@ -85,6 +86,11 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookieOptions: {
+        ...(process.env.VERCEL_ENV === "production"
+          ? { domain: getAuthCookieDomain("www.scholars.com.ng") }
+          : {}),
+      },
       cookies: {
         get(name: string) {
           return request.cookies.get(name)?.value;
