@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { assertAdmin } from "@/lib/admin/guard";
+import { getAutonomousFixLogs } from "@/lib/admin/fix-log";
 
-const REPORTS = new Set(["growth", "funnel", "retention", "provider"]);
+const REPORTS = new Set(["growth", "funnel", "retention", "provider", "fixes"]);
 
 function parseDate(value: string | null, fallback: Date): Date | null {
   if (!value) return fallback;
@@ -50,6 +51,52 @@ export async function GET(request: Request) {
   const since = sinceDate.toISOString();
   const until = untilDate.toISOString();
   const scholarshipId = scholarshipParam || null;
+
+  if (report === "fixes") {
+    const [{ data: errors }, fixLogs] = await Promise.all([
+      supabase
+        .from("monitoring_error_events")
+        .select("created_at, kind, pathname, message, source")
+        .gte("created_at", since)
+        .lt("created_at", until)
+        .order("created_at", { ascending: false })
+        .limit(500),
+      getAutonomousFixLogs(100),
+    ]);
+    const rows: Record<string, unknown>[] = [
+      ...(errors ?? []).map((item) => ({
+        record_type: "runtime_error",
+        timestamp: item.created_at,
+        status: "observed",
+        summary: item.message,
+        kind: item.kind,
+        route: item.pathname ?? "",
+        source: item.source ?? "",
+        commit: "",
+        url: "",
+      })),
+      ...fixLogs
+        .filter((item) => item.committedAt >= since && item.committedAt < until)
+        .map((item) => ({
+          record_type: "repository_fix",
+          timestamp: item.committedAt,
+          status: "fixed",
+          summary: item.message,
+          kind: "",
+          route: "",
+          source: item.author,
+          commit: item.shortSha,
+          url: item.url,
+        })),
+    ].sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
+    return new NextResponse(csv(rows.length ? rows : [{ message: "No fix or runtime error logs in this period" }]), {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": 'attachment; filename="scholars-fix-logs.csv"',
+        "Cache-Control": "private, no-store",
+      },
+    });
+  }
 
   const { data, error } = await supabase.rpc("get_provider_analytics", {
     p_since: since,
