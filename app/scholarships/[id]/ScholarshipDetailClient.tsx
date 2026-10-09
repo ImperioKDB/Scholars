@@ -17,6 +17,7 @@ import { track } from "@/lib/analytics";
 import { ReportScholarshipButton } from "@/components/ReportScholarshipButton";
 import { ScholarshipCommunity } from "@/components/ScholarshipCommunity";
 import type { ScholarshipCommunity as ScholarshipCommunityData } from "@/lib/scholarship-community";
+import { getSavedReturnPath } from "@/lib/scrollRestore";
 
 type ScholarshipDetail = {
   id: string;
@@ -91,6 +92,11 @@ export function ScholarshipDetailClient({
   const [backHref, setBackHref] = useState("/dashboard");
   useEffect(() => {
     try {
+      const savedReturnPath = getSavedReturnPath();
+      if (savedReturnPath) {
+        setBackHref(savedReturnPath);
+        return;
+      }
       const referrer = document.referrer ? new URL(document.referrer) : null;
       if (referrer && referrer.origin === window.location.origin && ["/dashboard", "/discover", "/scholarships"].some((prefix) => referrer.pathname === prefix || referrer.pathname.startsWith(`${prefix}/`))) {
         setBackHref(referrer.pathname + referrer.search);

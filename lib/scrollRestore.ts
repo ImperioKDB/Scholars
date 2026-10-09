@@ -13,10 +13,28 @@ type Saved = { from: string; y: number };
 
 export function saveReturnScroll() {
   try {
-    const saved: Saved = { from: window.location.pathname, y: window.scrollY };
+    const saved: Saved = { from: window.location.pathname + window.location.search, y: window.scrollY };
     sessionStorage.setItem(KEY, JSON.stringify(saved));
   } catch {
     // storage blocked -- degrade to current behavior (land at top)
+  }
+}
+
+// Client-side navigation does not reliably update document.referrer. Keep the
+// originating catalog route available to detail pages so their back link can
+// return to Browse (including any active filters).
+export function getSavedReturnPath(): string | null {
+  try {
+    const raw = sessionStorage.getItem(KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<Saved>;
+    if (typeof parsed.from !== "string") return null;
+    const url = new URL(parsed.from, window.location.origin);
+    if (url.origin !== window.location.origin) return null;
+    if (!["/dashboard", "/discover", "/scholarships"].some((prefix) => url.pathname === prefix || url.pathname.startsWith(`${prefix}/`))) return null;
+    return url.pathname + url.search;
+  } catch {
+    return null;
   }
 }
 

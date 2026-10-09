@@ -3,6 +3,7 @@ import { StatusMessage } from "@/components/StatusMessage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ScholarshipCard, type CardScholarship } from "@/components/ScholarshipCard";
+import { SkeletonCard } from "@/components/Skeleton";
 import { isCurrentlyOpen } from "@/lib/discovery";
 import { fetchWithTimeout, FetchTimeoutError, FetchNetworkError } from "@/lib/fetch";
 import { MilestoneOnboarding } from "@/components/MilestoneOnboarding";
@@ -209,7 +210,20 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
               </div>
             </div>
           )}
-          {loading && <p className="text-sm text-navy-light mt-6" aria-live="polite">Loading&hellip;</p>}
+          {loading && (
+            <div
+              className="mt-6 grid md:grid-cols-2 gap-4"
+              role="status"
+              aria-live="polite"
+              aria-busy="true"
+              aria-label="Loading scholarships"
+            >
+              {Array.from({ length: items.length === 0 ? 4 : 2 }).map((_, i) => (
+                <SkeletonCard key={i} />
+              ))}
+              <span className="sr-only">Loading scholarships&hellip;</span>
+            </div>
+          )}
           {!loading && hasMore && (
             <div className="mt-6 text-center">
               <button
