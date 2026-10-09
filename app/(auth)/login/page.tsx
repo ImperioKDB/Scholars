@@ -119,7 +119,10 @@ function LoginForm() {
     rememberAuthNext(next);
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${appBase()}/auth/callback?next=${encodeURIComponent(next)}` },
+      options: {
+        redirectTo: `${appBase()}/auth/callback?next=${encodeURIComponent(next)}`,
+        queryParams: { prompt: "select_account" },
+      },
     });
   }
 
