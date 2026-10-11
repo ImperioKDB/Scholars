@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { assertAdmin } from "@/lib/admin/guard";
 import { getAutonomousFixLogs } from "@/lib/admin/fix-log";
+import { getProviderAnalyticsWindow, parseProviderAnalyticsRange } from "@/lib/provider-analytics";
 
 const REPORTS = new Set(["growth", "funnel", "retention", "provider", "fixes"]);
 
@@ -31,9 +32,10 @@ export async function GET(request: Request) {
   if (!admin.ok) return admin.response;
 
   const url = new URL(request.url);
-  const now = new Date();
-  const sinceDate = parseDate(url.searchParams.get("since"), new Date(now.getTime() - 30 * 86400000));
-  const untilDate = parseDate(url.searchParams.get("until"), now);
+  const range = parseProviderAnalyticsRange(url.searchParams.get("range"));
+  const defaultWindow = getProviderAnalyticsWindow(range);
+  const sinceDate = parseDate(url.searchParams.get("since"), defaultWindow.since);
+  const untilDate = parseDate(url.searchParams.get("until"), defaultWindow.until);
   const report = url.searchParams.get("report");
 
   if (!sinceDate || !untilDate || sinceDate >= untilDate) {
