@@ -44,6 +44,11 @@ export function Footer() {
               </Link>
             </li>
             <li>
+              <Link href="/#faq" className="text-navy-light hover:text-navy">
+                FAQ
+              </Link>
+            </li>
+            <li>
               <Link href="/login" className="text-navy-light hover:text-navy">
                 Log in
               </Link>
@@ -59,7 +64,7 @@ export function Footer() {
             href="/signup"
             className="inline-flex items-center gap-2 rounded-seal bg-navy text-white text-sm font-medium px-5 py-2.5 hover:bg-navy-light transition-colors"
           >
-            Build your profile
+            Build your free profile
           </Link>
         </div>
       </div>

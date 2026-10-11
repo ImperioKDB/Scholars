@@ -1,19 +1,16 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useOverlayAccessibility } from "@/lib/useOverlayAccessibility";
 
 // components/CookieConsent.tsx
-// Consent dialog presented as a compact bottom sheet on mobile and centered
-// panel on larger screens. The backdrop dims without blurring the product,
-// keeping the visual weight proportional to this low-risk choice.
+// Consent notice presented as a compact, non-blocking panel. The product and
+// its primary CTA stay usable while the visitor makes this low-risk choice.
 //
 // Semantics, stated honestly in the copy:
 //   Accept  -> record "essential"; allow referral credit; never ask again.
 //   Reject  -> record "rejected"; middleware skips setting the referral
 //              cookie for this browser; never ask again. Sign-in cookies
 //              stay on either way because the app cannot work without them.
-//   Escape  -> treated as Reject.
 // A mirror cookie (scholars_consent) is written so middleware.ts, which
 // runs server-side and cannot read localStorage, can honor the choice.
 const CONSENT_KEY = "scholars.cookie.consent";
@@ -51,21 +48,16 @@ export function CookieConsent() {
     setShow(false);
   }, []);
 
-  const closeDialog = useCallback(() => record("rejected"), [record]);
-  const dialogRef = useOverlayAccessibility(show, closeDialog);
-
   if (!show) return null;
   return (
     <div
-      className="fixed inset-0 z-[97] flex items-end justify-center p-4 sm:items-center bg-navy/20"
+      className="fixed inset-x-0 bottom-0 z-[97] p-3 sm:bottom-4 sm:left-auto sm:right-4 sm:w-[min(100%-1.5rem,28rem)] sm:p-0"
+      role="region"
+      aria-label="Cookie preferences"
+      aria-live="polite"
     >
       <div
-        ref={dialogRef}
-        className="bg-white rounded-2xl border border-hairline shadow-card p-6 max-w-md w-full"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="cookie-title"
-        aria-describedby="cookie-description cookie-details"
+        className="bg-white rounded-2xl border border-hairline shadow-card p-5"
       >
         <h2 id="cookie-title" className="font-display text-xl font-semibold text-navy mb-2">
           Cookies on Scholars
