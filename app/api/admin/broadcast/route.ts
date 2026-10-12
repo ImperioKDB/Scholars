@@ -15,6 +15,7 @@ import { sendEmail as sendTransactionalEmail } from '@/lib/email/send'
 import { renderBroadcastDigest, type EmailListing } from '@/lib/email/template'
 import { listEnabledPushProfileIds, sendAdminBroadcastPush } from '@/lib/push/adminBroadcast'
 import { buildListingBroadcastPushMessage } from '@/lib/push/broadcastContent'
+import { selectEmailBatch, type EmailBatch } from '@/lib/email/batches'
 
 export const maxDuration = 300
 
@@ -25,6 +26,7 @@ const bodySchema = z.object({
   scholarship_ids: z.array(z.string().uuid()).optional().default([]),
   opportunity_ids: z.array(z.string().uuid()).optional().default([]),
   broadcast_id: z.string().uuid().optional(),
+  batch: z.enum(['A', 'B', 'C']).optional(),
 }).refine(
   (obj) => obj.scholarship_ids.length > 0 || obj.opportunity_ids.length > 0,
   'Pick at least one scholarship or opportunity (max 10 total per broadcast).'
@@ -179,7 +181,12 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "Couldn't load recipients" }, { status: 500 })
   }
-  if (recipients.length === 0) return NextResponse.json({ error: 'No registered emails found.' }, { status: 400 })
+  recipients = selectEmailBatch(recipients.sort((a, b) => a.id.localeCompare(b.id)), input.batch as EmailBatch | undefined)
+  if (recipients.length === 0) return NextResponse.json({ error: 'This batch has no registered email recipients.' }, { status: 400 })
+  if (input.batch) {
+    const batchIds = new Set(recipients.map((recipient) => recipient.id))
+    pushProfileIds = pushProfileIds.filter((profileId) => batchIds.has(profileId))
+  }
 
   const { data: profileRows } = await service.from('profiles').select('id')
   const profileIds = new Set((profileRows ?? []).map((p) => p.id as string))

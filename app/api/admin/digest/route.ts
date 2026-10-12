@@ -17,6 +17,7 @@ import { createClient } from '@/lib/supabase/server'
 import { assertAdmin } from '@/lib/admin/guard'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { runNewListingDigest } from '@/lib/email/digest'
+import { isEmailBatch, type EmailBatch } from '@/lib/email/batches'
 
 export const maxDuration = 300
 
@@ -26,6 +27,9 @@ export async function POST(request: Request) {
   const supabase = await createClient()
   const guard = await assertAdmin(supabase)
   if (!guard.ok) return guard.response
-  const summary = await runNewListingDigest({ minIntervalMs: 0, manual: true })
+  const raw = await request.json().catch(() => ({})) as { batch?: unknown }
+  const batch = raw.batch === undefined ? undefined : (isEmailBatch(raw.batch) ? raw.batch : null)
+  if (batch === null) return NextResponse.json({ error: 'Choose Batch A, Batch B, or Batch C.' }, { status: 400 })
+  const summary = await runNewListingDigest({ minIntervalMs: 0, manual: true, batch: batch as EmailBatch | undefined })
   return NextResponse.json({ summary })
 }

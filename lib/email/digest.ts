@@ -21,6 +21,7 @@ import { renderNewListingsDigest, type EmailListing } from '@/lib/email/template
 import { sendEmail } from '@/lib/email/send'
 import { firstName, getAuthEmailsByUserId } from '@/lib/email/authRecipients'
 import { claimNotificationDelivery, markNotificationAccepted, markNotificationRetryable } from '@/lib/email/outbox'
+import { selectEmailBatch, type EmailBatch } from '@/lib/email/batches'
 
 export const DIGEST_WINDOW_DAYS = 7
 export const DIGEST_CAP = 1
@@ -40,7 +41,7 @@ export type DigestSummary = {
   dry_run: boolean
 }
 
-export async function runNewListingDigest(opts: { minIntervalMs?: number; manual?: boolean } = {}): Promise<DigestSummary> {
+export async function runNewListingDigest(opts: { minIntervalMs?: number; manual?: boolean; batch?: EmailBatch } = {}): Promise<DigestSummary> {
   const minIntervalMs = opts.minIntervalMs ?? 0
   const manual = opts.manual ?? false
   const supabase = createServiceClient()
@@ -78,7 +79,10 @@ export async function runNewListingDigest(opts: { minIntervalMs?: number; manual
     const announced = new Set(
       (logRows ?? []).map((r) => `${r.profile_id}:${r.listing_kind}:${r.listing_id}`)
     )
-    const profileRows = (profiles ?? []) as { id: string; full_name: string | null }[]
+    const profileRows = selectEmailBatch(
+      ([...(profiles ?? [])] as { id: string; full_name: string | null }[]).sort((a, b) => a.id.localeCompare(b.id)),
+      opts.batch,
+    )
     const emailById = await getAuthEmailsByUserId(supabase, profileRows.map((p) => p.id))
     const lastDigestAt = new Map<string, number>()
     for (const r of logRows ?? []) {

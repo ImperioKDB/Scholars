@@ -8,11 +8,16 @@ import { renderNigeriaIndependenceDayGreeting } from "@/lib/email/template";
 import { sendEmail } from "@/lib/email/send";
 import { listEnabledPushProfileIds, sendAdminBroadcastPush } from "@/lib/push/adminBroadcast";
 import { INDEPENDENCE_DAY_PUSH_MESSAGE } from "@/lib/push/broadcastContent";
+import { selectEmailBatch, type EmailBatch } from "@/lib/email/batches";
 
 export const maxDuration = 300;
 
 const ROUTE = "/api/admin/independence-day";
-const CAMPAIGN_ID = "00000000-0000-4000-8000-000000000001";
+const CAMPAIGN_IDS: Record<EmailBatch, string> = {
+  A: "00000000-0000-4000-8000-000000000001",
+  B: "00000000-0000-4000-8000-000000000002",
+  C: "00000000-0000-4000-8000-000000000003",
+};
 const SEND_CONCURRENCY = 5;
 const MAX_ATTEMPTS = 3;
 
@@ -76,12 +81,16 @@ export async function GET() {
   if (!guard.ok) return guard.response;
 
   const service = createServiceClient();
-  const { count, error } = await service
-    .from("broadcast_delivery_log")
-    .select("id", { count: "exact", head: true })
-    .eq("broadcast_id", CAMPAIGN_ID)
-    .eq("status", "sent");
-  if (error) return NextResponse.json({ error: "Couldn't check campaign status." }, { status: 500 });
+  const sentBatches = {} as Record<EmailBatch, boolean>;
+  for (const batch of ["A", "B", "C"] as EmailBatch[]) {
+    const { count, error } = await service
+      .from("broadcast_delivery_log")
+      .select("id", { count: "exact", head: true })
+      .eq("broadcast_id", CAMPAIGN_IDS[batch])
+      .eq("status", "sent");
+    if (error) return NextResponse.json({ error: "Couldn't check campaign status." }, { status: 500 });
+    sentBatches[batch] = (count ?? 0) > 0;
+  }
 
   let recipientCount: number | null = null;
   try {
@@ -98,8 +107,9 @@ export async function GET() {
 
   return NextResponse.json({
     available: isIndependenceDay(),
-    alreadySent: (count ?? 0) > 0,
-    sent: count ?? 0,
+    alreadySent: Object.values(sentBatches).every(Boolean),
+    sent: Object.values(sentBatches).filter(Boolean).length,
+    sentBatches,
     recipientCount,
     pushRecipientCount,
   });
@@ -118,15 +128,19 @@ export async function POST(request: Request) {
   if (!process.env.BREVO_API_KEY || !process.env.REMINDER_FROM_EMAIL) {
     return NextResponse.json({ error: "Email sending is not configured on Vercel. Add BREVO_API_KEY and REMINDER_FROM_EMAIL first." }, { status: 503 });
   }
+  const raw = await request.json().catch(() => ({})) as { batch?: unknown };
+  const batch = raw.batch === "A" || raw.batch === "B" || raw.batch === "C" ? raw.batch as EmailBatch : null;
+  if (!batch) return NextResponse.json({ error: "Choose Batch A, Batch B, or Batch C." }, { status: 400 });
+  const campaignId = CAMPAIGN_IDS[batch];
 
   const service = createServiceClient();
   const { count: alreadySent, error: statusError } = await service
     .from("broadcast_delivery_log")
     .select("id", { count: "exact", head: true })
-    .eq("broadcast_id", CAMPAIGN_ID)
+    .eq("broadcast_id", campaignId)
     .eq("status", "sent");
   if (statusError) return NextResponse.json({ error: "Couldn't check whether this campaign was already sent." }, { status: 500 });
-  if ((alreadySent ?? 0) > 0) return NextResponse.json({ error: "The Independence Day email has already been sent." }, { status: 409 });
+  if ((alreadySent ?? 0) > 0) return NextResponse.json({ error: `Independence Day ${batch === "A" ? "Batch A" : batch === "B" ? "Batch B" : "Batch C"} has already been sent.` }, { status: 409 });
 
   let recipients: Recipient[];
   let pushProfileIds: string[];
@@ -139,7 +153,10 @@ export async function POST(request: Request) {
     logError(ROUTE, "recipient_load_failed", {}, error);
     return NextResponse.json({ error: "Couldn't load registered student emails." }, { status: 500 });
   }
-  if (recipients.length === 0) return NextResponse.json({ error: "No registered student emails found." }, { status: 400 });
+  recipients = selectEmailBatch(recipients.sort((a, b) => a.id.localeCompare(b.id)), batch);
+  if (recipients.length === 0) return NextResponse.json({ error: "This batch has no registered student emails." }, { status: 400 });
+  const batchIds = new Set(recipients.map((recipient) => recipient.id));
+  pushProfileIds = pushProfileIds.filter((profileId) => batchIds.has(profileId));
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
   let sent = 0;
@@ -157,7 +174,7 @@ export async function POST(request: Request) {
         const outcome = await sendWithRetry({ to: recipient.email, ...email });
         sent += 1;
         await service.from("broadcast_delivery_log").insert({
-          broadcast_id: CAMPAIGN_ID,
+          broadcast_id: campaignId,
           recipient_email: recipient.email,
           recipient_user_id: recipient.id,
           status: "sent",
@@ -168,7 +185,7 @@ export async function POST(request: Request) {
         logError(ROUTE, "send_failed", { email: recipient.email }, error);
         const message = error instanceof Error ? error.message : String(error);
         await service.from("broadcast_delivery_log").insert({
-          broadcast_id: CAMPAIGN_ID,
+          broadcast_id: campaignId,
           recipient_email: recipient.email,
           recipient_user_id: recipient.id,
           status: "failed",
@@ -183,7 +200,7 @@ export async function POST(request: Request) {
     Array.from({ length: Math.min(SEND_CONCURRENCY, recipients.length) }, () => worker()),
   );
   const [pushSummary] = await Promise.all([
-    sendAdminBroadcastPush(service, pushProfileIds, CAMPAIGN_ID, {
+    sendAdminBroadcastPush(service, pushProfileIds, campaignId, {
       ...INDEPENDENCE_DAY_PUSH_MESSAGE,
     }),
     emailWork,
@@ -193,5 +210,5 @@ export async function POST(request: Request) {
     push_recipients: pushSummary.recipients, push_accepted_profiles: pushSummary.acceptedProfiles,
     push_failed_profiles: pushSummary.failedProfiles, push_suppressed_profiles: pushSummary.suppressedProfiles,
   });
-  return NextResponse.json({ sent, failed, recipients: recipients.length, push: pushSummary });
+  return NextResponse.json({ sent, failed, recipients: recipients.length, batch, push: pushSummary });
 }

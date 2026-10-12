@@ -24,8 +24,9 @@ import { createClient } from '@/lib/supabase/server'
 import { assertAdmin } from '@/lib/admin/guard'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { runProfileNudges, PROFILE_NUDGE_INTERVAL_MS } from '@/lib/email/profileNudges'
+import { isEmailBatch, type EmailBatch } from '@/lib/email/batches'
 export const maxDuration = 300
-const bodySchema = z.object({ force: z.boolean().optional().default(false) })
+const bodySchema = z.object({ force: z.boolean().optional().default(false), batch: z.string().optional() })
 export async function POST(request: Request) {
 const limited = await checkRateLimit(request, { route: 'admin-profile-nudges', limit: 5 })
 if (limited) return limited
@@ -41,6 +42,8 @@ return NextResponse.json(
 )
 }
 const force = parsed.data.force
+const batch = parsed.data.batch === undefined ? undefined : (isEmailBatch(parsed.data.batch) ? parsed.data.batch : null)
+if (batch === null) return NextResponse.json({ error: 'Choose Batch A, Batch B, or Batch C.' }, { status: 400 })
 const options =
 force
 ? { minIntervalMs: 0, enforceSendWindow: false, ignoreCap: true }
@@ -48,6 +51,6 @@ force
 // A click is the only allowed email trigger. Keep this path synchronous so
 // the response reports the actual send result and the override button cannot
 // silently enqueue work for a background worker.
-const summary = await runProfileNudges({ ...options, manual: true })
+const summary = await runProfileNudges({ ...options, manual: true, batch: batch as EmailBatch | undefined })
 return NextResponse.json({ summary: { ...summary, forced: force } })
 }
