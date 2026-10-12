@@ -144,6 +144,13 @@ export async function middleware(request: NextRequest) {
     redirectUrl.searchParams.set("next", path + request.nextUrl.search);
     return NextResponse.redirect(redirectUrl);
   }
+  // The PWA's historical start URL was `/`. Keep existing installations
+  // useful while they refresh the manifest: an already-authenticated student
+  // should go straight to the dashboard rather than seeing the public home
+  // page (or following its login CTA).
+  if (path === "/" && user) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
   if (isAuthPage && user) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
@@ -154,6 +161,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/",
     "/dashboard/:path*",
     "/onboarding/:path*",
     "/discover/:path*",

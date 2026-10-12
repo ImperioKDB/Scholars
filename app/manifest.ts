@@ -19,8 +19,12 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "Scholars",
     description:
       "One profile, honest eligibility matching, and every deadline in one place. Built for students in Nigeria.",
+    // Keep the app identity stable at the site root, but open installed
+    // Scholars directly into the authenticated dashboard. Existing installs
+    // that still launch at `/` are covered by middleware's signed-in root
+    // redirect while the manifest update rolls out.
     id: appRoot,
-    start_url: appRoot,
+    start_url: `${appRoot}dashboard`,
     scope: appRoot,
     display: "standalone",
     background_color: "#F7F5EF",
