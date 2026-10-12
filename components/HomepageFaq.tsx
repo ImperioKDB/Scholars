@@ -1,18 +1,13 @@
 const FAQ_ITEMS = [
   {
+    question: "Who is Scholars for?",
+    answer:
+      "Scholars is built for students in Nigeria who want a simpler way to find relevant scholarship opportunities. Your matches are shaped by your academic level, discipline, and the eligibility details providers actually use.",
+  },
+  {
     question: "What do I need before I can see my first matches?",
     answer:
       "Start with your academic level, discipline, GPA, and the details providers commonly screen for. You can complete your profile in stages, and Scholars is designed to get you to useful matches before every optional detail is finished.",
-  },
-  {
-    question: "Does a match guarantee that I will receive the scholarship?",
-    answer:
-      "No. A match means the opportunity's published eligibility rules appear to fit your profile. The provider reviews applications and makes the final decision, so always check the provider's requirements and instructions before applying.",
-  },
-  {
-    question: "Does Scholars submit applications for me?",
-    answer:
-      "No. Scholars helps you find relevant opportunities, understand missing requirements, keep deadlines, and track your progress. You complete the final application on the provider's own website.",
   },
   {
     question: "How are opportunities verified?",
@@ -20,9 +15,14 @@ const FAQ_ITEMS = [
       "Listings are checked before they go live and reviewed as information changes. If a deadline or requirement cannot be confirmed, the opportunity is held or removed rather than presented as certain.",
   },
   {
-    question: "Is Scholars free for students?",
+    question: "Can I save scholarships and keep track of deadlines?",
     answer:
-      "Yes. Scholars is free for students, and providers cannot pay to improve a listing's match or ranking. Your profile can be deleted from your account settings.",
+      "Yes. Save opportunities you want to revisit, receive reminders before deadlines, and keep your application progress in one place instead of relying on scattered notes and browser tabs.",
+  },
+  {
+    question: "Is Scholars free, and can I delete my profile?",
+    answer:
+      "Yes. Scholars is free for students, and providers cannot pay to improve a listing's match or ranking. You can delete your profile from your account settings whenever you choose.",
   },
 ];
 
@@ -33,10 +33,10 @@ export function HomepageFaq() {
         <div className="mb-8 max-w-2xl">
           <p className="font-mono text-xs uppercase tracking-widest text-emerald mb-2">Before you start</p>
           <h2 id="homepage-faq-heading" className="font-display text-2xl md:text-3xl font-semibold text-navy">
-            What to expect from Scholars.
+            Questions students usually have.
           </h2>
           <p className="mt-3 text-sm leading-relaxed text-navy-light">
-            A match is a clear starting point, not a promise. Here is how the service helps and where the provider still makes the final call.
+            The short version of what Scholars is for, what you need, and what happens once you find an opportunity worth saving.
           </p>
         </div>
         <div className="divide-y divide-hairline border-y border-hairline">

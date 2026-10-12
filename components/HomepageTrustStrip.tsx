@@ -1,39 +1,73 @@
 const TRUST_ITEMS = [
   {
+    number: "01",
     label: "Free for students",
     detail: "Create a profile and explore matches without paying.",
+    tone: "light",
   },
   {
+    number: "02",
     label: "Verified listings",
     detail: "Each opportunity is checked before it goes live.",
+    tone: "paper",
   },
   {
+    number: "03",
     label: "No paid placements",
-    detail: "A provider cannot pay to improve a match or ranking.",
+    detail: "Providers cannot pay to improve a match or ranking.",
+    tone: "paper",
   },
   {
+    number: "04",
     label: "Your decision stays yours",
     detail: "Scholars explains fit; the provider makes the final award decision.",
+    tone: "light",
   },
-];
+] as const;
 
 export function HomepageTrustStrip() {
   return (
     <section aria-labelledby="trust-heading" className="border-y border-hairline bg-navy-50">
-      <div className="mx-auto max-w-6xl px-5 py-8 sm:px-6 md:py-10">
-        <div className="mb-6 max-w-2xl">
-          <p className="font-mono text-xs uppercase tracking-widest text-emerald mb-2">Good to know</p>
-          <h2 id="trust-heading" className="font-display text-2xl font-semibold text-navy">
-            Clear matches. No paid shortcuts.
-          </h2>
-        </div>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {TRUST_ITEMS.map((item) => (
-            <div key={item.label}>
-              <h3 className="text-sm font-semibold text-navy">{item.label}</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-navy-light">{item.detail}</p>
+      <div className="mx-auto max-w-6xl px-5 py-12 sm:px-6 md:py-16">
+        <div className="grid gap-5 lg:grid-cols-[0.82fr_1.18fr] lg:gap-6">
+          <div className="relative overflow-hidden rounded-2xl bg-navy p-6 text-white sm:p-8 lg:min-h-[22rem] lg:p-10">
+            <div aria-hidden="true" className="absolute -right-10 -top-12 font-display text-[13rem] leading-none text-white/[0.05]">
+              ?
             </div>
-          ))}
+            <div className="relative flex h-full flex-col justify-between">
+              <div>
+                <p className="font-mono text-xs uppercase tracking-[0.22em] text-emerald-light">Good to know</p>
+                <h2 id="trust-heading" className="mt-5 max-w-sm font-display text-3xl font-semibold leading-tight sm:text-4xl">
+                  The useful stuff, before you start.
+                </h2>
+              </div>
+              <div className="mt-12 flex items-end justify-between gap-6">
+                <p className="max-w-xs text-sm leading-relaxed text-white/70">
+                  A clearer way to find scholarships, without paid shortcuts or a wall of irrelevant results.
+                </p>
+                <span aria-hidden="true" className="hidden font-mono text-5xl text-emerald-light/80 sm:block">04</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-5 sm:grid-cols-2">
+            {TRUST_ITEMS.map((item) => (
+              <article
+                key={item.label}
+                className={[
+                  "group rounded-2xl border border-hairline p-5 transition-transform duration-200 hover:-translate-y-1 sm:p-6",
+                  item.tone === "light" ? "bg-white" : "bg-parchment",
+                ].join(" ")}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <span className="font-mono text-xs tracking-widest text-emerald">{item.number}</span>
+                  <span aria-hidden="true" className="h-2 w-2 rounded-full bg-emerald transition-transform duration-200 group-hover:scale-150" />
+                </div>
+                <h3 className="mt-8 font-display text-xl font-semibold text-navy">{item.label}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-navy-light">{item.detail}</p>
+              </article>
+            ))}
+          </div>
         </div>
       </div>
     </section>
