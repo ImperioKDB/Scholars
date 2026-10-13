@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { mergeSupabaseSessionCookies } from "./pwa-session";
 
-describe("Supabase session cookies for legacy PWA migration", () => {
+describe("Supabase session cookies for legacy PWA origin migration", () => {
   it("keeps the base session cookie and every numbered chunk only", () => {
     expect(
       mergeSupabaseSessionCookies([

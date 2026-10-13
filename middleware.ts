@@ -128,17 +128,17 @@ export async function middleware(request: NextRequest) {
   const isProtected = PROTECTED_PREFIXES.some((prefix) => path.startsWith(prefix));
   const isAuthPage = AUTH_PREFIXES.some((prefix) => path.startsWith(prefix));
 
-  // Older installed PWAs may still launch on www. Move their app/auth entry
-  // point to the apex origin before deciding that the session is missing;
-  // Chrome and the PWA then read the same apex-origin session cookies.
+  // Keep launches on the canonical www origin used by the PWA manifest and
+  // OAuth callback. Older apex installs can migrate their validated session
+  // once; canonical www installs must never be redirected out of their scope.
   if (
     process.env.VERCEL_ENV === "production" &&
-    hostname === "www.scholars.com.ng" &&
+    hostname === "scholars.com.ng" &&
     (path === "/" || isProtected || isAuthPage)
   ) {
-    const apexUrl = new URL(request.url);
-    apexUrl.hostname = "scholars.com.ng";
-    const redirectResponse = NextResponse.redirect(apexUrl);
+    const canonicalUrl = new URL(request.url);
+    canonicalUrl.hostname = "www.scholars.com.ng";
+    const redirectResponse = NextResponse.redirect(canonicalUrl);
     if (user) {
       const migratedCookies = mergeSupabaseSessionCookies(
         request.cookies.getAll(),
@@ -147,9 +147,9 @@ export async function middleware(request: NextRequest) {
       const cookieDomain = getAuthCookieDomain(hostname);
       if (cookieDomain) {
         for (const cookie of migratedCookies) {
-          // Remove any old www-only copy, then reissue the validated session
-          // cookie at the already-configured shared Scholars domain so the
-          // apex PWA launch can read it. Supabase still validates every use.
+          // Remove any old apex-only copy, then reissue the validated session
+          // cookie at the shared Scholars domain so the canonical PWA can read
+          // it. Supabase still validates every use.
           // Next's cookie helper indexes by cookie name and would collapse
           // the host-only expiry into the Domain cookie below. Append the
           // expiry separately so both scopes are updated in the same redirect.
