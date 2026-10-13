@@ -7,12 +7,12 @@ import type { MetadataRoute } from "next";
 // low-end Android phones where a home-screen icon is the difference
 // between a bookmarked tool and a forgotten tab.
 export default function manifest(): MetadataRoute.Manifest {
-  // Keep the installed PWA on its current production origin while both
-  // scholars.com.ng and www.scholars.com.ng serve the app directly. The
-  // relative start URL preserves each existing installation's origin.
+  // Use the apex origin as the PWA launch target. The app is served directly
+  // from both domains, but the apex is the origin where existing sessions
+  // are known to work; the middleware also migrates older www launches.
   const appRoot =
     process.env.VERCEL_ENV === "production"
-      ? "/"
+      ? "https://scholars.com.ng/"
       : "/";
   return {
     name: "Scholars | Find scholarships you're actually eligible for",

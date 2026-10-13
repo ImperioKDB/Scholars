@@ -32,6 +32,7 @@ function adminMfaRequired(): boolean {
 
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
+  const hostname = request.nextUrl.hostname.toLowerCase();
   const attributionResponse = NextResponse.next();
   const attributionCookie = request.cookies.get(COOKIE_NAMES.ATTRIBUTION)?.value;
   const params = request.nextUrl.searchParams;
@@ -114,6 +115,19 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
   const isProtected = PROTECTED_PREFIXES.some((prefix) => path.startsWith(prefix));
   const isAuthPage = AUTH_PREFIXES.some((prefix) => path.startsWith(prefix));
+
+  // Older installed PWAs may still launch on www. Move their app/auth entry
+  // point to the apex origin before deciding that the session is missing;
+  // Chrome and the PWA then read the same apex-origin session cookies.
+  if (
+    process.env.VERCEL_ENV === "production" &&
+    hostname === "www.scholars.com.ng" &&
+    (path === "/" || isProtected || isAuthPage)
+  ) {
+    const apexUrl = new URL(request.url);
+    apexUrl.hostname = "scholars.com.ng";
+    return NextResponse.redirect(apexUrl);
+  }
 
   if (path.startsWith("/api/admin")) {
     if (!user) {
