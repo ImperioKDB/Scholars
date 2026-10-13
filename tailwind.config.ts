@@ -36,9 +36,8 @@ const config: Config = {
         hairline: "#E4E1D8",
       },
       fontFamily: {
-        // Keep the design fonts when their variables are provided by a host,
-        // while remaining valid when builds intentionally avoid remote font
-        // downloads (the default CI/deploy path).
+        // Prefer bundled Fraunces/Manrope variables from app/layout.tsx, with
+        // safe system fallbacks if a font asset cannot be loaded.
         display: ["var(--font-fraunces, Georgia)", "serif"],
         sans: ["var(--font-manrope, system-ui)", "sans-serif"],
         mono: ["var(--font-manrope, ui-monospace)", "monospace"],

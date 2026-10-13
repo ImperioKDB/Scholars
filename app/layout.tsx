@@ -1,10 +1,27 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
 import { AuthRescue } from "@/components/AuthRescue";
 import { CookieConsent } from "@/components/CookieConsent";
 import { InstallAppPrompt } from "@/components/InstallAppPrompt";
 import { Monitoring } from "@/components/Monitoring";
 import "./globals.css";
 import "./motion.css";
+
+const fraunces = localFont({
+  src: [
+    { path: "./fonts/fraunces-latin.woff2", weight: "500 700", style: "normal" },
+    { path: "./fonts/fraunces-italic-latin.woff2", weight: "500 700", style: "italic" },
+  ],
+  variable: "--font-fraunces",
+  display: "swap",
+});
+
+const manrope = localFont({
+  src: "./fonts/manrope-latin.woff2",
+  weight: "400 700",
+  variable: "--font-manrope",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng"),
@@ -37,7 +54,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${fraunces.variable} ${manrope.variable}`}>
       <body className="font-sans bg-parchment text-ink antialiased">
         {/* Rescues auth codes/tokens that Supabase strands on the root
             when a redirectTo is rejected (see components/AuthRescue.tsx).
