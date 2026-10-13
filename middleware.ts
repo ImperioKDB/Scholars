@@ -144,6 +144,12 @@ export async function middleware(request: NextRequest) {
     redirectUrl.searchParams.set("next", path + request.nextUrl.search);
     return NextResponse.redirect(redirectUrl);
   }
+  // Older installed PWAs launch at `/`. If the persisted Supabase session is
+  // present, take the user directly to the dashboard instead of the public
+  // landing page or its login CTA.
+  if (path === "/" && user) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
   if (isAuthPage && user) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
@@ -154,6 +160,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/",
     "/dashboard/:path*",
     "/onboarding/:path*",
     "/discover/:path*",

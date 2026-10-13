@@ -7,12 +7,12 @@ import type { MetadataRoute } from "next";
 // low-end Android phones where a home-screen icon is the difference
 // between a bookmarked tool and a forgotten tab.
 export default function manifest(): MetadataRoute.Manifest {
-  // Vercel canonically redirects scholars.com.ng to www.scholars.com.ng.
-  // Keep the installed PWA on that same origin; otherwise Android opens the
-  // redirect as a Chrome Custom Tab, where the auth storage context differs.
+  // Keep the installed PWA on its current production origin while both
+  // scholars.com.ng and www.scholars.com.ng serve the app directly. The
+  // relative start URL preserves each existing installation's origin.
   const appRoot =
     process.env.VERCEL_ENV === "production"
-      ? "https://www.scholars.com.ng/"
+      ? "/"
       : "/";
   return {
     name: "Scholars | Find scholarships you're actually eligible for",
@@ -20,7 +20,7 @@ export default function manifest(): MetadataRoute.Manifest {
     description:
       "One profile, honest eligibility matching, and every deadline in one place. Built for students in Nigeria.",
     id: appRoot,
-    start_url: appRoot,
+    start_url: `${appRoot}dashboard`,
     scope: appRoot,
     display: "standalone",
     background_color: "#F7F5EF",
