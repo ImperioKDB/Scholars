@@ -24,6 +24,16 @@ export function ScrollReveal({
       return;
     }
 
+    let revealListener: ((event: TransitionEvent) => void) | null = null;
+    const clearRevealStyles = () => {
+      if (revealListener) {
+        element.removeEventListener("transitionend", revealListener);
+        element.removeEventListener("transitioncancel", revealListener);
+        revealListener = null;
+      }
+      delete element.dataset.revealEnhanced;
+      delete element.dataset.revealVisible;
+    };
     let observer: IntersectionObserver | null = null;
     try {
       observer = new IntersectionObserver(
@@ -32,6 +42,16 @@ export function ScrollReveal({
           if (entry.isIntersecting) {
             if (element.dataset.revealEnhanced === "true") {
               element.dataset.revealVisible = "true";
+              revealListener = (event) => {
+                if (event.target !== element) return;
+                if (
+                  event.type === "transitionend" &&
+                  (event as TransitionEvent).propertyName !== "opacity"
+                ) return;
+                clearRevealStyles();
+              };
+              element.addEventListener("transitionend", revealListener);
+              element.addEventListener("transitioncancel", revealListener);
             }
             observer?.unobserve(element);
           } else {
@@ -50,8 +70,7 @@ export function ScrollReveal({
 
     return () => {
       observer?.disconnect();
-      delete element.dataset.revealEnhanced;
-      delete element.dataset.revealVisible;
+      clearRevealStyles();
     };
   }, []);
 
