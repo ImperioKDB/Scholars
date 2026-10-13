@@ -1,5 +1,6 @@
 "use client";
 import { StatusMessage } from "@/components/StatusMessage";
+import { ScrollReveal } from "@/components/ScrollReveal";
 import { useEffect, useRef, useState } from "react";
 import { OpportunityCard, type CardOpportunity } from "@/components/OpportunityCard";
 import { OPPORTUNITY_TYPE_OPTIONS } from "@/lib/admin/opportunity";
@@ -204,7 +205,7 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
         </div>
       ) : (
         <>
-          <div className="grid md:grid-cols-2 gap-4 mb-12">
+          <ScrollReveal className="grid md:grid-cols-2 gap-4 mb-12">
             {items.map((o) => (
               <OpportunityCard sharerId={userId}
                 key={o.id}
@@ -214,7 +215,7 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
                 onToggleSave={() => toggleSave(o.id)}
               />
             ))}
-          </div>
+          </ScrollReveal>
           {loading && <p className="text-sm text-navy-light mb-12" aria-live="polite">Loading&hellip;</p>}
           {!loading && hasMore && (
             <div className="mb-12 text-center">
@@ -244,7 +245,7 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
           <p className="text-sm text-navy-light">Save opportunities above to keep track of them here.</p>
         </div>
       ) : (
-        <div className="grid md:grid-cols-2 gap-4">
+        <ScrollReveal className="grid md:grid-cols-2 gap-4">
           {saved.map((s) => (
             <OpportunityCard sharerId={userId}
               key={s.opportunity.id}
@@ -254,7 +255,7 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
               onToggleSave={() => toggleSave(s.opportunity.id)}
             />
           ))}
-        </div>
+        </ScrollReveal>
       )}
     </div>
   );

@@ -11,6 +11,7 @@ import { track } from "@/lib/analytics";
 import type { GapNudge } from "@/lib/matching/gaps";
 import { fetchWithTimeout, FetchTimeoutError, FetchNetworkError } from "@/lib/fetch";
 import { MilestoneOnboarding, announceMilestone } from "@/components/MilestoneOnboarding";
+import { ScrollReveal } from "@/components/ScrollReveal";
 type MatchTier = "excellent" | "good" | "possible" | "unlikely";
 type MatchApiItem = CardScholarship & {
   score: number;
@@ -370,19 +371,19 @@ export function DashboardClient({
           </p>
         </div>
       ) : (
-        <div key={tab} className="grid grid-cols-1 gap-4 mb-12">
+        <ScrollReveal key={tab} className="grid grid-cols-1 gap-4 mb-12">
           {filteredMatches.map((m, i) => {
             const met = m.requirements.filter((r) => r.status === "met").length;
             const total = m.requirements.filter((r) => r.status !== "unverifiable").length;
             const missingLabels = m.requirements.filter((r) => r.status === "missing_data").map((r) => r.label);
             return (
-              <div key={m.id} data-tour={i === 0 ? "save" : undefined} className="animate-card-in" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
+              <div key={m.id} data-tour={i === 0 ? "save" : undefined}>
                 <ScholarshipCard scholarship={m} score={m.score} metCount={met} totalCount={total} missingLabels={missingLabels}
                   saved={savedIds.has(m.id)} pending={pendingIds.has(m.id)} onToggleSave={() => toggleSave(m.id)} sharerId={userId} />
               </div>
             );
           })}
-        </div>
+        </ScrollReveal>
       )}
       {comingSoon.length > 0 && (
         <div className="mb-12">
