@@ -2,6 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { COOKIE_NAMES, REF_COOKIE_MAX_AGE_S } from "@/lib/config";
 import { getAuthCookieDomain } from "@/lib/auth/cookie-domain";
+import { mergeSupabaseSessionCookies } from "@/lib/auth/pwa-session";
 
 const PROTECTED_PREFIXES = [
   "/dashboard",
@@ -83,6 +84,21 @@ export async function middleware(request: NextRequest) {
   }
 
   let response = NextResponse.next({ request: { headers: request.headers } });
+  const pendingCookieMutations = new Map<
+    string,
+    { value: string; options: CookieOptions }
+  >();
+  function applyCookieMutation(name: string, value: string, options: CookieOptions) {
+    request.cookies.set({ name, value, ...options });
+    pendingCookieMutations.set(name, { value, options: hardened(options) });
+    // Rebuild the forwarded request after cookie changes so downstream
+    // server components see the refreshed session. Reapply every mutation
+    // because Supabase can update several cookie chunks during one refresh.
+    response = NextResponse.next({ request: { headers: request.headers } });
+    for (const [cookieName, cookie] of pendingCookieMutations) {
+      response.cookies.set(cookieName, cookie.value, cookie.options);
+    }
+  }
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -97,14 +113,10 @@ export async function middleware(request: NextRequest) {
           return request.cookies.get(name)?.value;
         },
         set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({ name, value, ...options });
-          response = NextResponse.next({ request: { headers: request.headers } });
-          response.cookies.set({ name, value, ...hardened(options) });
+          applyCookieMutation(name, value, options);
         },
         remove(name: string, options: CookieOptions) {
-          request.cookies.set({ name, value: "", ...options });
-          response = NextResponse.next({ request: { headers: request.headers } });
-          response.cookies.set({ name, value: "", ...hardened(options) });
+          applyCookieMutation(name, "", options);
         },
       },
     }
@@ -126,7 +138,36 @@ export async function middleware(request: NextRequest) {
   ) {
     const apexUrl = new URL(request.url);
     apexUrl.hostname = "scholars.com.ng";
-    return NextResponse.redirect(apexUrl);
+    const redirectResponse = NextResponse.redirect(apexUrl);
+    if (user) {
+      const migratedCookies = mergeSupabaseSessionCookies(
+        request.cookies.getAll(),
+        response.cookies.getAll()
+      );
+      const cookieDomain = getAuthCookieDomain(hostname);
+      if (cookieDomain) {
+        for (const cookie of migratedCookies) {
+          // Remove any old www-only copy, then reissue the validated session
+          // cookie at the already-configured shared Scholars domain so the
+          // apex PWA launch can read it. Supabase still validates every use.
+          // Next's cookie helper indexes by cookie name and would collapse
+          // the host-only expiry into the Domain cookie below. Append the
+          // expiry separately so both scopes are updated in the same redirect.
+          redirectResponse.headers.append(
+            "Set-Cookie",
+            `${cookie.name}=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; SameSite=Lax`
+          );
+          redirectResponse.cookies.set(cookie.name, cookie.value, {
+            domain: cookieDomain,
+            path: "/",
+            maxAge: cookie.value ? 400 * 24 * 60 * 60 : 0,
+            sameSite: "lax",
+            secure: true,
+          });
+        }
+      }
+    }
+    return redirectResponse;
   }
 
   if (path.startsWith("/api/admin")) {
