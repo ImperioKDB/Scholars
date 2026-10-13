@@ -7,12 +7,13 @@ import type { MetadataRoute } from "next";
 // low-end Android phones where a home-screen icon is the difference
 // between a bookmarked tool and a forgotten tab.
 export default function manifest(): MetadataRoute.Manifest {
-  // Vercel canonically redirects scholars.com.ng to www.scholars.com.ng.
-  // Keep the installed PWA on that same origin; otherwise Android opens the
-  // redirect as a Chrome Custom Tab, where the auth storage context differs.
+  // Keep the apex origin as the canonical PWA origin. Existing installs were
+  // created from scholars.com.ng, so changing this origin would strand their
+  // manifest and auth storage behind a host change. Both production domains
+  // currently serve this app directly; www remains a compatible entry point.
   const appRoot =
     process.env.VERCEL_ENV === "production"
-      ? "https://www.scholars.com.ng/"
+      ? "https://scholars.com.ng/"
       : "/";
   return {
     name: "Scholars | Find scholarships you're actually eligible for",
