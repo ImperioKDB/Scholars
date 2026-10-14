@@ -6,6 +6,8 @@ import { TestimonialsSection } from "@/components/TestimonialsSection";
 import { Footer } from "@/components/Footer";
 import { DeadlineBadge } from "@/components/DeadlineBadge";
 import { HomepageInstallPrompt } from "@/components/HomepageInstallPrompt";
+import { HomepageTrustStrip } from "@/components/HomepageTrustStrip";
+import { HomepageFaq } from "@/components/HomepageFaq";
 import { ScrollReveal } from "@/components/ScrollReveal";
 import { createPublicClient } from "@/lib/supabase/public";
 import { isCurrentlyOpen } from "@/lib/discovery";
@@ -69,6 +71,7 @@ export default async function LandingPage() {
           <Logo className="text-navy" />
           <nav className="hidden md:flex items-center gap-8 text-sm text-navy-light">
             <Link href="#how-it-works" className="hover:text-navy">How it works</Link>
+            <Link href="#faq" className="hover:text-navy">FAQ</Link>
             <Link href="/login" className="hover:text-navy">Log in</Link>
           </nav>
           <div className="flex items-center gap-2">
@@ -77,7 +80,7 @@ export default async function LandingPage() {
             href="/signup"
             className="inline-flex min-h-[44px] items-center rounded-seal bg-navy text-white text-sm font-medium px-5 hover:bg-navy-light transition-colors"
           >
-            Get started
+            Build your free profile
           </Link>
           </div>
         </div>
@@ -104,7 +107,7 @@ export default async function LandingPage() {
                 href="/signup"
                 className="inline-flex min-h-[48px] items-center gap-2 rounded-seal bg-navy text-white font-medium px-6 hover:bg-navy-light transition-colors"
               >
-                See your matches
+                Build your free profile
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -159,18 +162,25 @@ export default async function LandingPage() {
             </div>
           </div>
         </section>
+        <HomepageTrustStrip />
         {/* How it works */}
         <section id="how-it-works" className="below-fold border-t border-hairline bg-white">
           <ScrollReveal className="mx-auto max-w-4xl px-6 py-14 md:py-16">
-            <h2 className="font-display text-2xl font-semibold text-navy mb-10">
-              How Scholars works
-            </h2>
+            <div className="mb-10 max-w-2xl">
+              <h2 className="font-display text-2xl font-semibold text-navy">
+                How Scholars works
+              </h2>
+              <p className="mt-3 text-sm leading-relaxed text-navy-light">
+                In about five minutes, start with the details providers actually screen for, see your first useful matches, and come back later to improve your profile.
+              </p>
+            </div>
             <HowItWorksRotator />
           </ScrollReveal>
         </section>
         {/* Social proof: real consented student testimonials. Renders
             nothing until at least one row is consented and published. */}
         <TestimonialsSection />
+        <HomepageFaq />
       </main>
       <Footer />
     </div>
