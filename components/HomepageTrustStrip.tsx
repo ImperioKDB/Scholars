@@ -3,25 +3,21 @@ const TRUST_ITEMS = [
     number: "01",
     label: "Free for students",
     detail: "Create a profile and explore matches without paying.",
-    tone: "light",
   },
   {
     number: "02",
     label: "Verified listings",
     detail: "Each opportunity is checked before it goes live.",
-    tone: "paper",
   },
   {
     number: "03",
     label: "No paid placements",
     detail: "Providers cannot pay to improve a match or ranking.",
-    tone: "paper",
   },
   {
     number: "04",
     label: "Your decision stays yours",
     detail: "Scholars explains fit; the provider makes the final award decision.",
-    tone: "light",
   },
 ] as const;
 
@@ -45,7 +41,6 @@ export function HomepageTrustStrip() {
                 <p className="max-w-xs text-sm leading-relaxed text-white/70">
                   A clearer way to find scholarships, without paid shortcuts or a wall of irrelevant results.
                 </p>
-                <span aria-hidden="true" className="hidden font-mono text-5xl text-emerald-light/80 sm:block">04</span>
               </div>
             </div>
           </div>
@@ -54,10 +49,7 @@ export function HomepageTrustStrip() {
             {TRUST_ITEMS.map((item) => (
               <article
                 key={item.label}
-                className={[
-                  "group rounded-2xl border border-hairline p-5 transition-transform duration-200 hover:-translate-y-1 sm:p-6",
-                  item.tone === "light" ? "bg-white" : "bg-parchment",
-                ].join(" ")}
+                className="group rounded-2xl border border-hairline bg-white p-5 transition-transform duration-200 hover:-translate-y-1 sm:p-6"
               >
                 <div className="flex items-start justify-between gap-4">
                   <span className="font-mono text-xs tracking-widest text-emerald">{item.number}</span>
