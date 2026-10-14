@@ -39,7 +39,7 @@ type PublicScholarship = {
   provider_name: string;
   description: string | null;
   amount: string | null;
-  deadline: string;
+  deadline: string | null;
   level: "undergrad" | "postgrad" | "both";
   discipline: string | null;
   verified: boolean;
@@ -78,8 +78,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const description =
     scholarship.provider_name +
     (scholarship.amount ? " \u00b7 " + scholarship.amount : "") +
-    " \u00b7 Deadline " +
-    scholarship.deadline +
+    (scholarship.deadline ? " \u00b7 Deadline " + formatDeadline(scholarship.deadline) : "") +
     ". See if you qualify on Scholars.";
   const canonicalSlug = scholarship.slug || slug;
   const image = `${base}/scholarship/${canonicalSlug}/opengraph-image`;
@@ -143,9 +142,11 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
                 {scholarship.amount}
               </span>
             )}
-            <span className="text-xs font-medium text-rose bg-rose-light px-2.5 py-1 rounded-full">
-              Deadline {formatDeadline(scholarship.deadline)}
-            </span>
+            {scholarship.deadline && (
+              <span className="text-xs font-medium text-rose bg-rose-light px-2.5 py-1 rounded-full">
+                Deadline {formatDeadline(scholarship.deadline)}
+              </span>
+            )}
             <span className="text-xs text-navy-light px-1">
               {scholarship.level === "both" ? "Undergrad & postgrad" : scholarship.level}
               {scholarship.discipline ? " \u00b7 " + scholarship.discipline : ""}
