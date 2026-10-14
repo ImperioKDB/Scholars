@@ -23,7 +23,7 @@ const TRUST_ITEMS = [
 
 export function HomepageTrustStrip() {
   return (
-    <section aria-labelledby="trust-heading" className="border-y border-hairline bg-white">
+    <section aria-labelledby="trust-heading" className="border-y border-hairline bg-navy-50">
       <div className="mx-auto max-w-6xl px-5 py-12 sm:px-6 md:py-16">
         <div className="grid gap-5 lg:grid-cols-[0.82fr_1.18fr] lg:gap-6">
           <div className="relative overflow-hidden rounded-2xl bg-navy p-6 text-white sm:p-8 lg:min-h-[22rem] lg:p-10">
