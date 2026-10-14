@@ -214,10 +214,8 @@ export function Sidebar({
         <div className="ml-auto"><NotificationBell /></div>
       </header>
       <div
-        className={[
-          "md:hidden fixed inset-0 z-50 transition-opacity duration-200 motion-reduce:transition-none",
-          mobileOpen ? "opacity-100 pointer-events-auto" : "hidden opacity-0 pointer-events-none",
-        ].join(" ")}
+        className="student-menu-overlay md:hidden fixed inset-0 z-50"
+        data-open={mobileOpen}
         aria-hidden={!mobileOpen}
         inert={!mobileOpen}
       >
@@ -228,10 +226,7 @@ export function Sidebar({
           role="dialog"
           aria-modal="true"
           aria-label="Student navigation"
-          className={[
-            "absolute inset-y-0 left-0 w-80 max-w-[88%] bg-white flex flex-col shadow-card transition-transform duration-200 motion-reduce:transition-none motion-reduce:transform-none",
-            mobileOpen ? "translate-x-0" : "-translate-x-full",
-          ].join(" ")}
+          className="student-menu-panel absolute inset-y-0 left-0 w-80 max-w-[88%] bg-white flex flex-col shadow-card"
         >
           <div className="px-5 py-5 border-b border-hairline flex items-center justify-between">
             <Logo className="text-navy" />

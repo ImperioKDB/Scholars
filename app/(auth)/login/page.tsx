@@ -13,21 +13,18 @@ import { AuthConfirmation } from "@/components/AuthConfirmation";
 import { safeNextPath } from "@/lib/validate";
 import { AUTH_NEXT_COOKIE } from "@/components/AuthRescue";
 import { getAuthCookieDomain } from "@/lib/auth/cookie-domain";
+import { getAuthRedirectOrigin } from "@/lib/auth/redirect-origin";
 
 // AUTH SECURITY AUDIT (brute-force brake, client side): progressive
 // lockout stored in localStorage. UX-level only -- the real brakes are
 // Supabase's own server-side auth rate limits.
 const LOCK_KEY = "scholars_login_lockout";
 
-// REDIRECT FIX (test feedback): OAuth and confirmation redirects now use
-// the canonical app URL from NEXT_PUBLIC_APP_URL when set, instead of
-// whatever origin the browser happens to be on. A preview or stale custom
-// domain that isn't in Supabase's redirect allowlist gets silently
-// replaced by the Site URL (the homepage flash testers saw); pointing
-// every flow at the canonical origin keeps the allowlist match stable.
+// Keep OAuth on the host where an installed PWA was launched. Previews use
+// the configured production origin so Supabase allowlist matching stays stable.
 function appBase(): string {
   if (typeof window === "undefined") return process.env.NEXT_PUBLIC_APP_URL || "";
-  return process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+  return getAuthRedirectOrigin(window.location.origin, process.env.NEXT_PUBLIC_APP_URL);
 }
 function rememberAuthNext(next: string) {
   const domain = getAuthCookieDomain(window.location.hostname);

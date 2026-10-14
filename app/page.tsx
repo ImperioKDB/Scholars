@@ -8,6 +8,7 @@ import { DeadlineBadge } from "@/components/DeadlineBadge";
 import { HomepageInstallPrompt } from "@/components/HomepageInstallPrompt";
 import { HomepageTrustStrip } from "@/components/HomepageTrustStrip";
 import { HomepageFaq } from "@/components/HomepageFaq";
+import { ScrollReveal } from "@/components/ScrollReveal";
 import { createPublicClient } from "@/lib/supabase/public";
 import { isCurrentlyOpen } from "@/lib/discovery";
 import { todayUtcIso } from "@/lib/dates";
@@ -63,7 +64,7 @@ function levelLabel(level: LiveScholarship["level"]): string {
 export default async function LandingPage() {
   const live = await loadLiveScholarships();
   return (
-    <div className="min-h-screen overflow-y-auto motion-safe:scroll-smooth">
+    <div className="min-h-screen overflow-y-auto">
       <HomepageInstallPrompt />
       <header className="border-b border-hairline bg-parchment/95 backdrop-blur-sm">
         <div className="mx-auto max-w-6xl px-5 py-4 sm:px-6 sm:py-5 flex items-center justify-between">
@@ -164,7 +165,7 @@ export default async function LandingPage() {
         <HomepageTrustStrip />
         {/* How it works */}
         <section id="how-it-works" className="below-fold border-t border-hairline bg-white">
-          <div className="mx-auto max-w-4xl px-6 py-14 md:py-16">
+          <ScrollReveal className="mx-auto max-w-4xl px-6 py-14 md:py-16">
             <div className="mb-10 max-w-2xl">
               <h2 className="font-display text-2xl font-semibold text-navy">
                 How Scholars works
@@ -174,7 +175,7 @@ export default async function LandingPage() {
               </p>
             </div>
             <HowItWorksRotator />
-          </div>
+          </ScrollReveal>
         </section>
         {/* Social proof: real consented student testimonials. Renders
             nothing until at least one row is consented and published. */}

@@ -4,6 +4,8 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { StatusMessage } from "@/components/StatusMessage";
 import { DeadlineBadge } from "@/components/DeadlineBadge";
 import { SendIndependenceDayButton } from "@/components/admin/SendIndependenceDayButton";
+import { EmailBatchButtons } from "@/components/admin/EmailBatchButtons";
+import type { EmailBatch } from "@/lib/email/batches";
 import { buildListingBroadcastPushMessage } from "@/lib/push/broadcastContent";
 
 // app/admin/broadcast/page.tsx
@@ -63,7 +65,7 @@ export default function AdminBroadcastPage() {
   const [recipientCount, setRecipientCount] = useState<number | null>(null);
   const [pushRecipientCount, setPushRecipientCount] = useState<number | null>(null);
   const broadcastIdRef = useRef<string | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmBatch, setConfirmBatch] = useState<EmailBatch | null>(null);
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -129,7 +131,13 @@ export default function AdminBroadcastPage() {
     });
   }
 
+  function chooseBatch(batch: EmailBatch) {
+    broadcastIdRef.current = null;
+    setConfirmBatch(batch);
+  }
   async function send() {
+    if (!confirmBatch) return;
+    const batch = confirmBatch;
     setSending(true);
     setError(null);
     setNotice(null);
@@ -143,6 +151,7 @@ export default function AdminBroadcastPage() {
           scholarship_ids: [...selectedScholarships],
           opportunity_ids: [...selectedOpportunities],
           broadcast_id: broadcastId,
+          batch,
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -161,6 +170,7 @@ export default function AdminBroadcastPage() {
       broadcastIdRef.current = null;
       setSelectedScholarships(new Set());
       setSelectedOpportunities(new Set());
+      setConfirmBatch(null);
     } catch {
       setError("Network error. Check your connection and try again.");
     } finally {
@@ -170,12 +180,12 @@ export default function AdminBroadcastPage() {
 
   return (
     <div>
-      {confirmOpen && (
+      {confirmBatch && (
         <ConfirmDialog
-          message={`Send one email to ${recipientCount ?? "every"} registered email${recipientCount === 1 ? "" : "s"} and a push alert to ${pushRecipientCount == null ? "all opted-in push profiles" : `${pushRecipientCount} opted-in push profile${pushRecipientCount === 1 ? "" : "s"}`} about ${totalSelected} selected listing${totalSelected === 1 ? "" : "s"}? Email recipients stay unchanged; push is limited to profiles with active push devices. Push preview: "${pushPreview.title}" — "${pushPreview.body}" Opens ${pushPreview.url}.`}
+          message={`Send the selected listings by email and push to Batch ${confirmBatch} only? This is up to 300 students in the stable student order. Push preview: "${pushPreview.title}" — "${pushPreview.body}" Opens ${pushPreview.url}.`}
           onConfirm={send}
-          onClose={() => !sending && setConfirmOpen(false)}
-          confirmLabel="Send broadcast"
+          onClose={() => !sending && setConfirmBatch(null)}
+          confirmLabel={`Send Batch ${confirmBatch}`}
           cancelLabel="Cancel"
           tone="navy"
         />
@@ -286,14 +296,7 @@ export default function AdminBroadcastPage() {
           <StatusMessage tone="success">{notice}</StatusMessage>
           <StatusMessage tone="error">{error}</StatusMessage>
 
-          <button
-            type="button"
-            onClick={() => setConfirmOpen(true)}
-            disabled={totalSelected === 0 || sending}
-            className="rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60"
-          >
-            {sending ? "Sending\u2026" : `Send to ${recipientCount ?? "all"} emails + ${pushRecipientCount ?? "all opted-in"} push profiles`}
-          </button>
+          <EmailBatchButtons onSelect={chooseBatch} disabled={totalSelected === 0 || sending} />
         </>
       )}
       {loading && <p className="text-sm text-navy-light">Loading&hellip;</p>}

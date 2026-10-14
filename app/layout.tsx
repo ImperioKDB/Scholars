@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Fraunces, Manrope } from "next/font/google";
+import localFont from "next/font/local";
 import { AuthRescue } from "@/components/AuthRescue";
 import { CookieConsent } from "@/components/CookieConsent";
 import { InstallAppPrompt } from "@/components/InstallAppPrompt";
@@ -7,17 +7,20 @@ import { Monitoring } from "@/components/Monitoring";
 import "./globals.css";
 import "./motion.css";
 
-const fraunces = Fraunces({
-  subsets: ["latin"],
+const fraunces = localFont({
+  src: [
+    { path: "./fonts/fraunces-latin.woff2", weight: "500 700", style: "normal" },
+    { path: "./fonts/fraunces-italic-latin.woff2", weight: "500 700", style: "italic" },
+  ],
   variable: "--font-fraunces",
-  weight: ["500", "600", "700"],
-  style: ["normal", "italic"],
+  display: "swap",
 });
 
-const manrope = Manrope({
-  subsets: ["latin"],
+const manrope = localFont({
+  src: "./fonts/manrope-latin.woff2",
+  weight: "400 700",
   variable: "--font-manrope",
-  weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {

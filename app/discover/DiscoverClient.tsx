@@ -1,5 +1,6 @@
 "use client";
 import { StatusMessage } from "@/components/StatusMessage";
+import { ScrollReveal } from "@/components/ScrollReveal";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ScholarshipCard, type CardScholarship } from "@/components/ScholarshipCard";
@@ -191,11 +192,11 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
       ) : (
         <>
           {openNowItems.length > 0 && (
-            <div data-tour="scholarships-list" className="grid md:grid-cols-2 gap-4">
+            <ScrollReveal data-tour="scholarships-list" className="grid md:grid-cols-2 gap-4">
               {openNowItems.map((s) => (
                 <ScholarshipCard key={s.id} scholarship={s} saved={savedIds.has(s.id)} pending={pendingIds.has(s.id)} onToggleSave={() => toggleSave(s.id)} sharerId={userId} />
               ))}
-            </div>
+            </ScrollReveal>
           )}
           {comingSoonItems.length > 0 && (
             <div className="mt-10">
@@ -203,11 +204,11 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
               <p className="text-sm text-navy-light mb-4">
                 Verified scholarships that aren&apos;t accepting applications yet. Save one to keep it on your radar.
               </p>
-              <div className="below-fold grid md:grid-cols-2 gap-4">
+              <ScrollReveal className="below-fold grid md:grid-cols-2 gap-4">
                 {comingSoonItems.map((s) => (
                   <ScholarshipCard key={s.id} scholarship={s} saved={savedIds.has(s.id)} pending={pendingIds.has(s.id)} onToggleSave={() => toggleSave(s.id)} sharerId={userId} />
                 ))}
-              </div>
+              </ScrollReveal>
             </div>
           )}
           {loading && (

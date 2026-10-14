@@ -36,15 +36,11 @@ const config: Config = {
         hairline: "#E4E1D8",
       },
       fontFamily: {
-        display: ["var(--font-fraunces)", "Georgia", "serif"],
-        // sans and mono both point at Manrope now (see app/layout.tsx for
-        // why) -- "mono" no longer means monospace, it means "the data/
-        // label emphasis face," same role IBM Plex Mono used to fill.
-        // Kept as a separate token rather than merged into `sans` so any
-        // component still using `font-mono` for that emphasis role reads
-        // the same as before without needing to change.
-        sans: ["var(--font-manrope)", "system-ui", "sans-serif"],
-        mono: ["var(--font-manrope)", "ui-monospace", "monospace"],
+        // Prefer bundled Fraunces/Manrope variables from app/layout.tsx, with
+        // safe system fallbacks if a font asset cannot be loaded.
+        display: ["var(--font-fraunces, Georgia)", "serif"],
+        sans: ["var(--font-manrope, system-ui)", "sans-serif"],
+        mono: ["var(--font-manrope, ui-monospace)", "monospace"],
       },
       borderRadius: {
         seal: "9999px",

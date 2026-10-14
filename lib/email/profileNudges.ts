@@ -51,10 +51,11 @@ import { logError } from '@/lib/logging'
 import { renderProfileNudge } from '@/lib/email/template'
 import { sendEmail } from '@/lib/email/send'
 import { claimNotificationDelivery, markNotificationAccepted, markNotificationRetryable } from '@/lib/email/outbox'
+import { selectEmailBatch, type EmailBatch } from '@/lib/email/batches'
 export const PROFILE_NUDGE_INTERVAL_MS =
 Number(process.env.PROFILE_REMINDER_INTERVAL_DAYS ?? 2) * 86400000
 export const PROFILE_NUDGE_MAX_SENDS = Number(process.env.PROFILE_REMINDER_MAX_SENDS ?? 5)
-export const PROFILE_NUDGE_BATCH = 200
+export const PROFILE_NUDGE_BATCH = 300
 // Override sends page through the whole incomplete base at this size per
 // press. Brevo calls are sequential (~0.2-0.5s each), so 1000 is roughly
 // the ceiling the route's 300s maxDuration absorbs; anything beyond it is
@@ -129,7 +130,7 @@ const t = Date.parse(p.profile_reminder_last_sent_at)
 return Number.isNaN(t) ? -1 : t
 }
 export async function runProfileNudges(
-opts: { minIntervalMs?: number; enforceSendWindow?: boolean; ignoreCap?: boolean; manual?: boolean } = {}
+opts: { minIntervalMs?: number; enforceSendWindow?: boolean; ignoreCap?: boolean; manual?: boolean; batch?: EmailBatch } = {}
 ): Promise<ProfileNudgeSummary> {
 const minIntervalMs = opts.minIntervalMs ?? PROFILE_NUDGE_INTERVAL_MS
 const enforceSendWindow = opts.enforceSendWindow ?? false
@@ -178,11 +179,12 @@ const { data: rows, error: rowsError } = await supabase
 .lt('profile_completeness', 100)
 if (rowsError) throw rowsError
 const cutoffMs = Date.now() - minIntervalMs
-const eligible = ((rows ?? []) as unknown as ProfileRow[])
+let eligible = ((rows ?? []) as unknown as ProfileRow[])
 .filter((r) => (ignoreCap ? true : (r.profile_reminder_count ?? 0) < PROFILE_NUDGE_MAX_SENDS))
 .filter((r) => lastSentMs(r) < cutoffMs)
-.sort((a, b) => lastSentMs(a) - lastSentMs(b))
-.slice(0, ignoreCap ? PROFILE_NUDGE_FORCE_BATCH : PROFILE_NUDGE_BATCH)
+.sort((a, b) => a.id.localeCompare(b.id))
+const batchEligible = selectEmailBatch(eligible, opts.batch)
+eligible = batchEligible.slice(0, opts.batch ? 300 : (ignoreCap ? PROFILE_NUDGE_FORCE_BATCH : PROFILE_NUDGE_BATCH))
 // Emails come from auth (the authoritative source) via the service role,
 // paginated, so the pass never depends on a denormalized email column
 // existing on profiles or staying in sync with sign-in changes.

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createPublicClient } from "@/lib/supabase/public";
 import { TestimonialsRotator, type TestimonialItem } from "@/components/TestimonialsRotator";
+import { ScrollReveal } from "@/components/ScrollReveal";
 
 // components/TestimonialsSection.tsx
 // Server wrapper for the landing-page social proof band. Product decision:
@@ -27,7 +28,7 @@ export async function TestimonialsSection() {
   const hasMore = all.length > HOMEPAGE_COUNT;
   return (
     <section className="below-fold border-t border-hairline bg-grain">
-      <div className="mx-auto max-w-4xl px-6 py-14 md:py-16">
+      <ScrollReveal className="mx-auto max-w-4xl px-6 py-14 md:py-16">
         <h2 className="font-display text-2xl md:text-3xl font-semibold text-navy mb-8">
           What students say
         </h2>
@@ -45,7 +46,7 @@ export async function TestimonialsSection() {
             </Link>
           </div>
         )}
-      </div>
+      </ScrollReveal>
     </section>
   );
 }

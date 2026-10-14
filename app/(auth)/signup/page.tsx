@@ -13,14 +13,11 @@ import { normalizeEmail } from "@/lib/auth/email";
 import { safeNextPath } from "@/lib/validate";
 import { AUTH_NEXT_COOKIE } from "@/components/AuthRescue";
 import { getAuthCookieDomain } from "@/lib/auth/cookie-domain";
+import { getAuthRedirectOrigin } from "@/lib/auth/redirect-origin";
 
-// REDIRECT FIX (test feedback): same canonical-origin rule as the login
-// page, applied to both the Google OAuth redirectTo and the email
-// confirmation emailRedirectTo, so neither flow can be bounced to the
-// Supabase Site URL (homepage) by allowlist drift.
 function appBase(): string {
   if (typeof window === "undefined") return process.env.NEXT_PUBLIC_APP_URL || "";
-  return process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+  return getAuthRedirectOrigin(window.location.origin, process.env.NEXT_PUBLIC_APP_URL);
 }
 function rememberAuthNext(next: string) {
   const domain = getAuthCookieDomain(window.location.hostname);
