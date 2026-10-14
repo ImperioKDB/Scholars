@@ -6,15 +6,15 @@ afterEach(() => {
 });
 
 describe("PWA manifest origin", () => {
-  it("uses the canonical production origin for the app id, launch URL, and scope", () => {
+  it("keeps production installs on the host that served the manifest", () => {
     vi.stubEnv("VERCEL_ENV", "production");
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://www.scholars.com.ng/");
 
     const result = manifest();
 
-    expect(result.id).toBe("https://www.scholars.com.ng/");
-    expect(result.start_url).toBe("https://www.scholars.com.ng/dashboard");
-    expect(result.scope).toBe("https://www.scholars.com.ng/");
+    expect(result.id).toBe("/");
+    expect(result.start_url).toBe("/dashboard");
+    expect(result.scope).toBe("/");
   });
 
   it("keeps development and preview installs on their own origin", () => {

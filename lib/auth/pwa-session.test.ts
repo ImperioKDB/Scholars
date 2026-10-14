@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { mergeSupabaseSessionCookies } from "./pwa-session";
+import {
+  getSupabaseSessionCookieNames,
+  mergeSupabaseSessionCookies,
+} from "./pwa-session";
 
 describe("Supabase session cookies for legacy PWA origin migration", () => {
   it("keeps the base session cookie and every numbered chunk only", () => {
@@ -25,6 +28,20 @@ describe("Supabase session cookies for legacy PWA origin migration", () => {
         [{ name: "sb-project123-auth-token.0", value: "refreshed" }]
       )
     ).toEqual([{ name: "sb-project123-auth-token.0", value: "refreshed" }]);
+  });
+
+  it("lists every session chunk for host-only cleanup without PKCE cookies", () => {
+    expect(
+      getSupabaseSessionCookieNames([
+        { name: "sb-project123-auth-token", value: "base" },
+        { name: "sb-project123-auth-token.0", value: "chunk-0" },
+        { name: "sb-project123-auth-token-code-verifier", value: "pkce" },
+        { name: "scholars_auth_next", value: "/dashboard" },
+      ])
+    ).toEqual([
+      "sb-project123-auth-token",
+      "sb-project123-auth-token.0",
+    ]);
   });
 
   it("retains empty refreshed chunks so deleted cookies are cleared", () => {

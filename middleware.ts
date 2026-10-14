@@ -2,7 +2,10 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { COOKIE_NAMES, REF_COOKIE_MAX_AGE_S } from "@/lib/config";
 import { getAuthCookieDomain } from "@/lib/auth/cookie-domain";
-import { mergeSupabaseSessionCookies } from "@/lib/auth/pwa-session";
+import {
+  getSupabaseSessionCookieNames,
+  mergeSupabaseSessionCookies,
+} from "@/lib/auth/pwa-session";
 
 const PROTECTED_PREFIXES = [
   "/dashboard",
@@ -29,6 +32,21 @@ function hardened(options: CookieOptions): CookieOptions {
 
 function adminMfaRequired(): boolean {
   return process.env.REQUIRE_ADMIN_MFA === "true";
+}
+
+const AUTH_COOKIE_SCOPE_MARKER = "scholars_auth_cookie_scope_v1";
+const AUTH_COOKIE_SCOPE_MAX_AGE = 400 * 24 * 60 * 60;
+
+function expireHostOnlySessionCookies(
+  response: NextResponse,
+  cookieNames: readonly string[]
+) {
+  for (const name of new Set(cookieNames)) {
+    response.headers.append(
+      "Set-Cookie",
+      `${name}=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; SameSite=Lax`
+    );
+  }
 }
 
 export async function middleware(request: NextRequest) {
@@ -84,6 +102,11 @@ export async function middleware(request: NextRequest) {
   }
 
   let response = NextResponse.next({ request: { headers: request.headers } });
+  const authCookieDomain =
+    process.env.VERCEL_ENV === "production"
+      ? getAuthCookieDomain(hostname)
+      : undefined;
+  const hostOnlyCookiesToExpire = new Set<string>();
   const pendingCookieMutations = new Map<
     string,
     { value: string; options: CookieOptions }
@@ -104,9 +127,7 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookieOptions: {
-        ...(process.env.VERCEL_ENV === "production"
-          ? { domain: getAuthCookieDomain("www.scholars.com.ng") }
-          : {}),
+        ...(authCookieDomain ? { domain: authCookieDomain } : {}),
       },
       cookies: {
         get(name: string) {
@@ -124,51 +145,10 @@ export async function middleware(request: NextRequest) {
 
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
   const isProtected = PROTECTED_PREFIXES.some((prefix) => path.startsWith(prefix));
   const isAuthPage = AUTH_PREFIXES.some((prefix) => path.startsWith(prefix));
-
-  // Keep launches on the canonical www origin used by the PWA manifest and
-  // OAuth callback. Older apex installs can migrate their validated session
-  // once; canonical www installs must never be redirected out of their scope.
-  if (
-    process.env.VERCEL_ENV === "production" &&
-    hostname === "scholars.com.ng" &&
-    (path === "/" || isProtected || isAuthPage)
-  ) {
-    const canonicalUrl = new URL(request.url);
-    canonicalUrl.hostname = "www.scholars.com.ng";
-    const redirectResponse = NextResponse.redirect(canonicalUrl);
-    if (user) {
-      const migratedCookies = mergeSupabaseSessionCookies(
-        request.cookies.getAll(),
-        response.cookies.getAll()
-      );
-      const cookieDomain = getAuthCookieDomain(hostname);
-      if (cookieDomain) {
-        for (const cookie of migratedCookies) {
-          // Remove any old apex-only copy, then reissue the validated session
-          // cookie at the shared Scholars domain so the canonical PWA can read
-          // it. Supabase still validates every use.
-          // Next's cookie helper indexes by cookie name and would collapse
-          // the host-only expiry into the Domain cookie below. Append the
-          // expiry separately so both scopes are updated in the same redirect.
-          redirectResponse.headers.append(
-            "Set-Cookie",
-            `${cookie.name}=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; SameSite=Lax`
-          );
-          redirectResponse.cookies.set(cookie.name, cookie.value, {
-            domain: cookieDomain,
-            path: "/",
-            maxAge: cookie.value ? 400 * 24 * 60 * 60 : 0,
-            sameSite: "lax",
-            secure: true,
-          });
-        }
-      }
-    }
-    return redirectResponse;
-  }
 
   if (path.startsWith("/api/admin")) {
     if (!user) {
@@ -197,7 +177,16 @@ export async function middleware(request: NextRequest) {
   if (isProtected && !user) {
     const redirectUrl = new URL("/login", request.url);
     redirectUrl.searchParams.set("next", path + request.nextUrl.search);
-    return NextResponse.redirect(redirectUrl);
+    const redirectResponse = NextResponse.redirect(redirectUrl);
+    // Remove only an invalid host-only copy. A valid parent-domain cookie is
+    // left untouched so the browser can retry it on the login request.
+    if (authCookieDomain && (!authError || authError.status === 401)) {
+      expireHostOnlySessionCookies(
+        redirectResponse,
+        getSupabaseSessionCookieNames(request.cookies.getAll())
+      );
+    }
+    return redirectResponse;
   }
   // Older installed PWAs launch at `/`. If the persisted Supabase session is
   // present, take the user directly to the dashboard instead of the public
@@ -208,8 +197,53 @@ export async function middleware(request: NextRequest) {
   if (isAuthPage && user) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
+  if (authCookieDomain && isProtected && user) {
+    const requestSessionCookieNames = getSupabaseSessionCookieNames(
+      request.cookies.getAll()
+    );
+    if (request.cookies.get(AUTH_COOKIE_SCOPE_MARKER)?.value !== "1") {
+      const requestSessionCookies = requestSessionCookieNames.map((name) => ({
+        name,
+        value: request.cookies.get(name)?.value ?? "",
+      }));
+      const sessionCookies = mergeSupabaseSessionCookies(
+        requestSessionCookies,
+        response.cookies.getAll()
+      );
+      for (const cookie of sessionCookies) {
+        applyCookieMutation(cookie.name, cookie.value, {
+          domain: authCookieDomain,
+          path: "/",
+          maxAge: cookie.value ? AUTH_COOKIE_SCOPE_MAX_AGE : 0,
+          sameSite: "lax",
+          secure: true,
+        });
+      }
+      for (const name of requestSessionCookieNames) {
+        hostOnlyCookiesToExpire.add(name);
+      }
+      response.cookies.set(AUTH_COOKIE_SCOPE_MARKER, "1", {
+        path: "/",
+        maxAge: AUTH_COOKIE_SCOPE_MAX_AGE,
+        sameSite: "lax",
+        secure: true,
+        httpOnly: true,
+      });
+    }
+  }
+  if (
+    authCookieDomain &&
+    isAuthPage &&
+    !user &&
+    authError?.status === 401
+  ) {
+    for (const name of getSupabaseSessionCookieNames(request.cookies.getAll())) {
+      hostOnlyCookiesToExpire.add(name);
+    }
+  }
   const attributionHeader = attributionResponse.cookies.get(COOKIE_NAMES.ATTRIBUTION);
   if (attributionHeader) response.cookies.set(attributionHeader);
+  expireHostOnlySessionCookies(response, [...hostOnlyCookiesToExpire]);
   return response;
 }
 

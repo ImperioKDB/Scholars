@@ -4,6 +4,18 @@ export type SessionCookie = Readonly<{ name: string; value: string }>;
 // migrate unrelated sb-* cookies such as PKCE code verifiers or app cookies.
 const SUPABASE_SESSION_COOKIE = /^sb-[a-z0-9]+-auth-token(?:\.\d+)?$/i;
 
+export function getSupabaseSessionCookieNames(
+  ...cookieLists: ReadonlyArray<ReadonlyArray<SessionCookie>>
+): string[] {
+  const names = new Set<string>();
+  for (const cookieList of cookieLists) {
+    for (const cookie of cookieList) {
+      if (SUPABASE_SESSION_COOKIE.test(cookie.name)) names.add(cookie.name);
+    }
+  }
+  return [...names];
+}
+
 export function mergeSupabaseSessionCookies(
   ...cookieLists: ReadonlyArray<ReadonlyArray<SessionCookie>>
 ): SessionCookie[] {
