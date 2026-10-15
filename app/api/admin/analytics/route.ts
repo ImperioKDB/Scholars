@@ -4,7 +4,7 @@ import { assertAdmin } from "@/lib/admin/guard";
 import { getAutonomousFixLogs } from "@/lib/admin/fix-log";
 import { getProviderAnalyticsWindow, parseProviderAnalyticsRange } from "@/lib/provider-analytics";
 
-const REPORTS = new Set(["growth", "funnel", "retention", "provider", "fixes"]);
+const REPORTS = new Set(["growth", "funnel", "retention", "provider", "visitors", "fixes"]);
 
 function parseDate(value: string | null, fallback: Date): Date | null {
   if (!value) return fallback;
@@ -54,6 +54,19 @@ export async function GET(request: Request) {
   const until = untilDate.toISOString();
   const scholarshipId = scholarshipParam || null;
 
+  if (report === "visitors") {
+    const { data, error } = await supabase.rpc("get_daily_visitor_metrics", { p_since: since, p_until: until });
+    if (error) return NextResponse.json({ error: "Visitor analytics unavailable" }, { status: 500 });
+    const payload = data ?? {};
+    const rows = payload.daily?.length ? payload.daily : [{ message: "No visitor data in this period" }];
+    return new NextResponse(csv(rows), {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": 'attachment; filename="scholars-daily-visitors.csv"',
+        "Cache-Control": "private, no-store",
+      },
+    });
+  }
   if (report === "fixes") {
     const [{ data: errors }, fixLogs] = await Promise.all([
       supabase
