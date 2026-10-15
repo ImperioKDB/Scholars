@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -73,6 +73,33 @@ function LoginForm() {
   const [confirmationEmail, setConfirmationEmail] = useState<string | null>(null);
   const cleanEmail = normalizeEmail(email);
   const next = safeNextPath(searchParams.get("next"), "/dashboard");
+
+  // Middleware is the first line of defense, but an installed PWA can
+  // occasionally reach this page before its browser cookie state has been
+  // refreshed. Check the browser's persisted Supabase session as a fallback
+  // so a still-valid session returns straight to the requested app page.
+  const sessionRedirected = useRef(false);
+  useEffect(() => {
+    let active = true;
+    const redirectIfSignedIn = (hasSession: boolean) => {
+      if (!active || !hasSession || sessionRedirected.current) return;
+      sessionRedirected.current = true;
+      router.replace(next);
+      router.refresh();
+    };
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (_event, session) => redirectIfSignedIn(Boolean(session))
+    );
+    void supabase.auth.getSession().then(({ data, error: sessionError }) => {
+      if (!sessionError) redirectIfSignedIn(Boolean(data.session));
+    }).catch(() => {
+      // Keep the normal sign-in form available if browser storage is blocked.
+    });
+    return () => {
+      active = false;
+      authListener.subscription.unsubscribe();
+    };
+  }, [next, router, supabase]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
