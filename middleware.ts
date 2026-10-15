@@ -175,6 +175,21 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isProtected && !user) {
+    if (process.env.VERCEL_ENV === "production" && path === "/dashboard") {
+      const sessionCookieCount = getSupabaseSessionCookieNames(
+        request.cookies.getAll()
+      ).length;
+      console.info(
+        "[pwa-auth-diagnostic]",
+        JSON.stringify({
+          hostname,
+          route: path,
+          sessionCookieCount,
+          authErrorStatus: authError?.status ?? null,
+          authErrorCode: authError?.code ?? null,
+        })
+      );
+    }
     const redirectUrl = new URL("/login", request.url);
     redirectUrl.searchParams.set("next", path + request.nextUrl.search);
     const redirectResponse = NextResponse.redirect(redirectUrl);
