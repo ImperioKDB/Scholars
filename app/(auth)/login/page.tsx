@@ -76,8 +76,9 @@ function LoginForm() {
 
   // Middleware is the first line of defense, but an installed PWA can
   // occasionally reach this page before its browser cookie state has been
-  // refreshed. Check the browser's persisted Supabase session as a fallback
-  // so a still-valid session returns straight to the requested app page.
+  // refreshed. Ask Supabase to validate the user rather than trusting the
+  // locally cached session, so a rejected session cannot bounce back into the
+  // protected route.
   const sessionRedirected = useRef(false);
   useEffect(() => {
     let active = true;
@@ -90,8 +91,8 @@ function LoginForm() {
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (_event, session) => redirectIfSignedIn(Boolean(session))
     );
-    void supabase.auth.getSession().then(({ data, error: sessionError }) => {
-      if (!sessionError) redirectIfSignedIn(Boolean(data.session));
+    void supabase.auth.getUser().then(({ data, error: userError }) => {
+      if (!userError) redirectIfSignedIn(Boolean(data.user));
     }).catch(() => {
       // Keep the normal sign-in form available if browser storage is blocked.
     });

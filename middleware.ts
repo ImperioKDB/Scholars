@@ -17,6 +17,10 @@ const PROTECTED_PREFIXES = [
   "/admin",
   "/scholarships",
   "/settings",
+  "/achievements",
+  "/notifications",
+  "/community",
+  "/reviews",
 ];
 const AUTH_PREFIXES = ["/login", "/signup"];
 const REF_UUID_RE =
@@ -136,17 +140,33 @@ export async function middleware(request: NextRequest) {
         set(name: string, value: string, options: CookieOptions) {
           applyCookieMutation(name, value, options);
         },
-        remove(name: string, options: CookieOptions) {
-          applyCookieMutation(name, "", options);
+        remove(_name: string, _options: CookieOptions) {
+          // Supabase may ask to remove cookies after a transient refresh
+          // failure. Keep the browser's existing session intact; only the
+          // explicit 401/session-invalid branch below expires host-only
+          // cookies.
         },
       },
     }
   );
 
+  async function getUserWithRetry() {
+    const first = await supabase.auth.getUser();
+    const error = first.error;
+    const retryable = Boolean(
+      error &&
+        (error.name === "AuthRetryableFetchError" ||
+          error.status === undefined ||
+          error.status === 0 ||
+          error.status >= 500)
+    );
+    if (!retryable) return first;
+    return supabase.auth.getUser();
+  }
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser();
+  } = await getUserWithRetry();
   const isProtected = PROTECTED_PREFIXES.some((prefix) => path.startsWith(prefix));
   const isAuthPage = AUTH_PREFIXES.some((prefix) => path.startsWith(prefix));
 
@@ -195,7 +215,7 @@ export async function middleware(request: NextRequest) {
     const redirectResponse = NextResponse.redirect(redirectUrl);
     // Remove only an invalid host-only copy. A valid parent-domain cookie is
     // left untouched so the browser can retry it on the login request.
-    if (authCookieDomain && (!authError || authError.status === 401)) {
+    if (authCookieDomain && authError?.status === 401) {
       expireHostOnlySessionCookies(
         redirectResponse,
         getSupabaseSessionCookieNames(request.cookies.getAll())
@@ -275,6 +295,10 @@ export const config = {
     "/api/admin/:path*",
     "/scholarships/:path*",
     "/settings/:path*",
+    "/achievements/:path*",
+    "/notifications/:path*",
+    "/community/:path*",
+    "/reviews/:path*",
     "/s/:path*",
     "/o/:path*",
     "/scholarship/:path*",

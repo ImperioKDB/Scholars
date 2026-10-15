@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { AdeShell } from "@/components/ade/AdeShell";
 import { Sidebar } from "@/components/Sidebar";
 import { NotificationInbox } from "@/components/NotificationInbox";
@@ -7,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function NotificationsPage() {
   const { user, profile } = await getCurrentUserAndProfile();
+  if (!user) redirect("/login?next=%2Fnotifications");
   return (
     <AdeShell>
       <div className="min-h-screen bg-parchment">

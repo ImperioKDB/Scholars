@@ -1,5 +1,5 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { getAuthCookieDomain } from "@/lib/auth/cookie-domain";
 
 // Server-side client using the anon key, respects the caller's session (RLS applies).
@@ -18,6 +18,14 @@ import { getAuthCookieDomain } from "@/lib/auth/cookie-domain";
 //     browser token still only sees what RLS allows that user.
 export function createClient() {
   const cookieStore = cookies();
+  const requestHeaders = headers();
+  const requestHost = (
+    requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? ""
+  ).split(",")[0].trim().split(":")[0].toLowerCase();
+  const authCookieDomain =
+    process.env.VERCEL_ENV === "production"
+      ? getAuthCookieDomain(requestHost)
+      : undefined;
   const hardened = (options: CookieOptions): CookieOptions => ({
     ...options,
     sameSite: "lax",
@@ -28,9 +36,7 @@ export function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookieOptions: {
-        ...(process.env.VERCEL_ENV === "production"
-          ? { domain: getAuthCookieDomain("www.scholars.com.ng") }
-          : {}),
+        ...(authCookieDomain ? { domain: authCookieDomain } : {}),
       },
       cookies: {
         get(name: string) {
