@@ -56,6 +56,16 @@ function expireHostOnlySessionCookies(
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const hostname = request.nextUrl.hostname.toLowerCase();
+  if (
+    process.env.VERCEL_ENV === "production" &&
+    (hostname === "scholars.com.ng" || hostname === "scholars-eight.vercel.app")
+  ) {
+    const canonicalUrl = new URL(
+      request.nextUrl.pathname + request.nextUrl.search,
+      "https://www.scholars.com.ng"
+    );
+    return NextResponse.redirect(canonicalUrl, 308);
+  }
   const attributionResponse = NextResponse.next();
   const attributionCookie = request.cookies.get(COOKIE_NAMES.ATTRIBUTION)?.value;
   const params = request.nextUrl.searchParams;
