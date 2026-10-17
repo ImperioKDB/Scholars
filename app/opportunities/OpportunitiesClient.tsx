@@ -3,6 +3,7 @@ import { StatusMessage } from "@/components/StatusMessage";
 import { ScrollReveal } from "@/components/ScrollReveal";
 import { useEffect, useRef, useState } from "react";
 import { OpportunityCard, type CardOpportunity } from "@/components/OpportunityCard";
+import { OpportunityGridSkeleton } from "@/components/OpportunityGridSkeleton";
 import { OPPORTUNITY_TYPE_OPTIONS } from "@/lib/admin/opportunity";
 import { fetchWithTimeout } from "@/lib/fetch";
 
@@ -200,7 +201,12 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
           </button>
         </StatusMessage>
       )}
-      {!loading && items.length === 0 && !loadError ? (
+      {loading && items.length === 0 ? (
+        <div className="mb-12" role="status" aria-live="polite" aria-busy="true" aria-label="Loading opportunities">
+          <span className="sr-only">Loading opportunities</span>
+          <OpportunityGridSkeleton />
+        </div>
+      ) : !loading && items.length === 0 && !loadError ? (
         <div className="bg-white rounded-xl border border-hairline p-8 text-center mb-12">
           <p className="text-sm text-navy-light">
             No opportunities match that search. Try fewer filters or a different keyword.
@@ -219,7 +225,11 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
               />
             ))}
           </ScrollReveal>
-          {loading && <p className="text-sm text-navy-light mb-12" aria-live="polite">Loading&hellip;</p>}
+          {loading && items.length > 0 && (
+            <p className="text-sm text-navy-light mb-12" role="status" aria-live="polite">
+              Updating opportunities&hellip;
+            </p>
+          )}
           {!loading && hasMore && (
             <div className="mb-12 text-center">
               <button
