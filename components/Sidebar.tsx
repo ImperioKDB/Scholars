@@ -40,7 +40,7 @@ import {
 } from "@/components/icons";
 const MOBILE_TABS = [
   { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
-  { href: "/discover", label: "Browse", Icon: DiscoverIcon },
+  { href: "/opportunities", label: "Opportunities", Icon: OpportunitiesIcon },
   { href: "/applications", label: "Applications", Icon: ApplicationsIcon },
   { href: "/settings", label: "Profile", Icon: SettingsIcon },
 ];
