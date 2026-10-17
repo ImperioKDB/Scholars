@@ -35,7 +35,7 @@ const querySchema = z.object({
 })
 
 const OPPORTUNITY_COLUMNS =
-  'id, type, title, provider_name, duration, location, compensation, discipline, deadline, opens_at, application_url, how_to_apply, verified'
+  'id, type, title, provider_name, description, eligibility_notes, duration, location, compensation, discipline, deadline, opens_at, application_url, how_to_apply, verified, slug'
 
 export async function GET(request: Request) {
   const supabase = await createClient()

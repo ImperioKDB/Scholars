@@ -59,7 +59,10 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
     params.set("limit", String(PAGE_SIZE));
     params.set("offset", String(offset));
     try {
-      const res = await fetchWithTimeout("/api/opportunities?" + params.toString(), { signal: controller.signal });
+      const res = await fetchWithTimeout("/api/opportunities?" + params.toString(), {
+        signal: controller.signal,
+        cache: "no-store",
+      });
       if (requestId !== requestIdRef.current) return;
       if (!res.ok) {
         setLoadError("Couldn't load opportunities. Try again.");
