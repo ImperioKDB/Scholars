@@ -6,7 +6,8 @@ import { createPublicClient } from "@/lib/supabase/public";
 import { formatVerifiedOn, todayUtcIso } from "@/lib/dates";
 import { Breadcrumbs, SeoJsonLd } from "@/components/SeoJsonLd";
 import { ScholarshipCommunity } from "@/components/ScholarshipCommunity";
-import { loadScholarshipCommunity } from "@/lib/scholarship-community";
+import { EMPTY_SOCIAL_PROOF, loadScholarshipCommunity } from "@/lib/scholarship-community";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/validate";
 // app/scholarship/[slug]/page.tsx
 // GET /s/[id] -- public, unauthenticated share landing page for a single
@@ -20,6 +21,7 @@ import { isUuid } from "@/lib/validate";
 // WhatsApp previews fast and off the database. This route is eligible for
 // ISR because it reads through the cookie-free public client only.
 export const revalidate = 300;
+export const dynamic = "force-dynamic";
 // Shows only facts every visitor can honestly see: title, provider,
 // amount, deadline, description, and (Push C) when a human last checked
 // the listing. NEVER a match score or eligibility status -- those are
@@ -121,7 +123,12 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
   if (!scholarship) {
     notFound();
   }
-  const community = await loadScholarshipCommunity(createPublicClient(), scholarship.id);
+  const { data: { user } } = await createServerClient().auth.getUser();
+  const isSignedIn = Boolean(user);
+  const loadedCommunity = await loadScholarshipCommunity(createPublicClient(), scholarship.id);
+  const community = isSignedIn
+    ? loadedCommunity
+    : { ...loadedCommunity, discussions: [], socialProof: EMPTY_SOCIAL_PROOF };
   const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
   const publicUrl = `${base}/scholarship/${scholarship.slug || slug}`;
   return (
@@ -201,7 +208,7 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
             initialDiscussions={community.discussions}
             prompts={community.prompts}
             socialProof={community.socialProof}
-            canInteract={false}
+            canInteract={isSignedIn}
           />
         </div>
         <SeoJsonLd

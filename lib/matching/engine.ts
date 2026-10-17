@@ -8,6 +8,7 @@ import type {
   ScholarshipRow,
   ScholarshipRule,
 } from "./types";
+import { disciplineRequirementMatches } from "./discipline";
 
 // Fields the engine can actually check against the profiles schema (plus
 // the derived `age` field, computed from date_of_birth at evaluation time
@@ -172,6 +173,19 @@ function evaluateOperator(
   }
 }
 
+function evaluateDisciplineOperator(
+  operator: RuleOperator,
+  profileValue: string,
+  ruleValue: unknown
+): boolean {
+  if (operator === "eq") return disciplineRequirementMatches(profileValue, ruleValue);
+  if (operator === "in") {
+    const values = Array.isArray(ruleValue) ? ruleValue : [ruleValue];
+    return values.some((value) => disciplineRequirementMatches(profileValue, value));
+  }
+  return evaluateOperator(operator, profileValue, ruleValue);
+}
+
 function evaluateRule(
   field: string,
   operator: RuleOperator,
@@ -230,7 +244,9 @@ function evaluateRule(
   const met =
     field === "discipline" && operator === "eq" && isOpenDiscipline(value)
       ? true
-      : evaluateOperator(operator, profileValue as string | number | boolean, value);
+      : field === "discipline"
+        ? evaluateDisciplineOperator(operator, String(profileValue), value)
+        : evaluateOperator(operator, profileValue as string | number | boolean, value);
   const shownValue = displayValue(field, profileValue);
 
   return {

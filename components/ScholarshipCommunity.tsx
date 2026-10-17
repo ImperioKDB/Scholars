@@ -307,11 +307,13 @@ export function ScholarshipCommunity({
         )}
       </div>
 
-      <div className="mt-4 grid grid-cols-3 divide-x divide-hairline rounded-2xl border border-hairline bg-white px-2 py-3 sm:max-w-xl sm:px-4" aria-label="Activity for this scholarship">
-        <ActivityStat value={socialProof.discussion_post_count} label="discussions" />
-        <ActivityStat value={socialProof.discussion_reply_count} label="replies" />
-        <ActivityStat value={socialProof.discussion_contributor_count} label="contributors" />
-      </div>
+      {canInteract && (
+        <div className="mt-4 grid grid-cols-3 divide-x divide-hairline rounded-2xl border border-hairline bg-white px-2 py-3 sm:max-w-xl sm:px-4" aria-label="Activity for this scholarship">
+          <ActivityStat value={socialProof.discussion_post_count} label="discussions" />
+          <ActivityStat value={socialProof.discussion_reply_count} label="replies" />
+          <ActivityStat value={socialProof.discussion_contributor_count} label="contributors" />
+        </div>
+      )}
 
       {composerOpen && canInteract && (
         <form ref={composerRef} onSubmit={submitPost} className="mt-4 scroll-mt-6 rounded-2xl border border-emerald/30 bg-white p-4 shadow-card sm:p-5">
@@ -355,7 +357,7 @@ export function ScholarshipCommunity({
         </form>
       )}
 
-      <ScholarshipSocialProof proof={socialProof} />
+      {canInteract && <ScholarshipSocialProof proof={socialProof} />}
 
       {notice && <p className="mt-4 rounded-lg bg-emerald-light px-3 py-2.5 text-sm text-emerald" role="status">{notice}</p>}
       {error && !composerOpen && <p className="mt-4 rounded-lg bg-rose-light px-3 py-2.5 text-sm text-rose" role="alert">{error}</p>}
