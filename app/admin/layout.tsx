@@ -1,75 +1,13 @@
-import Link from "next/link";
 import { requireAdmin } from "@/lib/admin/access";
-import { Logo } from "@/components/Logo";
 import { SchemaCheckBanner } from "@/components/admin/SchemaCheckBanner";
+import { AdminShell } from "@/components/admin/AdminShell";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const { fullName } = await requireAdmin();
   return (
-    <div className="min-h-screen bg-parchment">
-      {/* AUDIT FIX (batch 5): keyboard skip link -- admin doesn't render
-          the Sidebar that carries it everywhere else, so it gets its
-          own. Target is the <main id="main"> below. */}
-      <a
-        href="#main"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:rounded-lg focus:bg-navy focus:px-4 focus:py-2.5 focus:text-sm focus:font-medium focus:text-white"
-      >
-        Skip to content
-      </a>
-      <header className="border-b border-hairline bg-white">
-        <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Logo className="text-navy" />
-            <span className="font-mono text-xs uppercase tracking-widest text-amber bg-amber-light px-2 py-1 rounded">
-              Admin
-            </span>
-          </div>
-          <nav className="flex items-center gap-6 text-sm flex-wrap justify-end">
-            <Link href="/admin" className="text-navy-light hover:text-navy">
-              Overview
-            </Link>
-            <Link href="/admin/health" className="text-navy-light hover:text-navy">
-              Health
-            </Link>
-            <Link href="/admin/analytics" className="rounded-full bg-amber-light px-3 py-1.5 font-medium text-amber hover:bg-amber/15">
-              Provider Analytics
-            </Link>
-            <Link href="/admin/scholarships" className="text-navy-light hover:text-navy">
-              Scholarships
-            </Link>
-            <Link href="/admin/opportunities" className="text-navy-light hover:text-navy">
-              Opportunities
-            </Link>
-            <Link href="/admin/discovery" className="text-navy-light hover:text-navy">
-              Discovery
-            </Link>
-            <Link href="/admin/broadcast" className="text-navy-light hover:text-navy">
-              Broadcast
-            </Link>
-            <Link href="/admin/feedback" className="text-navy-light hover:text-navy">
-              Feedback
-            </Link>
-            <Link href="/admin/discussions" className="rounded-full bg-emerald-light px-3 py-1.5 font-medium text-emerald hover:bg-emerald/15">
-              Community moderation
-            </Link>
-            <Link href="/admin/testimonials" className="text-navy-light hover:text-navy">
-              Testimonials
-            </Link>
-            <Link href="/admin/users" className="text-navy-light hover:text-navy">
-              Users
-            </Link>
-            <Link href="/dashboard" className="text-navy-light hover:text-navy">
-              Back to app
-            </Link>
-            {fullName && <span className="text-navy-light">{fullName}</span>}
-          </nav>
-        </div>
-      </header>
-      {/* HARDENING: drift banner renders on every admin page. If the
-          live DB is missing columns the code expects, the admin sees
-          it immediately instead of diagnosing a 500 from a phone. */}
+    <AdminShell fullName={fullName}>
       <SchemaCheckBanner />
-      <main id="main" className="mx-auto max-w-6xl px-6 py-10">{children}</main>
-    </div>
+      {children}
+    </AdminShell>
   );
 }
