@@ -6,7 +6,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type Row = {
   id: string;
-  type: "fellowship" | "internship" | "competition" | "mentorship";
+  type: "fellowship" | "internship" | "competition" | "mentorship" | "training";
   title: string;
   provider_name: string;
   deadline: string | null;
@@ -20,6 +20,7 @@ const TYPE_LABELS: Record<Row["type"], string> = {
   internship: "Internship",
   competition: "Competition",
   mentorship: "Mentorship",
+  training: "Training",
 };
 
 export default function AdminOpportunitiesPage() {

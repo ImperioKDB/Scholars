@@ -28,7 +28,7 @@ import { escapeLikePattern, sanitizeSearchText } from '@/lib/validate'
 import { todayUtcIso } from '@/lib/dates'
 
 const querySchema = z.object({
-  type: z.enum(['fellowship', 'internship', 'competition', 'mentorship']).optional(),
+  type: z.enum(['fellowship', 'internship', 'competition', 'mentorship', 'training']).optional(),
   discipline: z.string().trim().min(1).max(200).optional(),
   q: z.string().trim().min(1).max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),

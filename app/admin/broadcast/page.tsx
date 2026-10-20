@@ -32,7 +32,7 @@ type ScholarshipRow = {
 type OpportunityRow = {
   id: string;
   slug: string | null;
-  type: "fellowship" | "internship" | "competition" | "mentorship";
+  type: "fellowship" | "internship" | "competition" | "mentorship" | "training";
   title: string;
   provider_name: string;
   deadline: string | null;
@@ -46,6 +46,7 @@ const TYPE_LABELS: Record<OpportunityRow["type"], string> = {
   internship: "Internship",
   competition: "Competition",
   mentorship: "Mentorship",
+  training: "Training",
 };
 
 const TYPE_TONE: Record<OpportunityRow["type"], string> = {
@@ -53,6 +54,7 @@ const TYPE_TONE: Record<OpportunityRow["type"], string> = {
   internship: "bg-emerald-light text-emerald",
   competition: "bg-amber-light text-amber",
   mentorship: "bg-rose-light text-rose",
+  training: "bg-navy-50 text-navy",
 };
 
 export default function AdminBroadcastPage() {

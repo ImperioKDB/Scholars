@@ -9,12 +9,12 @@ export const revalidate = 300;
 export const metadata: Metadata = {
   title: "Student Fellowships, Internships and Opportunities",
   description:
-    "Find verified fellowships, internships, competitions, and mentorship opportunities for students in Nigeria and beyond.",
+    "Find verified fellowships, internships, competitions, mentorship, and training opportunities for students in Nigeria and beyond.",
   alternates: { canonical: "/opportunities-for-students" },
   openGraph: {
     title: "Student Fellowships, Internships and Opportunities",
     description:
-      "Find verified fellowships, internships, competitions, and mentorship opportunities for students in Nigeria and beyond.",
+      "Find verified fellowships, internships, competitions, mentorship, and training opportunities for students in Nigeria and beyond.",
     url: "/opportunities-for-students",
     type: "website",
   },
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     card: "summary",
     title: "Student Fellowships, Internships and Opportunities",
     description:
-      "Find verified fellowships, internships, competitions, and mentorship opportunities for students in Nigeria and beyond.",
+      "Find verified fellowships, internships, competitions, mentorship, and training opportunities for students in Nigeria and beyond.",
   },
 };
 
@@ -65,7 +65,7 @@ export default async function OpportunitiesForStudentsPage() {
           <p className="font-mono text-xs uppercase tracking-widest text-emerald mb-3">Verified opportunities</p>
           <h1 className="font-display text-4xl font-semibold leading-tight text-navy">Student fellowships, internships and opportunities</h1>
           <p className="mt-5 text-base leading-7 text-navy-light">
-            Explore verified opportunities for students, including fellowships, internships, competitions, and mentorship programmes. Check the provider, deadline, location, and compensation before you apply.
+            Explore verified opportunities for students, including fellowships, internships, competitions, mentorship, and training programmes. Check the provider, deadline, location, and compensation before you apply.
           </p>
         </div>
         <section className="mt-10" aria-labelledby="opportunity-list-heading">

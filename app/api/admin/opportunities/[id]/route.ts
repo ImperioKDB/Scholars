@@ -20,7 +20,7 @@ import { assertAdmin } from '@/lib/admin/guard'
 import { httpUrlSchema, isUuid } from '@/lib/validate'
 const updateSchema = z
   .object({
-    type: z.enum(['fellowship', 'internship', 'competition', 'mentorship']),
+    type: z.enum(['fellowship', 'internship', 'competition', 'mentorship', 'training']),
     title: z.string().trim().min(1).max(300),
     provider_name: z.string().trim().min(1).max(300),
     description: z.string().trim().max(5000).nullable(),

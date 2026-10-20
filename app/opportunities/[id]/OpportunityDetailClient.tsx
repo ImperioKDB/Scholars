@@ -12,7 +12,7 @@ import { queueOpportunitySavedState } from "@/lib/offline/outbox";
 export type OpportunityDetail = {
   id: string;
   slug?: string;
-  type: "fellowship" | "internship" | "competition" | "mentorship";
+  type: "fellowship" | "internship" | "competition" | "mentorship" | "training";
   title: string;
   provider_name: string;
   description: string | null;
@@ -28,7 +28,7 @@ export type OpportunityDetail = {
 
 export type SimilarOpportunity = {
   id: string;
-  type: "fellowship" | "internship" | "competition" | "mentorship";
+  type: "fellowship" | "internship" | "competition" | "mentorship" | "training";
   title: string;
   provider_name: string;
   compensation: string | null;
@@ -41,6 +41,7 @@ const TYPE_LABELS: Record<OpportunityDetail["type"], string> = {
   internship: "Internship",
   competition: "Competition",
   mentorship: "Mentorship",
+  training: "Training",
 };
 
 const TYPE_TONE: Record<OpportunityDetail["type"], string> = {
@@ -48,6 +49,7 @@ const TYPE_TONE: Record<OpportunityDetail["type"], string> = {
   internship: "bg-emerald-light text-emerald",
   competition: "bg-amber-light text-amber",
   mentorship: "bg-rose-light text-rose",
+  training: "bg-navy-50 text-navy",
 };
 
 export function OpportunityDetailClient({

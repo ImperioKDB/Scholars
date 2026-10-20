@@ -36,7 +36,7 @@ const PUBLIC_COLUMNS =
 type PublicOpportunity = {
   id: string;
   slug: string;
-  type: "fellowship" | "internship" | "competition" | "mentorship";
+  type: "fellowship" | "internship" | "competition" | "mentorship" | "training";
   title: string;
   provider_name: string;
   description: string | null;
@@ -55,6 +55,7 @@ const TYPE_LABELS: Record<PublicOpportunity["type"], string> = {
   internship: "Internship",
   competition: "Competition",
   mentorship: "Mentorship",
+  training: "Training",
 };
 
 const TYPE_TONES: Record<PublicOpportunity["type"], string> = {
@@ -62,6 +63,7 @@ const TYPE_TONES: Record<PublicOpportunity["type"], string> = {
   internship: "bg-emerald-light text-emerald",
   competition: "bg-amber-light text-amber",
   mentorship: "bg-rose-light text-rose",
+  training: "bg-navy-50 text-navy",
 };
 
 const loadOpportunity = cache(async (slug: string): Promise<PublicOpportunity | null> => {

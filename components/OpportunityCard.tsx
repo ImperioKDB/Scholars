@@ -8,7 +8,7 @@ import { saveReturnScroll } from "@/lib/scrollRestore";
 export type CardOpportunity = {
   id: string;
   slug?: string;
-  type: "fellowship" | "internship" | "competition" | "mentorship";
+  type: "fellowship" | "internship" | "competition" | "mentorship" | "training";
   title: string;
   provider_name: string;
   description: string | null;
@@ -27,6 +27,7 @@ const TYPE_LABELS: Record<CardOpportunity["type"], string> = {
   internship: "Internship",
   competition: "Competition",
   mentorship: "Mentorship",
+  training: "Training",
 };
 
 const TYPE_TONE: Record<CardOpportunity["type"], string> = {
@@ -34,6 +35,7 @@ const TYPE_TONE: Record<CardOpportunity["type"], string> = {
   internship: "bg-emerald-light text-emerald",
   competition: "bg-amber-light text-amber",
   mentorship: "bg-rose-light text-rose",
+  training: "bg-navy-50 text-navy",
 };
 
 const DEADLINE_TONE_CLASSES: Record<ReturnType<typeof deadlineTone>, string> = {

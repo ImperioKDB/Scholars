@@ -1,13 +1,14 @@
 import { z } from "zod";
 import { DISCIPLINE_OPTIONS } from "@/lib/profile";
 
-export type OpportunityType = "fellowship" | "internship" | "competition" | "mentorship";
+export type OpportunityType = "fellowship" | "internship" | "competition" | "mentorship" | "training";
 
 export const OPPORTUNITY_TYPE_OPTIONS: { value: OpportunityType; label: string }[] = [
   { value: "fellowship", label: "Fellowship" },
   { value: "internship", label: "Internship" },
   { value: "competition", label: "Competition" },
   { value: "mentorship", label: "Mentorship" },
+  { value: "training", label: "Training" },
 ];
 
 export { DISCIPLINE_OPTIONS };
@@ -17,7 +18,7 @@ export { DISCIPLINE_OPTIONS };
 // required, unlike scholarships: mentorships and some internships run on
 // a rolling basis with no fixed close date.
 export const opportunitySchema = z.object({
-  type: z.enum(["fellowship", "internship", "competition", "mentorship"]),
+  type: z.enum(["fellowship", "internship", "competition", "mentorship", "training"]),
   title: z.string().min(3, "Title is required."),
   provider_name: z.string().min(2, "Provider name is required."),
   description: z.string().optional(),

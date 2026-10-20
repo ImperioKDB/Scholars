@@ -190,7 +190,7 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
       <div className="mb-8">
         <h1 className="font-display text-2xl font-semibold text-navy">Opportunities</h1>
         <p className="text-sm text-navy-light mt-1 mb-6">
-          Fellowships, internships, competitions, and mentorships alongside your scholarship matches --
+          Fellowships, internships, competitions, mentorships, and training programs alongside your scholarship matches --
           verified, but not scored, since eligibility for these varies too much to gate automatically.
         </p>
         <div className="bg-white rounded-xl border border-hairline p-4">
