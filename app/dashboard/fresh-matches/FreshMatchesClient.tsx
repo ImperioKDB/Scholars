@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DeadlineBadge } from "@/components/DeadlineBadge";
 import { MatchSeal } from "@/components/MatchSeal";
 import { StatusMessage } from "@/components/StatusMessage";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { queueScholarshipSavedState } from "@/lib/offline/outbox";
 import { saveReturnScroll } from "@/lib/scrollRestore";
 import { daysUntil, formatDeadlineLabel } from "@/lib/dates";
 import type { CardScholarship } from "@/components/ScholarshipCard";
@@ -133,16 +134,36 @@ function PlannerSection({ title, description, matches, section, savedIds, pendin
 }
 
 export function FreshMatchesClient({
+  userId,
   initialMatches,
   initialSavedIds,
   initialError,
 }: {
+  userId: string;
   initialMatches: FreshMatch[];
   initialSavedIds: string[];
   initialError: string | null;
 }) {
   const [savedIds, setSavedIds] = useState(() => new Set(initialSavedIds));
   const [pendingIds, setPendingIds] = useState(() => new Set<string>());
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onSyncComplete = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId?: string }>).detail;
+      if (detail?.userId !== userId) return;
+      void fetchWithTimeout("/api/scholarships/save", { retries: 1 })
+        .then(async (response) => {
+          if (!response.ok) return;
+          const data = await response.json();
+          setSavedIds(new Set((data.saved ?? []).map((item: { scholarship: { id: string } }) => item.scholarship.id)));
+        })
+        .catch(() => {});
+    };
+    window.addEventListener("scholars:offline-sync-complete", onSyncComplete);
+    return () => window.removeEventListener("scholars:offline-sync-complete", onSyncComplete);
+  }, [userId]);
 
   const plan = useMemo(() => {
     const urgent: FreshMatch[] = [];
@@ -174,6 +195,8 @@ export function FreshMatchesClient({
   }, [initialMatches]);
 
   async function toggleSave(scholarshipId: string) {
+    setActionNotice(null);
+    setActionError(null);
     const wasSaved = savedIds.has(scholarshipId);
     setSavedIds((current) => {
       const next = new Set(current);
@@ -186,14 +209,31 @@ export function FreshMatchesClient({
       const response = wasSaved
         ? await fetchWithTimeout(`/api/scholarships/save?scholarship_id=${scholarshipId}`, { method: "DELETE" })
         : await fetchWithTimeout("/api/scholarships/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scholarship_id: scholarshipId }) });
-      if (!response.ok) throw new Error("save failed");
+      if (!response.ok) {
+        const queued = (response.status === 408 || response.status >= 500)
+          && await queueScholarshipSavedState(userId, scholarshipId, !wasSaved);
+        if (queued) {
+          setActionNotice("Your change is saved on this device and will sync when connected.");
+        } else {
+          setSavedIds((current) => {
+            const next = new Set(current);
+            if (wasSaved) next.add(scholarshipId);
+            else next.delete(scholarshipId);
+            return next;
+          });
+          setActionError(response.status === 401 ? "Your session needs to be refreshed before saving." : "Couldn't update saved status. Try again.");
+        }
+      }
     } catch {
-      setSavedIds((current) => {
+      const queued = await queueScholarshipSavedState(userId, scholarshipId, !wasSaved);
+      if (queued) setActionNotice("Your change is saved on this device and will sync when connected.");
+      else setSavedIds((current) => {
         const next = new Set(current);
         if (wasSaved) next.add(scholarshipId);
         else next.delete(scholarshipId);
         return next;
       });
+      if (!queued) setActionError("Couldn't save this change offline. Check your connection and try again.");
     } finally {
       setPendingIds((current) => {
         const next = new Set(current);
@@ -216,6 +256,8 @@ export function FreshMatchesClient({
         <p className="mt-2 max-w-2xl text-sm text-navy-light">A practical shortlist of what to review first, why each scholarship fits you, and what to do next.</p>
       </div>
       {initialError && <StatusMessage tone="error" className="mb-6">{initialError}</StatusMessage>}
+      {actionError && <StatusMessage tone="error" className="mb-6">{actionError}</StatusMessage>}
+      {actionNotice && <div role="status" className="mb-6 rounded-xl border border-navy/10 bg-navy-50 px-4 py-3 text-sm text-navy">{actionNotice}</div>}
       {reviewCount === 0 ? (
         <div className="rounded-2xl border border-hairline bg-white p-8 text-center">
           <p className="text-sm text-navy-light">Complete a few profile fields to unlock fresh matches.</p>

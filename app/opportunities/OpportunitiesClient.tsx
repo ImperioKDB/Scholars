@@ -6,6 +6,7 @@ import { OpportunityCard, type CardOpportunity } from "@/components/OpportunityC
 import { OpportunityGridSkeleton } from "@/components/OpportunityGridSkeleton";
 import { OPPORTUNITY_TYPE_OPTIONS } from "@/lib/admin/opportunity";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { queueOpportunitySavedState } from "@/lib/offline/outbox";
 
 // app/opportunities/OpportunitiesClient.tsx
 //
@@ -37,6 +38,7 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
   const [nextOffset, setNextOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedApiItem[]>(initialSaved);
   const [savedIds, setSavedIds] = useState<Set<string>>(
     new Set(initialSaved.map((s) => s.opportunity.id))
@@ -63,6 +65,7 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
       const res = await fetchWithTimeout("/api/opportunities?" + params.toString(), {
         signal: controller.signal,
         cache: "no-store",
+        retries: 1,
       });
       if (requestId !== requestIdRef.current) return;
       if (!res.ok) {
@@ -94,7 +97,7 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
 
   async function refreshSaved() {
     try {
-      const res = await fetchWithTimeout("/api/opportunities/save");
+      const res = await fetchWithTimeout("/api/opportunities/save", { retries: 1 });
       if (!res.ok) return;
       const data = await res.json();
       const list: SavedApiItem[] = data.saved ?? [];
@@ -105,6 +108,15 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
     }
   }
 
+  useEffect(() => {
+    const onSyncComplete = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId?: string }>).detail;
+      if (detail?.userId === userId) void refreshSaved();
+    };
+    window.addEventListener("scholars:offline-sync-complete", onSyncComplete);
+    return () => window.removeEventListener("scholars:offline-sync-complete", onSyncComplete);
+  }, [userId]);
+
   async function toggleSave(opportunityId: string) {
     const wasSaved = savedIds.has(opportunityId);
     setSavedIds((prev) => {
@@ -114,6 +126,18 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
       return next;
     });
     setPendingIds((prev) => new Set(prev).add(opportunityId));
+    setSaveError(null);
+    const applyQueuedStateLocally = () => {
+      if (wasSaved) {
+        setSaved((current) => current.filter((item) => item.opportunity.id !== opportunityId));
+      } else {
+        const opportunity = items.find((item) => item.id === opportunityId);
+        if (opportunity) setSaved((current) => [
+          { id: `offline-${opportunityId}`, saved_at: new Date().toISOString(), opportunity },
+          ...current.filter((item) => item.opportunity.id !== opportunityId),
+        ]);
+      }
+    };
     try {
       const res = wasSaved
         ? await fetchWithTimeout(`/api/opportunities/save?opportunity_id=${opportunityId}`, { method: "DELETE" })
@@ -122,23 +146,35 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ opportunity_id: opportunityId }),
           });
-      if (!res.ok) {
+      let handled = res.ok;
+      if (!handled && (res.status === 408 || res.status >= 500)) {
+        handled = await queueOpportunitySavedState(userId, opportunityId, !wasSaved);
+      }
+      if (!handled) {
+        setSaveError(res.status === 401 ? "Your session needs to be refreshed before saving." : "Couldn't update this saved opportunity. Try again.");
         setSavedIds((prev) => {
           const next = new Set(prev);
           if (wasSaved) next.add(opportunityId);
           else next.delete(opportunityId);
           return next;
         });
-      } else {
+      } else if (res.ok) {
         await refreshSaved();
+      } else {
+        applyQueuedStateLocally();
       }
     } catch {
-      setSavedIds((prev) => {
-        const next = new Set(prev);
-        if (wasSaved) next.add(opportunityId);
-        else next.delete(opportunityId);
-        return next;
-      });
+      const queued = await queueOpportunitySavedState(userId, opportunityId, !wasSaved);
+      if (queued) applyQueuedStateLocally();
+      else {
+        setSaveError("Couldn't save this change offline. Check your connection and try again.");
+        setSavedIds((prev) => {
+          const next = new Set(prev);
+          if (wasSaved) next.add(opportunityId);
+          else next.delete(opportunityId);
+          return next;
+        });
+      }
     }
     setPendingIds((prev) => {
       const next = new Set(prev);
@@ -193,6 +229,7 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
           </div>
         </div>
       </div>
+      {saveError && <StatusMessage tone="error" className="mb-6">{saveError}</StatusMessage>}
       {loadError && (
         <StatusMessage tone="error" className="mb-6">
           {loadError}{" "}

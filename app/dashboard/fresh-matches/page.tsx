@@ -19,6 +19,7 @@ export default async function FreshMatchesPage() {
 
   return (
     <FreshMatchesClient
+      userId={user.id}
       initialMatches={matches}
       initialSavedIds={(savedResult.data ?? []).map((row) => row.scholarship_id)}
       initialError={error && error !== "profile_not_found" ? "Couldn’t load your fresh matches. Try refreshing." : null}

@@ -17,6 +17,7 @@ import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { authFailureResponse } from '@/lib/auth/request-errors'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { escapeLikePattern, sanitizeSearchText } from '@/lib/validate'
 import { getRetainedScholarshipIds, scholarshipVisibilityFilter } from '@/lib/scholarship-visibility'
@@ -36,7 +37,7 @@ export async function GET(request: Request) {
 
   const supabase = await createClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  if (authError || !user) return authFailureResponse(authError)
 
   const retainedIds = await getRetainedScholarshipIds(supabase, user.id)
 

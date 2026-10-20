@@ -2,6 +2,8 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { COOKIE_NAMES, REF_COOKIE_MAX_AGE_S } from "@/lib/config";
 import { getAuthCookieDomain } from "@/lib/auth/cookie-domain";
+import { isTransientAuthError } from "@/lib/auth/request-errors";
+import { createTimeoutFetch } from "@/lib/fetch";
 import {
   getSupabaseSessionCookieNames,
   mergeSupabaseSessionCookies,
@@ -143,6 +145,7 @@ export async function middleware(request: NextRequest) {
       cookieOptions: {
         ...(authCookieDomain ? { domain: authCookieDomain } : {}),
       },
+      global: { fetch: createTimeoutFetch(8_000) },
       cookies: {
         get(name: string) {
           return request.cookies.get(name)?.value;
@@ -163,14 +166,7 @@ export async function middleware(request: NextRequest) {
   async function getUserWithRetry() {
     const first = await supabase.auth.getUser();
     const error = first.error;
-    const retryable = Boolean(
-      error &&
-        (error.name === "AuthRetryableFetchError" ||
-          error.status === undefined ||
-          error.status === 0 ||
-          error.status >= 500)
-    );
-    if (!retryable) return first;
+    if (!isTransientAuthError(error)) return first;
     return supabase.auth.getUser();
   }
   const {
@@ -179,6 +175,20 @@ export async function middleware(request: NextRequest) {
   } = await getUserWithRetry();
   const isProtected = PROTECTED_PREFIXES.some((prefix) => path.startsWith(prefix));
   const isAuthPage = AUTH_PREFIXES.some((prefix) => path.startsWith(prefix));
+
+  if (!user && isTransientAuthError(authError)) {
+    if (path.startsWith("/api/admin")) {
+      return NextResponse.json(
+        { error: "Authentication is temporarily unavailable. Retry shortly.", retryable: true },
+        { status: 503, headers: { "Retry-After": "3", "Cache-Control": "no-store" } }
+      );
+    }
+    if (isProtected) {
+      const problemUrl = new URL("/connection-problem", request.url);
+      problemUrl.searchParams.set("next", path + request.nextUrl.search);
+      return NextResponse.rewrite(problemUrl);
+    }
+  }
 
   if (path.startsWith("/api/admin")) {
     if (!user) {

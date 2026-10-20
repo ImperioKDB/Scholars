@@ -23,6 +23,7 @@ import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { authFailureResponse } from '@/lib/auth/request-errors'
 import { escapeLikePattern, sanitizeSearchText } from '@/lib/validate'
 import { todayUtcIso } from '@/lib/dates'
 
@@ -44,7 +45,7 @@ export async function GET(request: Request) {
     error: authError,
   } = await supabase.auth.getUser()
   if (authError || !user) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    return authFailureResponse(authError)
   }
 
   const { searchParams } = new URL(request.url)

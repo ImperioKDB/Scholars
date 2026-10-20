@@ -12,6 +12,7 @@ import type { GapNudge } from "@/lib/matching/gaps";
 import { fetchWithTimeout, FetchTimeoutError, FetchNetworkError } from "@/lib/fetch";
 import { MilestoneOnboarding, announceMilestone } from "@/components/MilestoneOnboarding";
 import { ScrollReveal } from "@/components/ScrollReveal";
+import { queueScholarshipSavedState } from "@/lib/offline/outbox";
 type MatchTier = "excellent" | "good" | "possible" | "unlikely";
 type MatchApiItem = CardScholarship & {
   score: number;
@@ -219,7 +220,7 @@ export function DashboardClient({
   }, [initialProfileCompleteness, initialSaved.length, initialMatches.length]);
   async function refreshSaved() {
     try {
-      const res = await fetchWithTimeout("/api/scholarships/save");
+      const res = await fetchWithTimeout("/api/scholarships/save", { retries: 1 });
       if (!res.ok) return;
       const data = await res.json();
       const list: SavedApiItem[] = data.saved ?? [];
@@ -229,6 +230,23 @@ export function DashboardClient({
       // Silent fail -- saved list is supplementary
     }
   }
+  useEffect(() => {
+    const onSyncComplete = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId?: string }>).detail;
+      if (detail?.userId !== userId) return;
+      void fetchWithTimeout("/api/scholarships/save", { retries: 1 })
+        .then(async (response) => {
+          if (!response.ok) return;
+          const data = await response.json();
+          const list: SavedApiItem[] = data.saved ?? [];
+          setSaved(list);
+          setSavedIds(new Set(list.map((item) => item.scholarship.id)));
+        })
+        .catch(() => {});
+    };
+    window.addEventListener("scholars:offline-sync-complete", onSyncComplete);
+    return () => window.removeEventListener("scholars:offline-sync-complete", onSyncComplete);
+  }, [userId]);
   const openMatches = useMemo(() => matches.filter((m) => m.isOpenNow), [matches]);
   const comingSoon = useMemo(() => matches.filter((m) => !m.isOpenNow), [matches]);
   const filteredMatches = useMemo(
@@ -269,15 +287,19 @@ export function DashboardClient({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ scholarship_id: scholarshipId }),
           });
-      if (!res.ok) {
+      let handled = res.ok;
+      if (!handled && (res.status === 408 || res.status >= 500)) {
+        handled = await queueScholarshipSavedState(userId, scholarshipId, !wasSaved);
+      }
+      if (!handled) {
         setSavedIds((prev) => { const n = new Set(prev); if (wasSaved) n.add(scholarshipId); else n.delete(scholarshipId); return n; });
-      } else {
+      } else if (res.ok) {
         await refreshSaved();
         if (!wasSaved) announceMilestone("saved_tip");
       }
     } catch (err) {
-      // Revert on network error
-      setSavedIds((prev) => { const n = new Set(prev); if (wasSaved) n.add(scholarshipId); else n.delete(scholarshipId); return n; });
+      const queued = await queueScholarshipSavedState(userId, scholarshipId, !wasSaved);
+      if (!queued) setSavedIds((prev) => { const n = new Set(prev); if (wasSaved) n.add(scholarshipId); else n.delete(scholarshipId); return n; });
     }
     setPendingIds((prev) => { const n = new Set(prev); n.delete(scholarshipId); return n; });
   }

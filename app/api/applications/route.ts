@@ -36,6 +36,7 @@ import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { authFailureResponse } from '@/lib/auth/request-errors'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { trackServerEvent } from '@/lib/analytics-server'
 
@@ -54,7 +55,7 @@ export async function GET() {
     error: authError,
   } = await supabase.auth.getUser()
   if (authError || !user) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    return authFailureResponse(authError)
   }
   const { data, error } = await supabase
     .from('applications')
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
     error: authError,
   } = await supabase.auth.getUser()
   if (authError || !user) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    return authFailureResponse(authError)
   }
   const raw = await request.json().catch(() => null)
   const parsed = createSchema.safeParse(raw)

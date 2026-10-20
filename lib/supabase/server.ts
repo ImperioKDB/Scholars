@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies, headers } from "next/headers";
 import { getAuthCookieDomain } from "@/lib/auth/cookie-domain";
+import { createTimeoutFetch } from "@/lib/fetch";
 
 // Server-side client using the anon key, respects the caller's session (RLS applies).
 //
@@ -38,6 +39,7 @@ export function createClient() {
       cookieOptions: {
         ...(authCookieDomain ? { domain: authCookieDomain } : {}),
       },
+      global: { fetch: createTimeoutFetch() },
       cookies: {
         get(name: string) {
           return cookieStore.get(name)?.value;

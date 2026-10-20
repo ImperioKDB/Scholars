@@ -17,6 +17,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { authFailureResponse } from "@/lib/auth/request-errors";
 import { invalidateMatchesCache } from "@/lib/matching/matchCache";
 import { WAEC_SUBJECTS, WAEC_GRADES } from "@/lib/data/waec";
 
@@ -39,7 +40,7 @@ export async function GET() {
     error: authError,
   } = await supabase.auth.getUser();
   if (authError || !user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return authFailureResponse(authError);
   }
   const { data: results, error } = await supabase
     .from("waec_results")
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
     error: authError,
   } = await supabase.auth.getUser();
   if (authError || !user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return authFailureResponse(authError);
   }
   const raw = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(raw);

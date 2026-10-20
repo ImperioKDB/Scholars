@@ -22,7 +22,7 @@ export default async function DiscoverPage() {
   }
 
   const supabase = createClient();
-  const { data: savedRows } = await supabase
+  const { data: savedRows, error: savedError } = await supabase
     .from("saved_scholarships")
     .select("scholarship_id")
     .eq("profile_id", user.id);
@@ -31,6 +31,7 @@ export default async function DiscoverPage() {
     <DiscoverClient
       userId={user.id}
       initialSavedIds={(savedRows ?? []).map((r) => r.scholarship_id as string)}
+      initialSavedError={savedError ? "Saved scholarships could not be checked. Retry when connected." : null}
     />
   );
 }

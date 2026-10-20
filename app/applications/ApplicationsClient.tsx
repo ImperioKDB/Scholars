@@ -1,6 +1,6 @@
 "use client";
 import { StatusMessage } from "@/components/StatusMessage";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ProviderMonogram } from "@/components/ProviderMonogram";
@@ -13,6 +13,7 @@ import { useAde } from "@/components/ade/AdeProvider";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { track } from "@/lib/analytics";
 import { MilestoneOnboarding, announceMilestone } from "@/components/MilestoneOnboarding";
+import { queueApplicationStatus, queueScholarshipSavedState } from "@/lib/offline/outbox";
 
 type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected" | "not_applied";
 
@@ -53,6 +54,7 @@ export function ApplicationsClient({ userId, initialApplications, initialSaved, 
   const [loadError, setLoadError] = useState<string | null>(initialError);
   const [savedError, setSavedError] = useState<string | null>(initialSavedError ?? null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [applications, setApplications] = useState<ApplicationApiItem[]>(initialApplications);
   const [saved, setSaved] = useState<SavedApiItem[]>(initialSaved);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
@@ -67,8 +69,8 @@ export function ApplicationsClient({ userId, initialApplications, initialSaved, 
     setSavedError(null);
     try {
       const [appsRes, savedRes] = await Promise.all([
-        fetchWithTimeout("/api/applications"),
-        fetchWithTimeout("/api/scholarships/save"),
+        fetchWithTimeout("/api/applications", { retries: 1 }),
+        fetchWithTimeout("/api/scholarships/save", { retries: 1 }),
       ]);
       if (!appsRes.ok) { setLoadError("Couldn't load your applications. Try refreshing."); return; }
       const appsData = await appsRes.json();
@@ -79,6 +81,15 @@ export function ApplicationsClient({ userId, initialApplications, initialSaved, 
       setLoadError("Couldn't load your applications. Check your connection and try again.");
     }
   }
+
+  useEffect(() => {
+    const onSyncComplete = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId?: string }>).detail;
+      if (detail?.userId === userId) void load();
+    };
+    window.addEventListener("scholars:offline-sync-complete", onSyncComplete);
+    return () => window.removeEventListener("scholars:offline-sync-complete", onSyncComplete);
+  }, [userId]);
 
   const trackedScholarshipIds = useMemo(() => new Set(applications.map((a) => a.scholarship.id)), [applications]);
   const untrackedSaved = useMemo(() => saved.filter((s) => !trackedScholarshipIds.has(s.scholarship.id)), [saved, trackedScholarshipIds]);
@@ -132,8 +143,10 @@ export function ApplicationsClient({ userId, initialApplications, initialSaved, 
   }
 
   async function updateStatus(applicationId: string, status: ApplicationStatus) {
+    const previousStatus = applications.find((application) => application.id === applicationId)?.status;
     setPendingIds((p) => new Set(p).add(applicationId));
     setActionError(null);
+    setActionNotice(null);
     setApplications((prev) => prev.map((a) => (a.id === applicationId ? { ...a, status } : a)));
     setFlashIds((prev) => new Set(prev).add(applicationId));
     setTimeout(() => setFlashIds((prev) => { const n = new Set(prev); n.delete(applicationId); return n; }), 750);
@@ -143,13 +156,28 @@ export function ApplicationsClient({ userId, initialApplications, initialSaved, 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
-      if (!res.ok) await load();
-      else if (status === "submitted" || status === "accepted" || status === "rejected") track("outcome_recorded", { status });
+      if (res.ok) {
+        if (status === "submitted" || status === "accepted" || status === "rejected") track("outcome_recorded", { status });
+      } else {
+        const queued = (res.status === 408 || res.status >= 500) && previousStatus
+          ? await queueApplicationStatus(userId, applicationId, status)
+          : false;
+        if (queued) setActionNotice("Your status change is saved on this device and will sync when connected.");
+        else {
+          if (previousStatus) setApplications((prev) => prev.map((a) => a.id === applicationId ? { ...a, status: previousStatus } : a));
+          setActionError(res.status === 401 ? "Your session needs to be refreshed before updating this status." : "Couldn't update status. Try again.");
+        }
+      }
     } catch {
-      setActionError("Couldn't update status. Check your connection and try again.");
-      await load();
+      const queued = previousStatus ? await queueApplicationStatus(userId, applicationId, status) : false;
+      if (queued) setActionNotice("Your status change is saved on this device and will sync when connected.");
+      else {
+        if (previousStatus) setApplications((prev) => prev.map((a) => a.id === applicationId ? { ...a, status: previousStatus } : a));
+        setActionError("Couldn't update status. Check your connection and try again.");
+      }
+    } finally {
+      setPendingIds((p) => { const n = new Set(p); n.delete(applicationId); return n; });
     }
-    setPendingIds((p) => { const n = new Set(p); n.delete(applicationId); return n; });
   }
 
   async function doStopTracking(applicationId: string) {
@@ -181,12 +209,24 @@ export function ApplicationsClient({ userId, initialApplications, initialSaved, 
 
   async function removeSaved(scholarshipId: string) {
     setPendingIds((p) => new Set(p).add(scholarshipId));
+    setActionError(null);
+    setActionNotice(null);
     try {
       const res = await fetchWithTimeout(`/api/scholarships/save?scholarship_id=${scholarshipId}`, { method: "DELETE" });
       if (res.ok) setSaved((current) => current.filter((item) => item.scholarship.id !== scholarshipId));
-      else setActionError("Couldn't remove this saved scholarship. Try again.");
-    } catch { setActionError("Couldn't remove this saved scholarship. Check your connection and try again."); }
-    setPendingIds((p) => { const n = new Set(p); n.delete(scholarshipId); return n; });
+      else if ((res.status === 408 || res.status >= 500) && await queueScholarshipSavedState(userId, scholarshipId, false)) {
+        setSaved((current) => current.filter((item) => item.scholarship.id !== scholarshipId));
+        setActionNotice("This removal is saved on this device and will sync when connected.");
+      } else setActionError(res.status === 401 ? "Your session needs to be refreshed before removing saved scholarships." : "Couldn't remove this saved scholarship. Try again.");
+    } catch {
+      const queued = await queueScholarshipSavedState(userId, scholarshipId, false);
+      if (queued) {
+        setSaved((current) => current.filter((item) => item.scholarship.id !== scholarshipId));
+        setActionNotice("This removal is saved on this device and will sync when connected.");
+      } else setActionError("Couldn't remove this saved scholarship. Check your connection and try again.");
+    } finally {
+      setPendingIds((p) => { const n = new Set(p); n.delete(scholarshipId); return n; });
+    }
   }
 
   function openApplication(a: ApplicationApiItem) {
@@ -238,6 +278,7 @@ export function ApplicationsClient({ userId, initialApplications, initialSaved, 
       )}
 
       {actionError && <StatusMessage tone="error" className="mb-6">{actionError}</StatusMessage>}
+      {actionNotice && <div role="status" className="mb-6 rounded-xl border border-navy/10 bg-navy-50 px-4 py-3 text-sm text-navy">{actionNotice}</div>}
 
       {nextAction && (
         <div className="bg-navy text-white rounded-2xl p-5 sm:p-6 mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

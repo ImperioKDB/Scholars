@@ -20,6 +20,7 @@ import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { authFailureResponse } from "@/lib/auth/request-errors";
 import { checkRateLimit } from "@/lib/ratelimit";
 import { trackServerEvent } from '@/lib/analytics-server'
 
@@ -34,7 +35,7 @@ export async function GET() {
     error: authError,
   } = await supabase.auth.getUser();
   if (authError || !user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return authFailureResponse(authError);
   }
   const { data: savedRows, error } = await supabase
     .from("saved_scholarships")
@@ -92,7 +93,7 @@ export async function POST(request: Request) {
     error: authError,
   } = await supabase.auth.getUser();
   if (authError || !user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return authFailureResponse(authError);
   }
   const raw = await request.json().catch(() => null);
   const parsed = saveSchema.safeParse(raw);
@@ -138,7 +139,7 @@ export async function DELETE(request: Request) {
     error: authError,
   } = await supabase.auth.getUser();
   if (authError || !user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return authFailureResponse(authError);
   }
   const { searchParams } = new URL(request.url);
   const parsed = saveSchema.safeParse({

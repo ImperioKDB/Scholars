@@ -8,6 +8,8 @@ import { SkeletonCard } from "@/components/Skeleton";
 import { isCurrentlyOpen } from "@/lib/discovery";
 import { fetchWithTimeout, FetchTimeoutError, FetchNetworkError } from "@/lib/fetch";
 import { MilestoneOnboarding } from "@/components/MilestoneOnboarding";
+import { readCachedScholarshipCatalog, writeCachedScholarshipCatalog } from "@/lib/offline/catalog-cache";
+import { queueScholarshipSavedState } from "@/lib/offline/outbox";
 
 const LEVEL_OPTIONS = [
   { value: "", label: "All levels" },
@@ -18,7 +20,7 @@ const LEVEL_OPTIONS = [
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 350;
 
-export function DiscoverClient({ userId, initialSavedIds }: { userId: string; initialSavedIds: string[] }) {
+export function DiscoverClient({ userId, initialSavedIds, initialSavedError }: { userId: string; initialSavedIds: string[]; initialSavedError?: string | null }) {
   const searchParams = useSearchParams();
   const [keyword, setKeyword] = useState(() => searchParams.get("q") ?? "");
   const [level, setLevel] = useState(() => searchParams.get("level") ?? "");
@@ -28,6 +30,9 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
   const [nextOffset, setNextOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [cachedAt, setCachedAt] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedError, setSavedError] = useState<string | null>(initialSavedError ?? null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set(initialSavedIds));
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
 
@@ -50,11 +55,23 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
     params.set("limit", String(PAGE_SIZE));
     params.set("offset", String(offset));
 
+    const canUseCache = Boolean(userId && offset === 0 && replace && !filtersActive && items.length === 0);
     try {
-      const res = await fetchWithTimeout("/api/scholarships?" + params.toString(), { signal: controller.signal });
+      const res = await fetchWithTimeout("/api/scholarships?" + params.toString(), { signal: controller.signal, retries: 1 });
       if (requestId !== requestIdRef.current) return;
       if (!res.ok) {
-        setLoadError("Couldn't load scholarships. Try again.");
+        if (res.status >= 500 && canUseCache) {
+          const cached = readCachedScholarshipCatalog<CardScholarship>(userId);
+          if (cached) {
+            setItems(cached.scholarships);
+            setTotal(cached.total);
+            setNextOffset(cached.scholarships.length);
+            setCachedAt(cached.cachedAt);
+            setLoading(false);
+            return;
+          }
+        }
+        setLoadError(res.status === 401 ? "Your session needs to be refreshed before loading scholarships." : "Couldn't load scholarships. Try again.");
         setLoading(false);
         return;
       }
@@ -63,9 +80,24 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
       setItems((prev) => (replace ? page : [...prev, ...page]));
       setTotal(data.total ?? 0);
       setNextOffset(offset + page.length);
+      if (offset === 0 && replace && !filtersActive) {
+        writeCachedScholarshipCatalog(userId, page, data.total ?? 0);
+        setCachedAt(null);
+      }
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
       if (controller.signal.aborted) return;
+      if (canUseCache) {
+        const cached = readCachedScholarshipCatalog<CardScholarship>(userId);
+        if (cached) {
+          setItems(cached.scholarships);
+          setTotal(cached.total);
+          setNextOffset(cached.scholarships.length);
+          setCachedAt(cached.cachedAt);
+          setLoading(false);
+          return;
+        }
+      }
       if (err instanceof FetchTimeoutError) {
         setLoadError("Request timed out. Check your connection and try again.");
       } else if (err instanceof FetchNetworkError) {
@@ -84,6 +116,23 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
       abortRef.current?.abort();
     };
   }, [keyword, level, discipline]);
+
+  useEffect(() => {
+    const onSyncComplete = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId?: string }>).detail;
+      if (detail?.userId !== userId) return;
+      void fetchWithTimeout("/api/scholarships/save", { retries: 1 })
+        .then(async (response) => {
+          if (!response.ok) return;
+          const data = await response.json();
+          setSavedIds(new Set((data.saved ?? []).map((item: { scholarship: { id: string } }) => item.scholarship.id)));
+          setSavedError(null);
+        })
+        .catch(() => {});
+    };
+    window.addEventListener("scholars:offline-sync-complete", onSyncComplete);
+    return () => window.removeEventListener("scholars:offline-sync-complete", onSyncComplete);
+  }, [userId]);
 
   const openNowItems = useMemo(
     () => items.filter((s) => isCurrentlyOpen(s)).map((s) => ({ ...s, isOpenNow: true })),
@@ -105,6 +154,7 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
     });
     setPendingIds((prev) => new Set(prev).add(scholarshipId));
 
+    setSaveError(null);
     try {
       const res = wasSaved
         ? await fetchWithTimeout(`/api/scholarships/save?scholarship_id=${scholarshipId}`, { method: "DELETE" })
@@ -113,7 +163,23 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ scholarship_id: scholarshipId }),
           });
-      if (!res.ok) {
+      let handled = res.ok;
+      if (!handled && (res.status === 408 || res.status >= 500)) {
+        handled = await queueScholarshipSavedState(userId, scholarshipId, !wasSaved);
+      }
+      if (!handled) {
+        setSaveError(res.status === 401 ? "Your session needs to be refreshed before saving." : "Couldn't update this saved scholarship. Try again.");
+        setSavedIds((prev) => {
+          const next = new Set(prev);
+          if (wasSaved) next.add(scholarshipId);
+          else next.delete(scholarshipId);
+          return next;
+        });
+      } else setSaveError(null);
+    } catch (err) {
+      const queued = await queueScholarshipSavedState(userId, scholarshipId, !wasSaved);
+      if (!queued) {
+        setSaveError("Couldn't save this change offline. Check your connection and try again.");
         setSavedIds((prev) => {
           const next = new Set(prev);
           if (wasSaved) next.add(scholarshipId);
@@ -121,20 +187,13 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
           return next;
         });
       }
-    } catch (err) {
-      // Revert on network error
-      setSavedIds((prev) => {
+    } finally {
+      setPendingIds((prev) => {
         const next = new Set(prev);
-        if (wasSaved) next.add(scholarshipId);
-        else next.delete(scholarshipId);
+        next.delete(scholarshipId);
         return next;
       });
     }
-    setPendingIds((prev) => {
-      const next = new Set(prev);
-      next.delete(scholarshipId);
-      return next;
-    });
   }
 
   const hasMore = nextOffset < total;
@@ -179,6 +238,14 @@ export function DiscoverClient({ userId, initialSavedIds }: { userId: string; in
           </div>
         </div>
       </div>
+      {cachedAt && (
+        <div role="status" className="mb-6 rounded-xl border border-amber/25 bg-amber-light px-4 py-3 text-sm text-navy">
+          Showing a saved catalogue from {new Date(cachedAt).toLocaleString()}. Scholarship availability and deadlines may have changed; verify them with the provider before applying.
+          <button type="button" onClick={() => load(0, true)} className="ml-2 font-semibold underline">Retry</button>
+        </div>
+      )}
+      {savedError && <StatusMessage tone="error" className="mb-6">Saved scholarship status may be out of date. {savedError}</StatusMessage>}
+      {saveError && <StatusMessage tone="error" className="mb-6">{saveError}</StatusMessage>}
       {loadError && (
         <StatusMessage tone="error" className="mb-6">
           {loadError}{" "}

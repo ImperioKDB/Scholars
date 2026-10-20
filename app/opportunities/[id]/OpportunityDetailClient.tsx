@@ -7,6 +7,7 @@ import { ShareButton } from "@/components/ShareButton";
 import { DeadlineBadge } from "@/components/DeadlineBadge";
 import { ProviderMonogram } from "@/components/ProviderMonogram";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { queueOpportunitySavedState } from "@/lib/offline/outbox";
 
 export type OpportunityDetail = {
   id: string;
@@ -63,6 +64,7 @@ export function OpportunityDetailClient({
   const [saved, setSaved] = useState(initialSaved);
   const [savePending, setSavePending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [backHref, setBackHref] = useState("/opportunities");
   useEffect(() => {
     try {
@@ -79,6 +81,7 @@ export function OpportunityDetailClient({
 
   async function toggleSave() {
     setActionError(null);
+    setActionNotice(null);
     const wasSaved = saved;
     setSaved(!wasSaved);
     setSavePending(true);
@@ -90,15 +93,22 @@ export function OpportunityDetailClient({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ opportunity_id: opportunity.id }),
           });
-      if (!res.ok) {
+      if (!res.ok && (res.status === 408 || res.status >= 500) && await queueOpportunitySavedState(sharerId, opportunity.id, !wasSaved)) {
+        setActionNotice("Your change is saved on this device and will sync when connected.");
+      } else if (!res.ok) {
         setSaved(wasSaved);
-        setActionError("Couldn't update saved status. Try again.");
+        setActionError(res.status === 401 ? "Your session needs to be refreshed before saving." : "Couldn't update saved status. Try again.");
       }
     } catch {
-      setSaved(wasSaved);
-      setActionError("Couldn't update saved status. Check your connection and try again.");
+      if (await queueOpportunitySavedState(sharerId, opportunity.id, !wasSaved)) {
+        setActionNotice("Your change is saved on this device and will sync when connected.");
+      } else {
+        setSaved(wasSaved);
+        setActionError("Couldn't save this change offline. Check your connection and try again.");
+      }
+    } finally {
+      setSavePending(false);
     }
-    setSavePending(false);
   }
 
   return (
@@ -136,6 +146,7 @@ export function OpportunityDetailClient({
           </div>
         )}
         {actionError && <StatusMessage tone="error" className="mb-4">{actionError}</StatusMessage>}
+        {actionNotice && <div role="status" className="mb-4 rounded-xl border border-navy/10 bg-navy-50 px-4 py-3 text-sm text-navy">{actionNotice}</div>}
         <div className="flex flex-wrap items-center gap-3 mb-8 pb-8 border-b border-hairline">
           {opportunity.application_url && (
             <a

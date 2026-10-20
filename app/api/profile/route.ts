@@ -30,6 +30,7 @@ import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { authFailureResponse } from '@/lib/auth/request-errors'
 import { invalidateMatchesCache } from '@/lib/matching/matchCache'
 import { isOwnStorageUrl } from '@/lib/validate'
 const profileSchema = z.object({
@@ -97,7 +98,7 @@ export async function GET() {
     error: authError,
   } = await supabase.auth.getUser()
   if (authError || !user) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    return authFailureResponse(authError)
   }
   const { data: profile, error } = await supabase
     .from('profiles')
@@ -119,7 +120,7 @@ export async function POST(request: Request) {
     error: authError,
   } = await supabase.auth.getUser()
   if (authError || !user) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    return authFailureResponse(authError)
   }
   const raw = await request.json().catch(() => null)
   const parsed = profileSchema.safeParse(raw)
@@ -183,7 +184,7 @@ export async function DELETE() {
     error: authError,
   } = await supabase.auth.getUser()
   if (authError || !user) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    return authFailureResponse(authError)
   }
   const { error, count } = await supabase
     .from('profiles')

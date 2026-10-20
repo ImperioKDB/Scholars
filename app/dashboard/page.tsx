@@ -66,6 +66,8 @@ export default async function DashboardPage() {
   const loadError =
     matchError && matchError !== "profile_not_found"
       ? "Couldn't load your matches. Try refreshing."
+      : savedResult.error || trendingResult.error
+        ? "Some dashboard details couldn't load, so saved scholarships or trending labels may be missing. Check your connection and refresh."
       : null;
   return (
     <DashboardClient

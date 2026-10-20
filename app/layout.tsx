@@ -4,6 +4,7 @@ import { AuthRescue } from "@/components/AuthRescue";
 import { CookieConsent } from "@/components/CookieConsent";
 import { InstallAppPrompt } from "@/components/InstallAppPrompt";
 import { Monitoring } from "@/components/Monitoring";
+import { NetworkStatus } from "@/components/NetworkStatus";
 import "./globals.css";
 import "./motion.css";
 
@@ -61,6 +62,7 @@ export default function RootLayout({
             No-op everywhere else. */}
         <AuthRescue />
         {children}
+        <NetworkStatus />
         <Monitoring />
         <InstallAppPrompt />
         {/* Essential-only cookie consent banner. Mounted in the root layout so

@@ -18,6 +18,7 @@ import { ReportScholarshipButton } from "@/components/ReportScholarshipButton";
 import { ScholarshipCommunity } from "@/components/ScholarshipCommunity";
 import type { ScholarshipCommunity as ScholarshipCommunityData } from "@/lib/scholarship-community";
 import { getSavedReturnPath } from "@/lib/scrollRestore";
+import { queueScholarshipSavedState } from "@/lib/offline/outbox";
 
 type ScholarshipDetail = {
   id: string;
@@ -106,6 +107,7 @@ export function ScholarshipDetailClient({
   const [savePending, setSavePending] = useState(false);
   const [trackPending, setTrackPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   function recordApplyClick() {
     if (!application) return;
@@ -126,6 +128,7 @@ export function ScholarshipDetailClient({
 
   async function toggleSave() {
     setActionError(null);
+    setActionNotice(null);
     const wasSaved = saved;
     setSaved(!wasSaved);
     setSavePending(true);
@@ -137,15 +140,22 @@ export function ScholarshipDetailClient({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ scholarship_id: scholarship.id }),
           });
-      if (!res.ok) {
+      if (!res.ok && (res.status === 408 || res.status >= 500) && await queueScholarshipSavedState(sharerId, scholarship.id, !wasSaved)) {
+        setActionNotice("Your change is saved on this device and will sync when connected.");
+      } else if (!res.ok) {
         setSaved(wasSaved);
-        setActionError("Couldn't update saved status. Try again.");
+        setActionError(res.status === 401 ? "Your session needs to be refreshed before saving." : "Couldn't update saved status. Try again.");
       }
     } catch {
-      setSaved(wasSaved);
-      setActionError("Couldn't update saved status. Check your connection and try again.");
+      if (await queueScholarshipSavedState(sharerId, scholarship.id, !wasSaved)) {
+        setActionNotice("Your change is saved on this device and will sync when connected.");
+      } else {
+        setSaved(wasSaved);
+        setActionError("Couldn't save this change offline. Check your connection and try again.");
+      }
+    } finally {
+      setSavePending(false);
     }
-    setSavePending(false);
   }
 
   async function startTracking() {
@@ -239,7 +249,8 @@ export function ScholarshipDetailClient({
           <p className="text-sm text-ink leading-relaxed mb-6 mt-4">{scholarship.description}</p>
         )}
 
-        {actionError && <StatusMessage tone="error" className="mb-4">{actionError}</StatusMessage>}
+      {actionError && <StatusMessage tone="error" className="mb-4">{actionError}</StatusMessage>}
+      {actionNotice && <div role="status" className="mb-4 rounded-xl border border-navy/10 bg-navy-50 px-4 py-3 text-sm text-navy">{actionNotice}</div>}
 
         <div className="flex flex-wrap items-center gap-3 mb-8 pb-8 border-b border-hairline">
           {scholarship.application_url && (

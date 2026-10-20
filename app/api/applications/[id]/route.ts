@@ -27,6 +27,7 @@ import { dbErrorResponse } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { authFailureResponse } from '@/lib/auth/request-errors'
 import { isUuid } from '@/lib/validate'
 import { trackServerEvent } from '@/lib/analytics-server'
 
@@ -55,7 +56,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     error: authError,
   } = await supabase.auth.getUser()
   if (authError || !user) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    return authFailureResponse(authError)
   }
 
   const raw = await request.json().catch(() => null)
@@ -65,6 +66,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       { error: 'Invalid update data', issues: parsed.error.issues },
       { status: 400 }
     )
+  }
+
+  let previousStatus: string | null = null
+  if (parsed.data.status !== undefined) {
+    const { data: existing, error: existingError } = await supabase
+      .from('applications')
+      .select('status')
+      .eq('id', id)
+      .eq('profile_id', user.id)
+      .maybeSingle()
+    if (existingError) return dbErrorResponse('applications/[id]', existingError)
+    if (!existing) return NextResponse.json({ error: 'Application not found' }, { status: 404 })
+    previousStatus = existing.status
   }
 
   const { data, error } = await supabase
@@ -82,7 +96,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return dbErrorResponse('applications/[id]', error)
   }
 
-  if (parsed.data.status !== undefined) {
+  if (parsed.data.status !== undefined && parsed.data.status !== previousStatus) {
     trackServerEvent(supabase, user.id, 'application_status_changed', {
       application_id: id,
       status: parsed.data.status,
@@ -103,7 +117,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     error: authError,
   } = await supabase.auth.getUser()
   if (authError || !user) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    return authFailureResponse(authError)
   }
 
   const { error, count } = await supabase

@@ -1,21 +1,8 @@
-// lib/supabase/service.ts
-//
 // SERVICE ROLE CLIENT — bypasses Row Level Security entirely.
-//
-// Use ONLY for:
-//   - The deadline-reminder cron job (writes notifications for arbitrary
-//     users; there's no user session to scope an RLS-respecting client to)
-//   - Any future system job that must act across all users' rows
-//
-// NEVER import this into anything reachable from a page, a client
-// component, or a normal user-triggered API route. Every route that
-// imports this file should independently verify it's only reachable by
-// a trusted caller (e.g. the CRON_SECRET check in the cron route) —
-// this client has no other access control of its own.
-
+// Use only for trusted system jobs that must operate across users' rows.
 import 'server-only'
-
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { createTimeoutFetch } from '@/lib/fetch'
 
 export function createServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -32,5 +19,6 @@ export function createServiceClient() {
       autoRefreshToken: false,
       persistSession: false,
     },
+    global: { fetch: createTimeoutFetch() },
   })
 }
