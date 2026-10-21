@@ -23,10 +23,24 @@ function formatDeadline(value?: string | null) {
   }).format(new Date(Date.UTC(year, month - 1, day)));
 }
 
+function formatShareValue(value?: string | null, kind: ShareCardKind = "scholarship") {
+  const fallback = kind === "scholarship" ? "See listing" : "Details in listing";
+  // Satori's default font does not consistently include the Naira glyph.
+  // Spell it out so the award remains readable in every social preview.
+  return (value || fallback).replace(/₦\s*/g, "NGN ");
+}
+
+function titleFontSize(title: string) {
+  if (title.length <= 42) return 52;
+  if (title.length <= 72) return 46;
+  if (title.length <= 105) return 40;
+  return 34;
+}
+
 function BrandMark() {
   return (
-    <svg width="76" height="76" viewBox="0 0 76 76" aria-hidden="true">
-      <circle cx="38" cy="38" r="35" fill="none" stroke="#35B8B0" strokeWidth="2" opacity="0.9" />
+    <svg width="48" height="48" viewBox="0 0 76 76" aria-hidden="true">
+      <circle cx="38" cy="38" r="35" fill="none" stroke="#35B8B0" strokeWidth="2" />
       <path
         d="M53 19C43 13 31 13 22 18C13 23 10 32 12 40C14 49 21 54 31 57L37 49C31 47 26 44 25 39C23 33 26 28 32 25C38 22 45 23 51 26L53 19Z"
         fill="#F7F5EF"
@@ -41,18 +55,49 @@ function BrandMark() {
   );
 }
 
-function MetaItem({ label, value }: { label: string; value: string }) {
+function DetailBox({ label, value, prominent = false }: { label: string; value: string; prominent?: boolean }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, minWidth: 0 }}>
-      <div style={{ display: "flex", fontSize: 15, fontWeight: 700, letterSpacing: 1.4, color: "#718096" }}>{label}</div>
-      <div style={{ display: "flex", fontSize: 24, fontWeight: 700, color: "#172342", lineHeight: 1.1 }}>{value}</div>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        gap: 8,
+        minWidth: 0,
+        flex: 1,
+        padding: "15px 17px",
+        borderRadius: 16,
+        background: prominent ? "#172342" : "#E9EEE9",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          color: prominent ? "#92D8D0" : "#536276",
+          fontSize: 15,
+          fontWeight: 800,
+          letterSpacing: 1.5,
+        }}
+      >
+        {label.toUpperCase()}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          color: prominent ? "#FFFFFF" : "#172342",
+          fontSize: 23,
+          fontWeight: 800,
+          lineHeight: 1.15,
+        }}
+      >
+        {value}
+      </div>
     </div>
   );
 }
 
 export function ShareCard({ kind, title, provider, primaryLabel, primaryValue, deadline }: ShareCardProps): ReactNode {
   const kindLabel = kind === "scholarship" ? "SCHOLARSHIP" : "OPPORTUNITY";
-  const value = primaryValue || (kind === "scholarship" ? "See listing" : "Details in listing");
 
   return (
     <div
@@ -60,47 +105,105 @@ export function ShareCard({ kind, title, provider, primaryLabel, primaryValue, d
         width: "100%",
         height: "100%",
         display: "flex",
-        background: "#F7F5EF",
-        color: "#172342",
+        alignItems: "center",
+        justifyContent: "center",
+        position: "relative",
+        overflow: "hidden",
+        background: "#172342",
         fontFamily: "Arial, sans-serif",
       }}
     >
-      <div style={{ width: 390, height: "100%", display: "flex", position: "relative", overflow: "hidden", background: "#172342", padding: "58px 54px" }}>
-        <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", width: "100%", zIndex: 2 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 15 }}>
-            <BrandMark />
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <div style={{ display: "flex", color: "#F7F5EF", fontSize: 30, fontWeight: 800, letterSpacing: -1 }}>Scholars</div>
-              <div style={{ display: "flex", color: "#92D8D0", fontSize: 14, fontWeight: 700, letterSpacing: 2 }}>FIND YOUR NEXT STEP</div>
+      <div
+        style={{
+          position: "absolute",
+          width: 720,
+          height: 720,
+          border: "2px solid rgba(53,184,176,0.18)",
+          borderRadius: 999,
+          left: -390,
+          top: -390,
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          width: 520,
+          height: 520,
+          border: "2px solid rgba(247,245,239,0.08)",
+          borderRadius: 999,
+          right: -300,
+          bottom: -370,
+        }}
+      />
+
+      {/* The centered 630px square is the safe area used by social clients
+          that crop landscape Open Graph images to a near-square thumbnail. */}
+      <div
+        style={{
+          width: 760,
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          position: "relative",
+          padding: "42px 68px 38px",
+          background: "#F7F5EF",
+          borderLeft: "1px solid #DFE4DE",
+          borderRight: "1px solid #DFE4DE",
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 27 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <BrandMark />
+              <div style={{ display: "flex", color: "#172342", fontSize: 25, fontWeight: 800, letterSpacing: -0.5 }}>
+                Scholars
+              </div>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                padding: "9px 13px",
+                borderRadius: 999,
+                background: "#DDF1EC",
+                color: "#146C6D",
+                fontSize: 14,
+                fontWeight: 800,
+                letterSpacing: 1.1,
+              }}
+            >
+              {kindLabel}
             </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ display: "flex", width: 48, height: 5, background: "#35B8B0" }} />
-            <div style={{ display: "flex", color: "#D6E8E3", fontSize: 22, lineHeight: 1.25, maxWidth: 230 }}>Opportunities worth sharing.</div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+            <div style={{ display: "flex", color: "#536276", fontSize: 22, fontWeight: 700, lineHeight: 1.2 }}>
+              {provider}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                color: "#172342",
+                fontSize: titleFontSize(title),
+                fontWeight: 800,
+                lineHeight: 1.06,
+                letterSpacing: -1.1,
+              }}
+            >
+              {title}
+            </div>
           </div>
         </div>
-        <div style={{ position: "absolute", width: 440, height: 440, border: "2px solid rgba(53,184,176,0.26)", borderRadius: 999, top: 255, left: -210 }} />
-        <div style={{ position: "absolute", width: 320, height: 320, border: "2px solid rgba(247,245,239,0.13)", borderRadius: 999, top: 320, left: -145 }} />
-        <div style={{ position: "absolute", width: 520, height: 52, background: "#248A9A", transform: "rotate(-34deg)", bottom: 74, left: -100, opacity: 0.9 }} />
-      </div>
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "66px 72px 58px 66px" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ display: "flex", width: 10, height: 10, borderRadius: 999, background: "#2CAAAE" }} />
-            <div style={{ display: "flex", color: "#167276", fontSize: 18, fontWeight: 800, letterSpacing: 2.5 }}>{kindLabel}</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "flex", gap: 12, width: "100%" }}>
+            <DetailBox label={primaryLabel} value={formatShareValue(primaryValue, kind)} prominent />
+            <DetailBox label="Deadline" value={formatDeadline(deadline)} />
           </div>
-          <div style={{ display: "flex", color: "#64748B", fontSize: 26, fontWeight: 600, lineHeight: 1.2 }}>{provider}</div>
-          <div style={{ display: "flex", color: "#172342", fontSize: 54, fontWeight: 800, lineHeight: 1.08, letterSpacing: -1.4, maxWidth: 650 }}>{title}</div>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <div style={{ display: "flex", height: 1, width: "100%", background: "#D7DDD8" }} />
-          <div style={{ display: "flex", gap: 42 }}>
-            <MetaItem label={primaryLabel.toUpperCase()} value={value} />
-            <MetaItem label="DEADLINE" value={formatDeadline(deadline)} />
+          <div style={{ display: "flex", justifyContent: "center", color: "#536276", fontSize: 15, fontWeight: 700 }}>
+            Shared from scholars.com.ng
           </div>
-          <div style={{ display: "flex", color: "#64748B", fontSize: 18, fontWeight: 600 }}>Shared from scholars.com.ng</div>
         </div>
       </div>
     </div>
