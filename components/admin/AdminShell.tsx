@@ -31,6 +31,7 @@ const NAV_GROUPS: AdminNavGroup[] = [
   {
     label: "Community",
     items: [
+      { href: "/admin/community-invitations", label: "WhatsApp invitations", description: "Consent-based manual invites", Icon: UsersIcon },
       { href: "/admin/discussions", label: "Moderation", description: "Review community posts", Icon: FeedbackIcon },
       { href: "/admin/feedback", label: "Feedback", description: "Student reports and ideas", Icon: FeedbackIcon },
       { href: "/admin/testimonials", label: "Testimonials", description: "Publish student stories", Icon: TestimonialsIcon },

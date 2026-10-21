@@ -7,7 +7,7 @@ function adminMfaRequired(): boolean {
 
 // Server-only admin gate for Server Components. Database RLS and API guards
 // remain the actual authorization boundaries.
-export async function requireAdmin(options: { requireAal2?: boolean } = {}) {
+export async function requireAdmin(options: { requireAal2?: boolean; requireFounder?: boolean } = {}) {
   const supabase = createClient();
   const {
     data: { user },
@@ -17,11 +17,12 @@ export async function requireAdmin(options: { requireAal2?: boolean } = {}) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("is_admin, full_name")
+    .select("is_admin, full_name, community_role")
     .eq("id", user!.id)
     .maybeSingle();
 
   if (profile?.is_admin !== true) redirect("/dashboard");
+  if (options.requireFounder && profile.community_role !== "founder") redirect("/dashboard");
 
   if (options.requireAal2 || adminMfaRequired()) {
     const { data: aal } =

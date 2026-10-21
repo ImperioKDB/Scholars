@@ -5,6 +5,7 @@ import { INSTITUTION_TYPE_OPTIONS } from "@/lib/profile";
 import { levelForXp } from "@/lib/xp/level";
 import { AvatarUploader } from "@/components/AvatarUploader";
 import { CommunityBioEditor } from "@/components/CommunityBioEditor";
+import { WhatsappCommunityInvitationConsent } from "@/components/WhatsappCommunityInvitationConsent";
 import { PushNotificationSettings } from "@/components/PushNotificationSettings";
 import { DeleteAccountButton } from "@/components/DeleteAccountButton";
 
@@ -41,6 +42,8 @@ type ProfileRow = {
   has_lga_certificate: boolean;
   avatar_url: string | null;
   community_bio: string | null;
+  whatsapp_number: string | null;
+  whatsapp_community_invite_opt_in: boolean;
   profile_completeness: number;
   xp_total: number;
 };
@@ -159,6 +162,12 @@ export default async function SettingsPage() {
       </Section>
       <Section title="Community profile">
         <CommunityBioEditor initialBio={p.community_bio} />
+      </Section>
+      <Section title="WhatsApp Student Community invitation">
+        <WhatsappCommunityInvitationConsent
+          initialOptIn={p.whatsapp_community_invite_opt_in}
+          initialNumber={p.whatsapp_number}
+        />
       </Section>
       <Section title="Push notifications">
         <PushNotificationSettings publicKey={process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY ?? null} />

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { track } from "@/lib/analytics";
 import { StatusMessage } from "@/components/StatusMessage";
+import { normalizeNigerianNumber } from "@/lib/whatsapp/phone";
 // components/WhatsappOptIn.tsx
 //
 // Phase 1 consent capture: a dashboard banner offering WhatsApp deadline
@@ -17,15 +18,6 @@ const DISMISS_KEY = "scholars:wa_banner_dismissed";
 // Accepts 08031234567, +2348031234567, 2348031234567 and normalizes to
 // E.164 (+234...). Returns null when the number isn't a valid Nigerian
 // mobile format so we never store garbage consent targets.
-export function normalizeNigerianNumber(raw: string): string | null {
-  const digits = raw.replace(/[\s()-]/g, "");
-  let normalized = digits;
-  if (digits.startsWith("0")) normalized = "+234" + digits.slice(1);
-  else if (digits.startsWith("+234")) normalized = digits;
-  else if (digits.startsWith("234")) normalized = "+" + digits;
-  else return null;
-  return /^\+234\d{10}$/.test(normalized) ? normalized : null;
-}
 export function WhatsappOptIn({ initialOptIn }: { initialOptIn: boolean }) {
   const [hidden, setHidden] = useState(() => {
     try {

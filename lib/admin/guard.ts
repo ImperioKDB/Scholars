@@ -18,7 +18,7 @@ function adminMfaRequired(): boolean {
 
 export async function assertAdmin(
   supabase: Supabase,
-  options: { requireAal2?: boolean } = {}
+  options: { requireAal2?: boolean; requireFounder?: boolean } = {}
 ): Promise<AdminGuard> {
   const {
     data: { user },
@@ -37,7 +37,7 @@ export async function assertAdmin(
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("is_admin")
+    .select("is_admin, community_role")
     .eq("id", user.id)
     .single();
 
@@ -46,6 +46,16 @@ export async function assertAdmin(
       ok: false,
       response: NextResponse.json(
         { error: "Admin access required" },
+        { status: 403 }
+      ),
+    };
+  }
+
+  if (options.requireFounder && profile.community_role !== "founder") {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "Founder access required" },
         { status: 403 }
       ),
     };
