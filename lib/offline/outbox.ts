@@ -15,6 +15,12 @@ export type OfflineOutboxRecord = {
   state: "pending" | "failed";
 };
 
+export type OfflineSyncProgress = {
+  current: number;
+  total: number;
+  synced: number;
+};
+
 let databasePromise: Promise<IDBDatabase> | null = null;
 let syncInFlight: Promise<{ synced: number; pending: number; failed: number }> | null = null;
 
@@ -43,6 +49,12 @@ function openDatabase(): Promise<IDBDatabase> {
 
 function emitOutboxUpdated() {
   if (typeof window !== "undefined") window.dispatchEvent(new Event("scholars:outbox-updated"));
+}
+
+function emitSyncProgress(progress: OfflineSyncProgress) {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent<OfflineSyncProgress>("scholars:offline-sync-progress", { detail: progress }));
+  }
 }
 
 async function readAll(): Promise<OfflineOutboxRecord[]> {
@@ -169,18 +181,22 @@ export async function syncPendingOutbox(userId: string): Promise<{ synced: numbe
     const records = (await readAll())
       .filter((record) => record.userId === userId && record.state === "pending")
       .sort((a, b) => a.createdAt - b.createdAt);
+    emitSyncProgress({ current: 0, total: records.length, synced });
 
-    for (const record of records) {
+    for (const [index, record] of records.entries()) {
       if (typeof navigator !== "undefined" && !navigator.onLine) break;
+      emitSyncProgress({ current: index + 1, total: records.length, synced });
       try {
         const response = await replay(record);
         if (response.ok) {
           await deleteRecord(record.key);
           synced += 1;
+          emitSyncProgress({ current: index + 1, total: records.length, synced });
           continue;
         }
         if (response.status === 401 || response.status === 408 || response.status === 429 || response.status >= 500) break;
         await writeRecord({ ...record, state: "failed" });
+        emitSyncProgress({ current: index + 1, total: records.length, synced });
       } catch {
         // The server may have received the request even if the response was lost.
         // Replaying desired-state writes is safe; keep it pending for the next connection.
