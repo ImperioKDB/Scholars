@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { clearFailedOutbox, getOutboxCounts, syncPendingOutbox, type OfflineSyncProgress } from "@/lib/offline/outbox";
+import { LogoMark } from "@/components/Logo";
 
 type ConnectionState = "unknown" | "online" | "offline" | "checking" | "unavailable" | "restored";
 
@@ -174,11 +175,61 @@ export function NetworkStatus() {
     }
   }
 
+  if (state === "checking") {
+    const circumference = 314;
+    const loaderProgressPercent = syncProgress?.total && syncProgress.synced > 0
+      ? progressPercent
+      : null;
+    const progressOffset = loaderProgressPercent === null
+      ? undefined
+      : circumference - (circumference * loaderProgressPercent) / 100;
+    const loaderMessage = !sending
+      ? "Checking your connection…"
+      : currentStep === 0
+        ? "Preparing your saved updates…"
+        : `Sending update ${currentStep} of ${syncProgress!.total}…`;
+    const loaderDetail = !sending
+      ? "Looking for a stable connection."
+      : currentStep === 0
+        ? "Your changes are safe on this device while we reconnect."
+        : `${syncProgress!.synced} of ${syncProgress!.total} updates sent successfully.`;
+
+    return (
+      <div className="network-loading-overlay" role="status" aria-live="polite" aria-busy="true">
+        <div className="network-loading-loader">
+          <div
+            className={`network-loading-ring ${loaderProgressPercent === null ? "network-loading-ring--indeterminate" : ""}`}
+            role="progressbar"
+            aria-label={sending ? "Synchronizing saved updates" : "Checking your connection"}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            {...(loaderProgressPercent === null ? {} : { "aria-valuenow": loaderProgressPercent })}
+          >
+            <svg viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+              <circle className="network-loading-ring__track" cx="60" cy="60" r="50" />
+              <circle
+                className="network-loading-ring__progress"
+                cx="60"
+                cy="60"
+                r="50"
+                pathLength="314"
+                style={progressOffset === undefined ? undefined : { strokeDashoffset: progressOffset }}
+              />
+            </svg>
+            <LogoMark className="network-loading-logo" />
+          </div>
+          <p className="network-loading-text">{loaderMessage}</p>
+          <p className="network-loading-detail">{loaderDetail}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-x-3 bottom-3 z-[100] mx-auto max-w-2xl" role="status" aria-live="polite">
-      <div className={`network-status-card rounded-2xl border border-navy/15 bg-white px-4 py-4 text-sm text-navy shadow-[0_8px_28px_rgba(11,30,61,0.18)] ${state === "checking" ? "network-status-card--busy" : ""}`}>
+      <div className="network-status-card rounded-2xl border border-navy/15 bg-white px-4 py-4 text-sm text-navy shadow-[0_8px_28px_rgba(11,30,61,0.18)]">
         <div className="flex items-center gap-3">
-          <div className={`network-status-mark shrink-0 ${state === "checking" ? "network-status-mark--busy" : ""}`} aria-hidden="true">
+          <div className="network-status-mark shrink-0" aria-hidden="true">
             <span /><span /><span />
           </div>
           <div className="min-w-0 flex-1">
@@ -186,32 +237,11 @@ export function NetworkStatus() {
             <p className="mt-0.5 text-xs leading-5 text-navy-light">{detail}</p>
           </div>
           {(state === "offline" || state === "unavailable" || counts.pending > 0) && (
-            <button type="button" onClick={() => void checkConnection()} disabled={state === "checking"} className="min-h-9 shrink-0 rounded-seal bg-navy px-4 text-xs font-semibold text-white hover:bg-navy-light disabled:opacity-60">
-              {state === "checking" ? "Working…" : counts.pending > 0 && state === "online" ? "Sync now" : "Retry"}
+            <button type="button" onClick={() => void checkConnection()} className="min-h-9 shrink-0 rounded-seal bg-navy px-4 text-xs font-semibold text-white hover:bg-navy-light">
+              {counts.pending > 0 && state === "online" ? "Sync now" : "Retry"}
             </button>
           )}
         </div>
-        {state === "checking" && (
-          <div className="mt-3 pl-12">
-            <div
-              className="network-sync-track"
-              role="progressbar"
-              aria-label={sending ? "Syncing queued updates" : "Checking your connection"}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              {...(progressPercent === null ? {} : { "aria-valuenow": progressPercent })}
-            >
-              <span
-                className={`network-sync-fill ${progressPercent === null ? "network-sync-fill--indeterminate" : ""}`}
-                style={progressPercent === null ? undefined : { width: `${progressPercent}%` }}
-              />
-            </div>
-            <div className="mt-1.5 flex items-center justify-between gap-3 text-[11px] text-navy-light">
-              <span>{sending ? "Applying your saved changes" : "Checking connection"}</span>
-              <span>{sending ? currentStep > 0 ? `${currentStep}/${syncProgress!.total}` : `${syncProgress!.total} queued` : "Almost there"}</span>
-            </div>
-          </div>
-        )}
         {counts.pending > 0 && <p className="mt-1 text-xs text-navy-light">Only saved scholarship/opportunity states and application status updates are queued; other actions need a connection.</p>}
         {counts.failed > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-rose">
