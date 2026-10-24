@@ -140,86 +140,6 @@
   width: 32%;
   animation: network-sync-travel 1.2s ease-in-out infinite;
 }
-.network-loading-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(247, 244, 237, 0.88);
-  backdrop-filter: blur(3px);
-  pointer-events: none;
-}
-.network-loading-panel {
-  display: flex;
-  width: min(100%, 320px);
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-.network-loading-ring {
-  position: relative;
-  width: 124px;
-  height: 124px;
-  color: #15705a;
-}
-.network-loading-ring svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-.network-loading-ring circle {
-  fill: none;
-  stroke-width: 7;
-}
-.network-loading-ring__track {
-  stroke: rgba(21, 112, 90, 0.14);
-}
-.network-loading-ring__progress {
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-dasharray: 314;
-  stroke-dashoffset: 314;
-  transition: stroke-dashoffset 260ms var(--motion-ease-out);
-}
-.network-loading-ring--indeterminate .network-loading-ring__progress {
-  stroke-dasharray: 88 226;
-}
-.network-loading-ring--indeterminate svg {
-  animation: network-loading-ring-spin 1.15s linear infinite;
-}
-.network-loading-logo {
-  position: absolute;
-  inset: 31px;
-  width: 62px;
-  height: 62px;
-  color: #0b1e3d;
-}
-.network-loading-headline {
-  margin-top: 22px;
-  color: #0b1e3d;
-  font-size: 1rem;
-  font-weight: 700;
-  line-height: 1.35;
-}
-.network-loading-detail {
-  max-width: 280px;
-  margin-top: 6px;
-  color: #53627a;
-  font-size: 0.8125rem;
-  line-height: 1.55;
-}
-.network-loading-caption {
-  margin-top: 12px;
-  color: #15705a;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
 @keyframes network-signal-hop {
   0%, 100% { opacity: 0.45; transform: translateY(0); }
   50% { opacity: 1; transform: translateY(-3px); }
@@ -227,10 +147,6 @@
 @keyframes network-sync-travel {
   from { transform: translateX(-110%); }
   to { transform: translateX(320%); }
-}
-@keyframes network-loading-ring-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
 }
 
 @keyframes tour-shell-in {
@@ -269,16 +185,6 @@
   .network-status-mark--busy span,
   .network-sync-fill--indeterminate {
     animation: none;
-  }
-  .network-loading-ring--indeterminate svg {
-    animation: none;
-  }
-  .network-loading-ring--indeterminate .network-loading-ring__progress {
-    stroke-dasharray: 314;
-    stroke-dashoffset: 220;
-  }
-  .network-loading-ring__progress {
-    transition: none;
   }
   .student-menu-overlay:not([data-open="true"]) {
     visibility: hidden;
