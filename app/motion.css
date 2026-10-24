@@ -140,76 +140,6 @@
   width: 32%;
   animation: network-sync-travel 1.2s ease-in-out infinite;
 }
-.network-loading-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px 24px calc(24px + env(safe-area-inset-bottom));
-  pointer-events: none;
-}
-.network-loading-loader {
-  display: flex;
-  width: min(100%, 280px);
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-.network-loading-ring {
-  position: relative;
-  width: 108px;
-  height: 108px;
-  color: #15705a;
-}
-.network-loading-ring svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-.network-loading-ring circle {
-  fill: none;
-  stroke-width: 4;
-}
-.network-loading-ring__track {
-  stroke: rgba(11, 30, 61, 0.13);
-}
-.network-loading-ring__progress {
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-dasharray: 314;
-  stroke-dashoffset: 314;
-  transition: stroke-dashoffset 260ms var(--motion-ease-out);
-}
-.network-loading-ring--indeterminate .network-loading-ring__progress {
-  stroke-dasharray: 82 232;
-}
-.network-loading-ring--indeterminate svg {
-  animation: network-loading-ring-spin 1.15s linear infinite;
-}
-.network-loading-logo {
-  position: absolute;
-  inset: 29px;
-  width: 50px;
-  height: 50px;
-  color: #0b1e3d;
-}
-.network-loading-text {
-  margin-top: 18px;
-  color: #0b1e3d;
-  font-size: 0.9375rem;
-  font-weight: 700;
-  line-height: 1.4;
-}
-.network-loading-detail {
-  max-width: 260px;
-  margin-top: 5px;
-  color: #53627a;
-  font-size: 0.75rem;
-  line-height: 1.5;
-}
 @keyframes network-signal-hop {
   0%, 100% { opacity: 0.45; transform: translateY(0); }
   50% { opacity: 1; transform: translateY(-3px); }
@@ -217,10 +147,6 @@
 @keyframes network-sync-travel {
   from { transform: translateX(-110%); }
   to { transform: translateX(320%); }
-}
-@keyframes network-loading-ring-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
 }
 
 @keyframes tour-shell-in {
@@ -259,12 +185,6 @@
   .network-status-mark--busy span,
   .network-sync-fill--indeterminate {
     animation: none;
-  }
-  .network-loading-ring--indeterminate svg {
-    animation: none;
-  }
-  .network-loading-ring__progress {
-    transition: none;
   }
   .student-menu-overlay:not([data-open="true"]) {
     visibility: hidden;
