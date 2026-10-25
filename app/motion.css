@@ -95,58 +95,174 @@
   transform: translateX(0);
 }
 
-/* Offline sync: a calm signal pulse and a real progress fill make recovery
-   feel active without pretending that queued work has finished. */
-.network-status-card--busy {
-  border-color: rgba(21, 112, 90, 0.3);
+/* Offline sync: a centered, logo-led status. The Scholars mark sits inside a
+   compact ring that is indeterminate while the connection is checked and only
+   becomes determinate from real synced/total progress. Ring and logo size
+   come from two variables so they always scale together around one centre.
+   The wrapper ignores pointer input, so the app underneath stays usable. */
+.network-loader {
+  --nl-ring: 72px;
+  --nl-mark: calc(var(--nl-ring) * 0.47);
+  --nl-accent: #15705a;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding:
+    max(1.5rem, env(safe-area-inset-top))
+    max(1.5rem, env(safe-area-inset-right))
+    max(1.5rem, env(safe-area-inset-bottom))
+    max(1.5rem, env(safe-area-inset-left));
+  background: rgba(247, 245, 239, 0.9);
+  pointer-events: none;
+  animation: network-loader-in var(--nl-fade, 320ms) ease-out both;
 }
-.network-status-mark {
+.network-loader[data-leaving="true"] {
+  animation: network-loader-out var(--nl-fade, 320ms) ease-in both;
+}
+.network-loader__content {
+  display: flex;
+  width: 100%;
+  max-width: 18rem;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.network-loader__ring {
+  position: relative;
+  flex: none;
+  width: var(--nl-ring);
+  height: var(--nl-ring);
+}
+.network-loader[data-phase="success"] .network-loader__ring {
+  animation: network-loader-pop 560ms var(--motion-ease-out) 1;
+}
+.network-loader__svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.network-loader__track,
+.network-loader__arc,
+.network-loader__sweep-arc {
+  fill: none;
+  stroke-width: 5;
+}
+.network-loader__track { stroke: rgba(11, 30, 61, 0.09); }
+.network-loader__arc,
+.network-loader__sweep-arc {
+  stroke: var(--nl-accent);
+  stroke-linecap: round;
+}
+.network-loader__arc {
+  transition: stroke-dashoffset 520ms var(--motion-ease-out), opacity 240ms ease;
+}
+.network-loader__arc[data-empty="true"],
+.network-loader__ring[data-mode="indeterminate"] .network-loader__arc {
+  opacity: 0;
+}
+.network-loader__sweep {
+  transition: opacity 240ms ease;
+  animation: network-loader-spin 1.8s linear infinite;
+}
+.network-loader__ring[data-mode="determinate"] .network-loader__sweep {
+  opacity: 0;
+}
+.network-loader__sweep-arc {
+  stroke-dasharray: 52 237;
+  animation: network-loader-dash 2.4s ease-in-out infinite;
+}
+.network-loader__mark {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: var(--nl-mark);
+  height: var(--nl-mark);
+  margin: auto;
+}
+.network-loader__text {
+  display: grid;
+  width: 100%;
+  justify-items: center;
+  row-gap: 0.25rem;
+  margin-top: 1rem;
+}
+.network-loader__fade {
+  animation: network-loader-text var(--motion-duration-card, 320ms) ease-out both;
+}
+.network-loader__check { color: var(--nl-accent); }
+.network-loader__check path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: network-loader-check 420ms 140ms var(--motion-ease-out) forwards;
+}
+@media (max-height: 460px) {
+  .network-loader { --nl-ring: 60px; }
+  .network-loader__text { margin-top: 0.625rem; }
+}
+
+/* Bottom dock for states that need to stay reachable without blocking the app:
+   offline, connection unavailable, waiting updates and failed updates. */
+.network-dock {
+  animation: network-dock-in var(--motion-duration-card, 320ms) var(--motion-ease-out) both;
+}
+.network-dock__mark {
   display: flex;
   width: 42px;
   height: 42px;
   align-items: center;
   justify-content: center;
-  gap: 4px;
   border-radius: 14px;
   background: #e4f2ed;
 }
-.network-status-mark span {
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  background: #15705a;
-  opacity: 0.5;
+@keyframes network-loader-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
-.network-status-mark--busy span {
-  animation: network-signal-hop 900ms var(--motion-ease-out) infinite;
+@keyframes network-loader-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
-.network-status-mark--busy span:nth-child(2) { animation-delay: 120ms; }
-.network-status-mark--busy span:nth-child(3) { animation-delay: 240ms; }
-.network-sync-track {
-  position: relative;
-  height: 5px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(11, 30, 61, 0.09);
+@keyframes network-loader-text {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
-.network-sync-fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: #15705a;
-  transition: width 260ms var(--motion-ease-out);
+@keyframes network-loader-spin {
+  to { transform: rotate(360deg); }
 }
-.network-sync-fill--indeterminate {
-  width: 32%;
-  animation: network-sync-travel 1.2s ease-in-out infinite;
+@keyframes network-loader-dash {
+  0%, 100% { stroke-dasharray: 52 237; }
+  50% { stroke-dasharray: 118 171; }
 }
-@keyframes network-signal-hop {
-  0%, 100% { opacity: 0.45; transform: translateY(0); }
-  50% { opacity: 1; transform: translateY(-3px); }
+@keyframes network-loader-pop {
+  0%, 100% { transform: scale(1); }
+  45% { transform: scale(1.06); }
 }
-@keyframes network-sync-travel {
-  from { transform: translateX(-110%); }
-  to { transform: translateX(320%); }
+@keyframes network-loader-check {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes network-dock-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .network-loader,
+  .network-loader[data-leaving="true"] { animation-duration: 1ms; }
+  .network-loader[data-phase="success"] .network-loader__ring,
+  .network-loader__sweep,
+  .network-loader__sweep-arc,
+  .network-loader__fade,
+  .network-loader__check path,
+  .network-dock { animation: none; }
+  .network-loader__arc,
+  .network-loader__sweep { transition: none; }
+  /* A still dotted ring says "waiting" without implying a percentage. */
+  .network-loader__sweep-arc { stroke-dasharray: 0.01 9.0321; }
+  .network-loader__check path { stroke-dashoffset: 0; }
 }
 
 @keyframes tour-shell-in {
@@ -178,13 +294,8 @@
   }
   .student-menu-overlay,
   .student-menu-overlay[data-open="true"],
-  .student-menu-panel,
-  .network-sync-fill {
+  .student-menu-panel {
     transition: none;
-  }
-  .network-status-mark--busy span,
-  .network-sync-fill--indeterminate {
-    animation: none;
   }
   .student-menu-overlay:not([data-open="true"]) {
     visibility: hidden;
