@@ -5,8 +5,7 @@ import { Logo } from "@/components/Logo";
 import { createPublicClient } from "@/lib/supabase/public";
 import { formatVerifiedOn, todayUtcIso } from "@/lib/dates";
 import { Breadcrumbs, SeoJsonLd } from "@/components/SeoJsonLd";
-import { ScholarshipCommunity } from "@/components/ScholarshipCommunity";
-import { loadScholarshipCommunity } from "@/lib/scholarship-community";
+import { PublicScholarshipCommunity } from "@/components/PublicScholarshipCommunity";
 import { isUuid } from "@/lib/validate";
 // app/scholarship/[slug]/page.tsx
 // GET /s/[id] -- public, unauthenticated share landing page for a single
@@ -121,7 +120,6 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
   if (!scholarship) {
     notFound();
   }
-  const community = await loadScholarshipCommunity(createPublicClient(), scholarship.id);
   const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
   const publicUrl = `${base}/scholarship/${scholarship.slug || slug}`;
   return (
@@ -196,13 +194,7 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
               Log in
             </Link>
           </p>
-          <ScholarshipCommunity
-            scholarshipId={scholarship.id}
-            initialDiscussions={community.discussions}
-            prompts={community.prompts}
-            socialProof={community.socialProof}
-            canInteract={false}
-          />
+          <PublicScholarshipCommunity scholarshipId={scholarship.id} />
         </div>
         <SeoJsonLd
           data={{

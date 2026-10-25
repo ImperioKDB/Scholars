@@ -28,6 +28,13 @@ export async function GET(
   }
   const sort = new URL(request.url).searchParams.get("sort") === "recent" ? "recent" : "helpful";
   const supabase = createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
   const community = await loadScholarshipCommunity(supabase, params.id, sort);
   return NextResponse.json(community, {
     headers: { "Cache-Control": "private, max-age=20, stale-while-revalidate=60" },
