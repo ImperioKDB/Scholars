@@ -4,7 +4,7 @@ import { ScrollReveal } from "@/components/ScrollReveal";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ScholarshipCard, type CardScholarship } from "@/components/ScholarshipCard";
-import { SkeletonCard } from "@/components/Skeleton";
+import { LogoLoader } from "@/components/LogoLoader";
 import { isCurrentlyOpen } from "@/lib/discovery";
 import { fetchWithTimeout, FetchTimeoutError, FetchNetworkError } from "@/lib/fetch";
 import { MilestoneOnboarding } from "@/components/MilestoneOnboarding";
@@ -286,10 +286,7 @@ export function DiscoverClient({ userId, initialSavedIds, initialSavedError }: {
               aria-busy="true"
               aria-label="Loading scholarships"
             >
-              {Array.from({ length: items.length === 0 ? 4 : 2 }).map((_, i) => (
-                <SkeletonCard key={i} />
-              ))}
-              <span className="sr-only">Loading scholarships&hellip;</span>
+              <LogoLoader variant="section" label="Loading scholarships…" />
             </div>
           )}
           {!loading && hasMore && (

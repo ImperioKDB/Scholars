@@ -8,7 +8,7 @@ import { FormField, inputClass } from "@/components/FormField";
 import { StatusMessage } from "@/components/StatusMessage";
 import { PasswordField } from "@/components/PasswordField";
 import { normalizeEmail } from "@/lib/auth/email";
-import { Skeleton } from "@/components/Skeleton";
+import { LogoLoader } from "@/components/LogoLoader";
 import { AuthConfirmation } from "@/components/AuthConfirmation";
 import { safeNextPath } from "@/lib/validate";
 import { AUTH_NEXT_COOKIE } from "@/components/AuthRescue";
@@ -237,13 +237,7 @@ export default function LoginPage() {
     <Suspense
       fallback={
         <AuthShell heading="Welcome back" sub="Sign in to see your scholarship matches.">
-          <div aria-busy="true" aria-label="Loading sign-in form" className="space-y-4">
-            <Skeleton className="h-4 w-16" />
-            <Skeleton className="h-11 w-full" />
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-11 w-full" />
-            <Skeleton className="h-12 w-full mt-2" />
-          </div>
+          <LogoLoader variant="section" label="Loading sign-in form…" />
         </AuthShell>
       }
     >

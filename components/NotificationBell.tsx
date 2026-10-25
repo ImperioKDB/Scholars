@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Skeleton } from "@/components/Skeleton";
+import { LogoLoader } from "@/components/LogoLoader";
 
 type NotificationItem = {
   id: string;
@@ -24,18 +24,8 @@ function relativeDate(value: string) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-function NotificationListSkeleton() {
-  return (
-    <div aria-label="Loading notifications" aria-busy="true" className="space-y-3 px-4 py-4">
-      {Array.from({ length: 3 }).map((_, index) => (
-        <div key={index} className="space-y-2">
-          <Skeleton className="h-3.5 w-full" />
-          <Skeleton className="h-3.5 w-2/3" />
-          <Skeleton className="h-2.5 w-16" />
-        </div>
-      ))}
-    </div>
-  );
+function NotificationListLoading() {
+  return <LogoLoader variant="section" label="Loading notifications…" />;
 }
 
 export function NotificationBell() {
@@ -140,7 +130,7 @@ export function NotificationBell() {
           </div>
           <div className="max-h-80 overflow-y-auto">
             {loading && items.length === 0 ? (
-              <NotificationListSkeleton />
+              <NotificationListLoading />
             ) : error ? (
               <div role="alert" className="px-4 py-5 text-sm text-navy-light">
                 <p>Notifications are temporarily unavailable.</p>

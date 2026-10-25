@@ -194,27 +194,6 @@ opacity only. */
   animation: card-in var(--motion-duration-card) var(--motion-ease-out) both;
 }
 
-/* MOTION/FEEDBACK (item 3): skeleton shimmer sweep. Replaces animate-pulse
-on Skeleton.tsx. background-position only (no layout cost), infinite while
-the placeholder is mounted, and fully disabled under reduced motion (the
-old pulse was not gated, an a11y gap). Base color stays navy-50 so the
-reduced-motion fallback is a plain static block. */
-@keyframes skeleton-shimmer {
-  0% { background-position: -150% 0; }
-  100% { background-position: 250% 0; }
-}
-.skeleton-shimmer {
-  background-image: linear-gradient(
-    100deg,
-    #EEF2F8 40%,
-    rgba(255, 255, 255, 0.9) 50%,
-    #EEF2F8 60%
-  );
-  background-size: 250% 100%;
-  /* One pass is enough to communicate loading. Keeping placeholders static
-     after the pass avoids continuous gradient repaints on low-power phones. */
-  animation: skeleton-shimmer 1.6s ease-in-out 1 both;
-}
 
 /* NOTE: the save-pop keyframes live in app/motion.css (single source).
 They were previously duplicated here; the duplicate was removed so the
@@ -226,12 +205,7 @@ animation has exactly one definition. */
   .animate-card-in {
     animation: none;
   }
-  .skeleton-shimmer {
-    animation: none;
-    background-image: none;
-  }
-  /* Safety gate: any remaining animate-pulse (e.g. third-party) also
-  stops under reduced motion. */
+  /* Safety gate for third-party animations under reduced motion. */
   .animate-pulse,
   .animate-spin,
   .confetti-piece {

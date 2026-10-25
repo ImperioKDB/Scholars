@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
+import { LogoLoader } from "@/components/LogoLoader";
+import { LogoMark } from "@/components/Logo";
 
 type ContributorProfile = {
   profile_id: string;
@@ -58,7 +60,9 @@ export function ContributorProfileSheet({
         <div className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
             {loading ? (
-              <div className="h-12 w-12 shrink-0 animate-pulse rounded-full bg-navy-50" aria-hidden="true" />
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-navy-50" aria-hidden="true">
+                <LogoMark className="h-7 w-7" />
+              </div>
             ) : (
               <Avatar
                 userId={profile?.display_name ?? "contributor"}
@@ -88,10 +92,8 @@ export function ContributorProfileSheet({
           </button>
         </div>
         {loading ? (
-          <div className="mt-5 space-y-2" aria-label="Loading contributor details">
-            <div className="h-4 w-2/3 animate-pulse rounded bg-navy-50" />
-            <div className="h-4 w-full animate-pulse rounded bg-navy-50" />
-            <div className="h-4 w-5/6 animate-pulse rounded bg-navy-50" />
+          <div className="mt-5">
+            <LogoLoader variant="section" label="Loading contributor details…" />
           </div>
         ) : profile ? (
           <div className="mt-5 space-y-4">

@@ -3,7 +3,7 @@ import { StatusMessage } from "@/components/StatusMessage";
 import { ScrollReveal } from "@/components/ScrollReveal";
 import { useEffect, useRef, useState } from "react";
 import { OpportunityCard, type CardOpportunity } from "@/components/OpportunityCard";
-import { OpportunityGridSkeleton } from "@/components/OpportunityGridSkeleton";
+import { LogoLoader } from "@/components/LogoLoader";
 import { OPPORTUNITY_TYPE_OPTIONS } from "@/lib/admin/opportunity";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { queueOpportunitySavedState } from "@/lib/offline/outbox";
@@ -240,8 +240,7 @@ export function OpportunitiesClient({ initialSaved, userId }: { initialSaved: Sa
       )}
       {loading && items.length === 0 ? (
         <div className="mb-12" role="status" aria-live="polite" aria-busy="true" aria-label="Loading opportunities">
-          <span className="sr-only">Loading opportunities</span>
-          <OpportunityGridSkeleton />
+          <LogoLoader variant="section" label="Loading opportunities…" />
         </div>
       ) : !loading && items.length === 0 && !loadError ? (
         <div className="bg-white rounded-xl border border-hairline p-8 text-center mb-12">

@@ -307,3 +307,104 @@
   }
   .status-flash { opacity: 0; }
 }
+
+
+/* Shared page and section loading state. Unlike the fixed NetworkStatus
+   overlay above, this loader stays in normal flow so navigation remains
+   visible and usable while route content resolves. */
+.logo-loader {
+  --ll-ring: 72px;
+  --ll-mark: calc(var(--ll-ring) * 0.47);
+  --ll-accent: #15705a;
+  --ll-track: rgba(11, 30, 61, 0.09);
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  padding-inline: max(1rem, env(safe-area-inset-left)) max(1rem, env(safe-area-inset-right));
+  color: #0b1e3d;
+  opacity: 0;
+  animation: logo-loader-in 200ms ease-out 300ms forwards;
+}
+.logo-loader--page {
+  min-height: min(26rem, calc(100svh - 8rem));
+}
+.logo-loader--section {
+  min-height: 15rem;
+}
+.logo-loader__content {
+  display: flex;
+  width: min(100%, 18rem);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.logo-loader__ring {
+  position: relative;
+  width: var(--ll-ring);
+  height: var(--ll-ring);
+  flex: none;
+}
+.logo-loader__svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  animation: logo-loader-spin 1.8s linear infinite;
+}
+.logo-loader__track,
+.logo-loader__arc {
+  fill: none;
+  stroke-width: 5;
+}
+.logo-loader__track { stroke: var(--ll-track); }
+.logo-loader__arc {
+  stroke: var(--ll-accent);
+  stroke-linecap: round;
+  stroke-dasharray: 52 237;
+  animation: logo-loader-sweep 2.4s ease-in-out infinite;
+}
+.logo-loader__mark {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: var(--ll-mark);
+  height: var(--ll-mark);
+  margin: auto;
+}
+.logo-loader__text {
+  display: flex;
+  min-height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1rem;
+  color: #0b1e3d;
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.5rem;
+}
+@keyframes logo-loader-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes logo-loader-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes logo-loader-sweep {
+  0%, 100% { stroke-dasharray: 52 237; }
+  50% { stroke-dasharray: 118 171; }
+}
+@media (max-height: 460px) {
+  .logo-loader { --ll-ring: 60px; }
+  .logo-loader--page { min-height: calc(100svh - 5rem); }
+  .logo-loader__text { margin-top: 0.625rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .logo-loader { animation: logo-loader-in 1ms ease-out 300ms forwards; }
+  .logo-loader__svg,
+  .logo-loader__arc { animation: none; }
+  .logo-loader__arc { stroke-dasharray: 0.01 9.0321; }
+}

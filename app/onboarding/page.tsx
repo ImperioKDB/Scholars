@@ -26,7 +26,7 @@ import { StepIndicator } from "@/components/StepIndicator";
 import { FormField, inputClass, selectClass, textareaClass } from "@/components/FormField";
 import { Combobox } from "@/components/Combobox";
 import { WaecResultsEditor, type WaecRow } from "@/components/WaecResultsEditor";
-import { Skeleton } from "@/components/Skeleton";
+import { LogoLoader } from "@/components/LogoLoader";
 import { getLGAsForState } from "@/lib/data/lgas";
 import {
   DISCIPLINE_OPTIONS,
@@ -396,31 +396,12 @@ function OnboardingForm() {
       <div className="min-h-screen bg-parchment">
         <header className="border-b border-hairline bg-white">
           <div className="mx-auto max-w-2xl px-6 py-5 flex items-center justify-between">
-            <Skeleton className="h-6 w-24" />
-            <Skeleton className="h-4 w-20" />
+            <Logo className="text-navy" />
+            <span className="text-sm text-navy-light">Loading your profile…</span>
           </div>
         </header>
         <main className="mx-auto max-w-2xl px-6 py-12">
-          <div className="flex items-center w-full mb-10">
-            {STEPS.map((_, i) => (
-              <div key={i} className="flex items-center flex-1 last:flex-none">
-                <Skeleton className="w-8 h-8 rounded-seal shrink-0" />
-                {i < STEPS.length - 1 && <div className="h-px flex-1 mx-3 bg-hairline" />}
-              </div>
-            ))}
-          </div>
-          <div className="bg-white rounded-2xl border border-hairline shadow-card p-5 sm:p-8">
-            <Skeleton className="h-7 w-48 mb-2" />
-            <Skeleton className="h-4 w-64 mb-8" />
-            <div className="space-y-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i}>
-                  <Skeleton className="h-3.5 w-28 mb-1.5" />
-                  <Skeleton className="h-10 w-full rounded-lg" />
-                </div>
-              ))}
-            </div>
-          </div>
+          <LogoLoader variant="page" label="Loading your profile…" />
         </main>
       </div>
     );

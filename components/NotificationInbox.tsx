@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Skeleton } from "@/components/Skeleton";
+import { LogoLoader } from "@/components/LogoLoader";
 
 type NotificationItem = {
   id: string;
@@ -19,23 +19,8 @@ function dateLabel(value: string) {
   return Number.isNaN(date.getTime()) ? "Recently" : date.toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-function NotificationInboxSkeleton() {
-  return (
-    <div aria-label="Loading notifications" aria-busy="true" className="overflow-hidden rounded-2xl border border-hairline bg-white">
-      {Array.from({ length: 4 }).map((_, index) => (
-        <div key={index} className="border-b border-hairline p-4 last:border-0">
-          <div className="flex items-start gap-3">
-            <Skeleton className="mt-1.5 h-2 w-2 shrink-0 rounded-full" />
-            <div className="min-w-0 flex-1 space-y-2">
-              <Skeleton className="h-3.5 w-full" />
-              <Skeleton className="h-3.5 w-4/5" />
-              <Skeleton className="h-2.5 w-32" />
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+function NotificationInboxLoading() {
+  return <LogoLoader variant="section" label="Loading notifications…" />;
 }
 
 export function NotificationInbox({ isAdmin = false }: { isAdmin?: boolean }) {
@@ -101,7 +86,7 @@ export function NotificationInbox({ isAdmin = false }: { isAdmin?: boolean }) {
       </div>
       {actionError && <p role="alert" className="mb-4 rounded-xl border border-rose-light bg-rose-light/40 px-4 py-3 text-sm text-navy">We couldn’t update your notifications. Please try again.</p>}
       {loading ? (
-        <NotificationInboxSkeleton />
+        <NotificationInboxLoading />
       ) : error ? (
         <div role="alert" className="rounded-2xl border border-rose-light bg-rose-light/40 p-6 text-sm text-navy">
           <p className="font-medium">We couldn’t load your notifications.</p>
