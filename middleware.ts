@@ -22,7 +22,6 @@ const PROTECTED_PREFIXES = [
   "/achievements",
   "/notifications",
   "/community",
-  "/reviews",
 ];
 const AUTH_PREFIXES = ["/login", "/signup"];
 const REF_UUID_RE =
