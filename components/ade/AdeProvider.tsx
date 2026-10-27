@@ -44,8 +44,9 @@ type AchievementPrompt = {
 type Prompt = CheckinPrompt | AchievementPrompt;
 
 export type ApplyIntercept = {
-  scholarshipId: string;
-  scholarshipTitle: string;
+  listingKind: "scholarship" | "opportunity";
+  listingId: string;
+  listingTitle: string;
   applicationUrl: string;
   applicationId: string | null;
 };
@@ -67,7 +68,7 @@ const STATUS_OPTIONS: { value: "submitted" | "accepted" | "rejected" | "in_progr
 type AdeContextValue = {
   poll: () => Promise<void>;
   confirmApply: (params: {
-    scholarshipTitle: string;
+    listingTitle: string;
     applicationUrl: string | null;
     alreadyTracked: boolean;
     applicationId: string;
@@ -203,7 +204,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
         const res = await fetchWithTimeout("/api/applications", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ scholarship_id: applyIntercept.scholarshipId }),
+          body: JSON.stringify(applyIntercept.listingKind === "scholarship" ? { scholarship_id: applyIntercept.listingId } : { opportunity_id: applyIntercept.listingId }),
         });
         if (res.ok) {
           const data = (await res.json()) as { application?: { id: string } };
@@ -243,7 +244,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
 
   const confirmApply = useCallback(
     async (params: {
-      scholarshipTitle: string;
+      listingTitle: string;
       applicationUrl: string | null;
       alreadyTracked: boolean;
       applicationId: string;
@@ -353,12 +354,12 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                   <p className="font-display text-base font-semibold text-navy mb-1">Ade says hi</p>
                   {applyIntercept.applicationId ? (
                     <p className="text-sm text-ink leading-relaxed mb-4">
-                      Good luck with <span className="font-medium">{applyIntercept.scholarshipTitle}</span>. I will
+                      Good luck with <span className="font-medium">{applyIntercept.listingTitle}</span>. I will
                       note that you opened the link and check in with you when you are back.
                     </p>
                   ) : (
                     <p className="text-sm text-ink leading-relaxed mb-4">
-                      Before you go: I can track <span className="font-medium">{applyIntercept.scholarshipTitle}</span>{" "}
+                      Before you go: I can track <span className="font-medium">{applyIntercept.listingTitle}</span>{" "}
                       for you, so its deadline and status stay on your dashboard and I can ask how it went.
                     </p>
                   )}
@@ -408,7 +409,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                   <>
                     <p className="font-display text-base font-semibold text-navy mb-1">Ade says hi</p>
                     <p className="text-sm text-ink leading-relaxed mb-4">
-                      How did it go with <span className="font-medium">{prompt.scholarshipTitle}</span>?{" "}
+                      How did it go with <span className="font-medium">{prompt.listingTitle}</span>?{" "}
                       {prompt.reason === "clicked" ? "You opened the application link last time." : "The deadline has passed."}
                     </p>
                     <div className="space-y-2">
@@ -462,7 +463,7 @@ export function AdeProvider({ children }: { children: React.ReactNode }) {
                 <>
                   <p className="font-display text-base font-semibold text-navy mb-1">Ade is here</p>
                   <p className="text-sm text-ink leading-relaxed">
-                    Nothing needs your attention right now. I check in after you open a scholarship portal, when a
+                    Nothing needs your attention right now. I check in after you open an application portal, when a
                     tracked deadline passes, and when you unlock an achievement.
                   </p>
                 </>

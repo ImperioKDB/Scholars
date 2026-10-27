@@ -72,14 +72,19 @@ async function loadContext(
 > {
   const { data: application, error: appError } = await supabase
     .from('applications')
-    .select('id, profile_id, scholarship:scholarships!inner ( id, title, provider_name, description, amount, discipline )')
+    .select('id, profile_id, scholarship:scholarships ( id, title, provider_name, description, amount, discipline ), opportunity:opportunities ( id, title, provider_name, description, compensation, discipline )')
     .eq('id', applicationId)
     .eq('profile_id', userId)
     .single()
 
   if (appError || !application) return { error: 'not_found' }
 
-  const scholarship = application.scholarship as unknown as LoadedScholarship
+  const scholarship = application.scholarship
+    ? (application.scholarship as unknown as LoadedScholarship)
+    : application.opportunity
+      ? ({ ...(application.opportunity as unknown as LoadedScholarship), amount: (application.opportunity as { compensation?: string | null }).compensation ?? null } as LoadedScholarship)
+      : null
+  if (!scholarship) return { error: 'not_found' }
 
   const [{ data: profile, error: profileError }, { data: waecResults }, { data: rules }] = await Promise.all([
     supabase.from('profiles').select(PROFILE_COLUMNS).eq('id', userId).single(),

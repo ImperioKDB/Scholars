@@ -174,7 +174,7 @@ export function DraftPanel({
   function openRealApplication() {
     if (!applicationUrl) return;
     confirmApply({
-      scholarshipTitle,
+      listingTitle: scholarshipTitle,
       applicationUrl,
       alreadyTracked: true,
       applicationId,

@@ -17,11 +17,20 @@ import { queueApplicationStatus, queueScholarshipSavedState } from "@/lib/offlin
 
 type ApplicationStatus = "in_progress" | "submitted" | "accepted" | "rejected" | "not_applied";
 
-type ApplicationApiItem = Draft & {
+type RawApplication = Draft & {
   id: string; status: ApplicationStatus; notes: string | null; created_at: string; updated_at: string;
   link_clicked_at: string | null; checkin_prompted_at: string | null;
-  scholarship: CardScholarship;
+  scholarship: CardScholarship | null;
+  opportunity?: { id: string; type: CardOpportunityType; title: string; provider_name: string; description: string | null; eligibility_notes: string | null; duration: string | null; location: string | null; compensation: string | null; discipline: string | null; deadline: string | null; application_url: string | null; how_to_apply: string | null } | null;
 };
+type CardOpportunityType = "fellowship" | "internship" | "competition" | "mentorship" | "training";
+type ApplicationApiItem = Omit<RawApplication, "scholarship" | "opportunity"> & { scholarship: CardScholarship; listingKind: "scholarship" | "opportunity" };
+function normalizeApplication(raw: RawApplication): ApplicationApiItem {
+  if (raw.scholarship) return { ...raw, scholarship: raw.scholarship, listingKind: "scholarship" };
+  const o = raw.opportunity;
+  if (!o) throw new Error("Application has no listing");
+  return { ...raw, scholarship: { id: o.id, title: o.title, provider_name: o.provider_name, amount: o.compensation, deadline: o.deadline, application_url: o.application_url, how_to_apply: o.how_to_apply, level: "both", discipline: o.discipline }, listingKind: "opportunity" };
+}
 
 type SavedApiItem = { id: string; saved_at: string; scholarship: CardScholarship };
 
@@ -55,7 +64,7 @@ export function ApplicationsClient({ userId, initialApplications, initialSaved, 
   const [savedError, setSavedError] = useState<string | null>(initialSavedError ?? null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
-  const [applications, setApplications] = useState<ApplicationApiItem[]>(initialApplications);
+  const [applications, setApplications] = useState<ApplicationApiItem[]>(initialApplications.map(normalizeApplication));
   const [saved, setSaved] = useState<SavedApiItem[]>(initialSaved);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [flashIds, setFlashIds] = useState<Set<string>>(new Set());
@@ -74,7 +83,7 @@ export function ApplicationsClient({ userId, initialApplications, initialSaved, 
       ]);
       if (!appsRes.ok) { setLoadError("Couldn't load your applications. Try refreshing."); return; }
       const appsData = await appsRes.json();
-      setApplications(appsData.applications ?? []);
+      setApplications((appsData.applications ?? []).map(normalizeApplication));
       if (savedRes.ok) { const savedData = await savedRes.json(); setSaved(savedData.saved ?? []); }
       else setSavedError("Saved scholarships are temporarily unavailable. Try refreshing.");
     } catch {
@@ -231,7 +240,7 @@ export function ApplicationsClient({ userId, initialApplications, initialSaved, 
 
   function openApplication(a: ApplicationApiItem) {
     if (!a.scholarship.application_url) return;
-    confirmApply({ scholarshipTitle: a.scholarship.title, applicationUrl: a.scholarship.application_url, alreadyTracked: true, applicationId: a.id, onTrack: async () => ({ id: a.id }) });
+    confirmApply({ listingTitle: a.scholarship.title, applicationUrl: a.scholarship.application_url, alreadyTracked: true, applicationId: a.id, onTrack: async () => ({ id: a.id }) });
   }
 
   return (

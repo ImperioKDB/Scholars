@@ -35,7 +35,7 @@ export async function GET(request: Request) {
   const { data: clicked } = await supabase
     .from('applications')
     .select(
-      'id, link_clicked_at, checkin_prompted_at, checkin_snoozed_until, scholarship:scholarships ( id, title )'
+      'id, link_clicked_at, checkin_prompted_at, checkin_snoozed_until, scholarship:scholarships ( id, title ), opportunity:opportunities ( id, title )'
     )
     .eq('profile_id', user.id)
     .eq('status', 'in_progress')
@@ -48,48 +48,38 @@ export async function GET(request: Request) {
     link_clicked_at: string
     checkin_prompted_at: string | null
     scholarship: { id: string; title: string } | null
+    opportunity: { id: string; title: string } | null
   }[]
   const clickedMatch = clickedRows.find(
-    (row) => row.scholarship && (!row.checkin_prompted_at || row.checkin_prompted_at < row.link_clicked_at)
+    (row) => (row.scholarship || row.opportunity) && (!row.checkin_prompted_at || row.checkin_prompted_at < row.link_clicked_at)
   )
-  if (clickedMatch && clickedMatch.scholarship) {
-    return NextResponse.json({
-      prompt: {
-        type: 'checkin',
-        applicationId: clickedMatch.id,
-        scholarshipId: clickedMatch.scholarship.id,
-        scholarshipTitle: clickedMatch.scholarship.title,
-        reason: 'clicked',
-      },
-    })
+  if (clickedMatch) {
+    const listing = clickedMatch.scholarship ?? clickedMatch.opportunity
+    if (listing) return NextResponse.json({ prompt: { type: 'checkin', applicationId: clickedMatch.id, listingKind: clickedMatch.scholarship ? 'scholarship' : 'opportunity', listingId: listing.id, listingTitle: listing.title, scholarshipId: clickedMatch.scholarship?.id ?? null, scholarshipTitle: clickedMatch.scholarship?.title ?? null, reason: 'clicked' } })
   }
   const { data: overdue } = await supabase
     .from('applications')
     .select(
-      'id, checkin_prompted_at, checkin_snoozed_until, scholarships!inner ( id, title, deadline )'
+      'id, checkin_prompted_at, checkin_snoozed_until, scholarships ( id, title, deadline ), opportunities ( id, title, deadline )'
     )
     .eq('profile_id', user.id)
     .eq('status', 'in_progress')
     .is('checkin_prompted_at', null)
     .or(`checkin_snoozed_until.is.null,checkin_snoozed_until.lt.${nowIso}`)
-    .lt('scholarships.deadline', todayStr)
+.or(`scholarships.deadline.lt.${todayStr},opportunities.deadline.lt.${todayStr}`)
   const overdueRows = (overdue ?? []) as unknown as {
     id: string
-    scholarships: { id: string; title: string; deadline: string }
+    scholarships: { id: string; title: string; deadline: string } | null
+    opportunities: { id: string; title: string; deadline: string } | null
   }[]
-  const overdueMatch = overdueRows.sort((a, b) =>
-    a.scholarships.deadline < b.scholarships.deadline ? -1 : 1
-  )[0]
+  const overdueMatch = overdueRows.filter((row) => row.scholarships || row.opportunities).sort((a, b) => {
+    const ad = (a.scholarships ?? a.opportunities)!.deadline
+    const bd = (b.scholarships ?? b.opportunities)!.deadline
+    return ad < bd ? -1 : 1
+  })[0]
   if (overdueMatch) {
-    return NextResponse.json({
-      prompt: {
-        type: 'checkin',
-        applicationId: overdueMatch.id,
-        scholarshipId: overdueMatch.scholarships.id,
-        scholarshipTitle: overdueMatch.scholarships.title,
-        reason: 'deadline_passed',
-      },
-    })
+    const listing = overdueMatch.scholarships ?? overdueMatch.opportunities
+    if (listing) return NextResponse.json({ prompt: { type: 'checkin', applicationId: overdueMatch.id, listingKind: overdueMatch.scholarships ? 'scholarship' : 'opportunity', listingId: listing.id, listingTitle: listing.title, scholarshipId: overdueMatch.scholarships?.id ?? null, scholarshipTitle: overdueMatch.scholarships?.title ?? null, reason: 'deadline_passed' } })
   }
   const { data: achievementRow } = await supabase
     .from('user_achievements')

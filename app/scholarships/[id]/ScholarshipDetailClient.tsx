@@ -258,8 +258,9 @@ export function ScholarshipDetailClient({
               type="button"
               onClick={() =>
                 interceptApply({
-                  scholarshipId: scholarship.id,
-                  scholarshipTitle: scholarship.title,
+                  listingKind: "scholarship",
+                  listingId: scholarship.id,
+                  listingTitle: scholarship.title,
                   applicationUrl: scholarship.application_url as string,
                   applicationId: application ? application.id : null,
                 })

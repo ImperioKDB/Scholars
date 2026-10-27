@@ -43,6 +43,8 @@ const updateSchema = z
 
 const SCHOLARSHIP_COLUMNS =
   'id, title, provider_name, description, amount, deadline, application_url, how_to_apply, level, discipline, verified'
+const OPPORTUNITY_COLUMNS =
+  'id, type, title, provider_name, description, eligibility_notes, duration, location, compensation, discipline, deadline, application_url, how_to_apply, verified'
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -86,7 +88,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     .update(parsed.data)
     .eq('id', id)
     .eq('profile_id', user.id)
-    .select(`id, status, notes, created_at, updated_at, scholarship:scholarships!inner ( ${SCHOLARSHIP_COLUMNS} )`)
+    .select(`id, status, notes, created_at, updated_at, scholarship:scholarships ( ${SCHOLARSHIP_COLUMNS} ), opportunity:opportunities ( ${OPPORTUNITY_COLUMNS} )`)
     .single()
 
   if (error) {

@@ -20,13 +20,15 @@ type ApplicationApiItem = {
   } | null;
   draft_generated_at: string | null;
   draft_confirmed_at: string | null;
-  scholarship: CardScholarship;
+  scholarship: CardScholarship | null;
+  opportunity?: unknown;
 };
 
 type SavedApiItem = {
   id: string;
   saved_at: string;
-  scholarship: CardScholarship;
+  scholarship: CardScholarship | null;
+  opportunity?: unknown;
 };
 
 // how_to_apply added: fallback guidance shown when application_url is
@@ -43,7 +45,7 @@ const SCHOLARSHIP_COLUMNS =
 // dropped instead of crashing the render. Same pattern is used in
 // app/dashboard/page.tsx,
 // app/api/applications/route.ts, and app/api/applications/[id]/route.ts.
-const APPLICATION_COLUMNS = `id, status, notes, created_at, updated_at, link_clicked_at, checkin_prompted_at, draft_statement, draft_summary, draft_generated_at, draft_confirmed_at, scholarship:scholarships!inner ( ${SCHOLARSHIP_COLUMNS} )`;
+const APPLICATION_COLUMNS = `id, status, notes, created_at, updated_at, link_clicked_at, checkin_prompted_at, draft_statement, draft_summary, draft_generated_at, draft_confirmed_at, scholarship:scholarships ( ${SCHOLARSHIP_COLUMNS} ), opportunity:opportunities ( id, type, title, provider_name, description, eligibility_notes, duration, location, compensation, discipline, deadline, application_url, how_to_apply )`;
 
 // Server Component: fetches tracked applications and saved scholarships
 // in parallel and hands them to ApplicationsClient as initial props.
@@ -82,8 +84,8 @@ export default async function ApplicationsPage() {
   return (
     <ApplicationsClient
       userId={user.id}
-      initialApplications={applications}
-      initialSaved={saved}
+      initialApplications={applications as any}
+      initialSaved={saved as any}
       initialError={loadError}
       initialSavedError={savedError}
     />

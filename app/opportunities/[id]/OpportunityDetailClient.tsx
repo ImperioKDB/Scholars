@@ -8,6 +8,7 @@ import { DeadlineBadge } from "@/components/DeadlineBadge";
 import { ProviderMonogram } from "@/components/ProviderMonogram";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { queueOpportunitySavedState } from "@/lib/offline/outbox";
+import { useAde } from "@/components/ade/AdeProvider";
 
 export type OpportunityDetail = {
   id: string;
@@ -63,6 +64,7 @@ export function OpportunityDetailClient({
   sharerId: string;
   similar: SimilarOpportunity[];
 }) {
+  const { interceptApply } = useAde();
   const [saved, setSaved] = useState(initialSaved);
   const [savePending, setSavePending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -153,6 +155,7 @@ export function OpportunityDetailClient({
           {opportunity.application_url && (
             <a
               href={opportunity.application_url}
+              onClick={(event) => { event.preventDefault(); interceptApply({ listingKind: "opportunity", listingId: opportunity.id, listingTitle: opportunity.title, applicationUrl: opportunity.application_url as string, applicationId: null }); }}
               target="_blank"
               rel="noreferrer"
               className="rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors"
