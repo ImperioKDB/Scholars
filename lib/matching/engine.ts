@@ -134,7 +134,18 @@ function describeRequirement(field: string, operator: RuleOperator, value: unkno
   }
 }
 
-function valuesMatch(a: unknown, b: unknown): boolean {
+function normalizeNationality(value: unknown): string {
+  const normalized = String(value).trim().toLowerCase().replace(/\s+/g, " ");
+  if (normalized === "nigeria" || normalized === "nigerian" || normalized.includes("nigerian")) {
+    return "nigerian";
+  }
+  return normalized;
+}
+
+function valuesMatch(a: unknown, b: unknown, field?: string): boolean {
+  if (field === "nationality") {
+    return normalizeNationality(a) === normalizeNationality(b);
+  }
   return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
 }
 
@@ -154,19 +165,20 @@ function isOpenDiscipline(value: unknown): boolean {
 function evaluateOperator(
   operator: RuleOperator,
   profileValue: string | number | boolean,
-  ruleValue: unknown
+  ruleValue: unknown,
+  field?: string
 ): boolean {
   switch (operator) {
     case "eq":
       if (typeof profileValue === "boolean") return profileValue === Boolean(ruleValue);
-      return valuesMatch(profileValue, ruleValue);
+      return valuesMatch(profileValue, ruleValue, field);
     case "gte":
       return Number(profileValue) >= Number(ruleValue);
     case "lte":
       return Number(profileValue) <= Number(ruleValue);
     case "in": {
       const arr = Array.isArray(ruleValue) ? ruleValue : [ruleValue];
-      return arr.some((v) => valuesMatch(profileValue, v));
+      return arr.some((v) => valuesMatch(profileValue, v, field));
     }
     case "exists":
       return profileValue !== null && profileValue !== undefined && profileValue !== "";
@@ -246,7 +258,7 @@ function evaluateRule(
       ? true
       : field === "discipline"
         ? evaluateDisciplineOperator(operator, String(profileValue), value)
-        : evaluateOperator(operator, profileValue as string | number | boolean, value);
+        : evaluateOperator(operator, profileValue as string | number | boolean, value, field);
   const shownValue = displayValue(field, profileValue);
 
   return {

@@ -59,4 +59,30 @@ describe("discipline matching", () => {
     expect(result.requirements[0]?.status).toBe("met");
     expect(result.tier).not.toBe("unlikely");
   });
+
+  it("treats Nigeria and Nigerian as equivalent nationality values", () => {
+    const result = evaluateScholarship(profile("Software Engineering"), scholarship, [
+      {
+        id: "nationality-rule",
+        scholarship_id: scholarship.id,
+        field: "nationality",
+        operator: "eq",
+        value: "Nigeria",
+      },
+    ]);
+    expect(result.requirements.find((r) => r.field === "nationality")?.status).toBe("met");
+  });
+
+  it("normalizes nationality aliases inside in-list rules", () => {
+    const result = evaluateScholarship(profile("Software Engineering"), scholarship, [
+      {
+        id: "nationality-list-rule",
+        scholarship_id: scholarship.id,
+        field: "nationality",
+        operator: "in",
+        value: ["Ghana", "Nigeria"],
+      },
+    ]);
+    expect(result.requirements.find((r) => r.field === "nationality")?.status).toBe("met");
+  });
 });
