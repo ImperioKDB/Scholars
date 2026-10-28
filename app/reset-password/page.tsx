@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { AuthShell } from "@/components/AuthShell";
 import { FormField, inputClass } from "@/components/FormField";
 import { normalizeEmail } from "@/lib/auth/email";
+import { SpinnerIcon } from "@/components/icons";
 // app/reset-password/page.tsx
 // GET /reset-password
 //
@@ -97,13 +98,23 @@ export default function ResetPasswordPage() {
             autoComplete="email"
           />
         </FormField>
+        <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {loading ? "Sending your password reset link…" : error ?? ""}
+        </div>
+        {loading && (
+          <div className="mb-3 flex items-center gap-3 rounded-xl border border-hairline bg-navy-50 px-4 py-3 text-sm text-navy-light" role="status">
+            <SpinnerIcon className="h-4 w-4 shrink-0 text-emerald" />
+            <span>Sending your reset link. This usually takes a few seconds.</span>
+          </div>
+        )}
         <button
           type="submit"
           disabled={loading}
           aria-busy={loading}
-          className="w-full rounded-lg bg-navy text-white font-medium py-3 mt-2 hover:bg-navy-light transition-colors disabled:opacity-60"
+          className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-navy text-white font-medium py-3 mt-2 hover:bg-navy-light transition-colors disabled:cursor-wait disabled:opacity-60"
         >
-          {loading ? "Sending\u2026" : "Send reset link"}
+          {loading && <SpinnerIcon className="h-4 w-4" />}
+          <span>{loading ? "Sending reset link…" : "Send reset link"}</span>
         </button>
       </form>
       <p className="text-sm text-navy-light mt-8 text-center">

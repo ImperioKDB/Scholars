@@ -27,6 +27,7 @@ import { FormField, inputClass, selectClass, textareaClass } from "@/components/
 import { Combobox } from "@/components/Combobox";
 import { WaecResultsEditor, type WaecRow } from "@/components/WaecResultsEditor";
 import { LogoLoader } from "@/components/LogoLoader";
+import { SpinnerIcon } from "@/components/icons";
 import { getLGAsForState } from "@/lib/data/lgas";
 import {
   DISCIPLINE_OPTIONS,
@@ -612,7 +613,9 @@ function OnboardingForm() {
             <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-3">
               {step > 0 && (
                 <button type="button" onClick={handleSkip} disabled={saving || skipPending}
-                  className="inline-flex min-h-[44px] items-center text-sm font-medium text-navy-light hover:text-navy px-3 py-2 disabled:opacity-60">
+                  aria-busy={skipPending}
+                  className="inline-flex min-h-[44px] items-center justify-center gap-2 text-sm font-medium text-navy-light hover:text-navy px-3 py-2 disabled:cursor-wait disabled:opacity-60">
+                  {skipPending && <SpinnerIcon className="h-4 w-4" />}
                   {skipPending ? "Saving\u2026" : "Skip for now"}
                 </button>
               )}
