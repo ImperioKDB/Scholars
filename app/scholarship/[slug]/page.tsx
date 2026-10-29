@@ -122,6 +122,10 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
   }
   const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
   const publicUrl = `${base}/scholarship/${scholarship.slug || slug}`;
+  const returnTo = `/scholarship/${scholarship.slug || slug}`;
+  const onboardingPath = `/onboarding?next=${encodeURIComponent(returnTo)}`;
+  const signupPath = `/signup?next=${encodeURIComponent(onboardingPath)}`;
+  const loginPath = `/login?next=${encodeURIComponent(onboardingPath)}`;
   return (
     <div className="min-h-screen bg-parchment flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
@@ -183,14 +187,14 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
             </p>
           </div>
           <Link
-            href="/signup?next=/onboarding"
+            href={signupPath}
             className="block text-center rounded-seal bg-navy text-white text-sm font-medium px-6 py-3.5 hover:bg-navy-light transition-colors"
           >
             See if you qualify -- join free
           </Link>
           <p className="text-sm text-navy-light mt-4 text-center">
             Already have an account?{" "}
-            <Link href="/login" className="text-navy font-medium hover:underline">
+            <Link href={loginPath} className="text-navy font-medium hover:underline">
               Log in
             </Link>
           </p>

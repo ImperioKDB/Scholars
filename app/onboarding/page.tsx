@@ -41,6 +41,7 @@ import {
 } from "@/lib/profile";
 import { INSTITUTION_OPTIONS, institutionTypeFor } from "@/lib/data/institutions";
 import { track } from "@/lib/analytics";
+import { safeNextPath } from "@/lib/validate";
 const STEPS = ["Core", "Personal", "Academic", "Documents", "Matching"];
 const DISCIPLINE_COMBO_OPTIONS = DISCIPLINE_OPTIONS.map((d) => ({ value: d, label: d }));
 const ONBOARDING_DRAFT_KEY = "scholars.onboarding.draft.v2";
@@ -134,6 +135,11 @@ function OnboardingForm() {
   const lastTrackedStep = useRef<number | null>(null);
   const completedSteps = useRef(new Set<number>());
   const terminalEventTracked = useRef(false);
+  // Public scholarship pages send new users here with their canonical URL in
+  // `next`. Keep that destination through onboarding so referred users return
+  // to the exact listing they came to evaluate instead of a generic dashboard.
+  const returnTo = safeNextPath(searchParams.get("next"), "/dashboard");
+  const onboardingPath = `/onboarding?next=${encodeURIComponent(returnTo)}`;
   const lgaOptions = useMemo(
     () => getLGAsForState(form.state_of_origin).map((l) => ({ value: l, label: l })),
     [form.state_of_origin]
@@ -150,7 +156,7 @@ function OnboardingForm() {
       try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        router.replace("/login");
+        router.replace(`/login?next=${encodeURIComponent(onboardingPath)}`);
         return;
       }
       const [profileRes, waecRes] = await Promise.all([
@@ -158,7 +164,7 @@ function OnboardingForm() {
         fetch("/api/profile/waec"),
       ]);
       if (profileRes.status === 401) {
-        router.replace("/login");
+        router.replace(`/login?next=${encodeURIComponent(onboardingPath)}`);
         return;
       }
       let serverForm: ProfileForm = { ...EMPTY_PROFILE_FORM };
@@ -357,10 +363,10 @@ function OnboardingForm() {
     setError(null);
     try {
       const res = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(profilePayload(form)) });
-      if (res.status === 401) { router.replace("/login"); return; }
+      if (res.status === 401) { router.replace(`/login?next=${encodeURIComponent(onboardingPath)}`); return; }
       if (!res.ok) { setError("Couldn't save your profile. Please try again. Your draft is still safe."); return; }
       trackStepCompletion(0, "provisional_matches");
-      terminalEventTracked.current = true; setDirty(false); clearDraft(); router.push("/dashboard"); router.refresh();
+      terminalEventTracked.current = true; setDirty(false); clearDraft(); router.push(returnTo); router.refresh();
     } catch {
       setError("Couldn't save your profile. Check your connection and try again. Your draft is still safe.");
     } finally { setSaving(false); }
@@ -371,12 +377,12 @@ function OnboardingForm() {
     setSaving(true); setError(null);
     try {
       const res = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(profilePayload(form)) });
-      if (res.status === 401) { router.replace("/login"); return; }
+      if (res.status === 401) { router.replace(`/login?next=${encodeURIComponent(onboardingPath)}`); return; }
       if (!res.ok) { setError("Couldn't save your profile. Please try again. Your draft is still safe."); return; }
       const validWaecRows = waecRows.filter((r) => r.subject && r.grade);
       const waecRes = await fetch("/api/profile/waec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ results: validWaecRows.map((r) => ({ subject: r.subject, grade: r.grade })) }) });
       if (!waecRes.ok) { setError("Your profile saved, but your WAEC results didn't. You can retry from this page."); return; }
-      trackStepCompletion(STEPS.length - 1, "finish"); terminalEventTracked.current = true; setDirty(false); clearDraft(); router.push("/dashboard"); router.refresh();
+      trackStepCompletion(STEPS.length - 1, "finish"); terminalEventTracked.current = true; setDirty(false); clearDraft(); router.push(returnTo); router.refresh();
     } catch {
       setError("Couldn't save your profile. Check your connection and try again. Your draft is still safe.");
     } finally { setSaving(false); }
@@ -385,9 +391,9 @@ function OnboardingForm() {
     setSkipPending(true); setError(null);
     try {
       const res = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(profilePayload(form)) });
-      if (res.status === 401) { router.replace("/login"); return; }
+      if (res.status === 401) { router.replace(`/login?next=${encodeURIComponent(onboardingPath)}`); return; }
       if (!res.ok) { setError("Couldn't save before skipping. Your draft is still safe; try again."); return; }
-      trackSkip(); clearDraft(); setDirty(false); router.push("/dashboard"); router.refresh();
+      trackSkip(); clearDraft(); setDirty(false); router.push(returnTo); router.refresh();
     } catch {
       setError("Couldn't save before skipping. Check your connection and try again. Your draft is still safe.");
     } finally { setSkipPending(false); }
