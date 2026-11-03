@@ -309,10 +309,15 @@ function OnboardingForm() {
     setForm((f) => ({ ...f, discipline: "" }));
     setDirty(true);
   }
+  function skipDiscipline() {
+    setManualDiscipline(false);
+    setForm((f) => ({ ...f, discipline: "" }));
+    setError(null);
+    setDirty(true);
+  }
   function validateStep(): string | null {
     if (step === 0) {
       if (!form.full_name.trim()) return "We need your name to personalize matches.";
-      if (!form.discipline.trim()) return "Pick your course so we can check discipline rules.";
       if (!form.institution_name.trim()) return "Pick your institution so we can check institution rules.";
       if (manualInstitution && form.institution_name.trim() && !form.institution_type) {
         return "Pick your institution type so your matches stay accurate.";
@@ -449,16 +454,22 @@ function OnboardingForm() {
               <FormField label="Full name">
                 <input className={inputClass} type="text" value={form.full_name} onChange={(e) => update("full_name", e.target.value)} placeholder="Enter your full name" />
               </FormField>
-              <FormField label="Field of study / discipline" hint="Search and select -- typing the exact course name works too.">
+              <FormField label="Field of study / discipline" hint="Search the list, or enter your programme exactly as your school names it.">
                 {manualDiscipline ? (
-                  <input className={inputClass} type="text" value={form.discipline} onChange={(e) => update("discipline", e.target.value)} placeholder="e.g. Mechatronics Engineering" />
+                  <input className={inputClass} type="text" maxLength={200} value={form.discipline} onChange={(e) => update("discipline", e.target.value)} placeholder="e.g. Biomedical Engineering" autoFocus />
                 ) : (
-                  <Combobox options={DISCIPLINE_COMBO_OPTIONS} value={form.discipline} onChange={(value) => update("discipline", value)} placeholder="Search a course, e.g. Computer Science" />
+                  <Combobox allowCustom options={DISCIPLINE_COMBO_OPTIONS} value={form.discipline} onChange={(value) => update("discipline", value)} placeholder="Search a course, e.g. Computer Science" emptyMessage="No catalogue match. You can use your course name as entered." />
                 )}
               </FormField>
-              <button type="button" onClick={toggleManualDiscipline} className="-mt-2 mb-4 text-xs font-medium text-navy hover:underline">
-                {manualDiscipline ? "Search the list instead" : "Can't find your course? Enter it manually"}
-              </button>
+              <div className="-mt-2 mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <button type="button" onClick={toggleManualDiscipline} className="text-sm font-medium text-navy hover:underline">
+                  {manualDiscipline ? "Search the course list instead" : "Can't find your course? Enter it manually"}
+                </button>
+                <button type="button" onClick={skipDiscipline} className="text-sm font-medium text-navy-light hover:text-navy hover:underline">
+                  Skip for now
+                </button>
+              </div>
+              <p className="-mt-2 mb-4 text-xs text-navy-light">Your course name will be saved as entered. You can update it later.</p>
               <FormField label="Institution" hint={manualInstitution ? "Type your school's official name and pick its type." : "Search and select -- this sets your institution type automatically."}>
                 {manualInstitution ? (
                   <div className="space-y-2">

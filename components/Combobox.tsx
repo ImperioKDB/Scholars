@@ -15,17 +15,16 @@ export type ComboboxOption = {
 // label (case-insensitive) -- on blur, click-outside, or Enter. That
 // closes the product-audit drop-off where someone typed "Computer
 // Science", saw the right row, tabbed away, and silently had nothing
-// saved because they never clicked the option. Anything short of an
-// exact match still commits nothing and resets to the last selected
-// label, so free text can never sneak into fields that must stay
-// constrained to a known list (institution, course/discipline, WAEC
-// subject).
+// saved because they never clicked the option. Fields that opt into
+// allowCustom also preserve and commit meaningful free text instead of
+// silently resetting it when the field loses focus.
 export function Combobox({
   options,
   value,
   onChange,
   placeholder,
   emptyMessage = "No matches -- try a different search.",
+  allowCustom = false,
   id,
   name,
   "aria-describedby": ariaDescribedBy,
@@ -36,6 +35,7 @@ export function Combobox({
   onChange: (value: string) => void;
   placeholder?: string;
   emptyMessage?: string;
+  allowCustom?: boolean;
   id?: string;
   name?: string;
   "aria-describedby"?: string;
@@ -45,19 +45,18 @@ export function Combobox({
   const inputId = id ?? `combobox-${generatedId}`;
   const listboxId = `${inputId}-listbox`;
   const selected = options.find((o) => o.value === value);
-  const [query, setQuery] = useState(selected?.label ?? "");
+  const selectedLabel = selected?.label ?? value;
+  const [query, setQuery] = useState(selectedLabel);
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(0);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setQuery(selected?.label ?? "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
+    setQuery(selectedLabel);
+  }, [selectedLabel]);
 
-  // If the typed text exactly matches one option's label
-  // (case-insensitive), commit it -- otherwise fall back to the last
-  // selected value. Returns true when something was committed.
+  // Commit an exact catalogue match, or meaningful custom text for fields
+  // that explicitly allow it. Returns true when something was committed.
   function commitExactMatch(): boolean {
     const typed = query.trim().toLowerCase();
     if (!typed) return false;
@@ -67,7 +66,13 @@ export function Combobox({
       setQuery(exact[0].label);
       return true;
     }
-    setQuery(selected?.label ?? "");
+    if (allowCustom) {
+      const custom = query.trim();
+      onChange(custom);
+      setQuery(custom);
+      return true;
+    }
+    setQuery(selectedLabel);
     return false;
   }
 
@@ -83,10 +88,10 @@ export function Combobox({
     // query/options in the deps so the listener always sees the latest
     // typed text (the closure would otherwise go stale between renders).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, options, query]);
+  }, [selected, selectedLabel, options, query, allowCustom]);
 
   const filtered =
-    query.trim() === "" || query === selected?.label
+    query.trim() === "" || query === selectedLabel
       ? options
       : options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase()));
   const activeOption = filtered[highlighted];
@@ -117,10 +122,15 @@ export function Combobox({
       const typed = query.trim().toLowerCase();
       const exact = options.find((o) => o.label.toLowerCase() === typed);
       const option = exact ?? filtered[highlighted];
-      if (option) select(option);
+      if (option) {
+        select(option);
+      } else if (allowCustom && typed) {
+        commitExactMatch();
+        setOpen(false);
+      }
     } else if (e.key === "Escape") {
       setOpen(false);
-      setQuery(selected?.label ?? "");
+      setQuery(selectedLabel);
     }
   }
 
@@ -131,6 +141,7 @@ export function Combobox({
         name={name}
         className={inputClass}
         type="text"
+        maxLength={allowCustom ? 200 : undefined}
         value={query}
         placeholder={placeholder}
         onChange={(e) => {
@@ -160,7 +171,22 @@ export function Combobox({
       {open && (
         <ul id={listboxId} role="listbox" className="absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-lg border border-hairline bg-white shadow-card py-1">
           {filtered.length === 0 && (
-            <li className="px-3.5 py-2.5 text-sm text-navy-light">{emptyMessage}</li>
+            <li className="px-3.5 py-2.5 text-sm text-navy-light">
+              <span className="block">{emptyMessage}</span>
+              {allowCustom && query.trim() && (
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    commitExactMatch();
+                    setOpen(false);
+                  }}
+                  className="mt-2 font-medium text-navy underline"
+                >
+                  Use “{query.trim()}”
+                </button>
+              )}
+            </li>
           )}
           {filtered.map((option, i) => (
             <li key={option.value} id={`${listboxId}-option-${i}`} role="option" aria-selected={option.value === value}>
