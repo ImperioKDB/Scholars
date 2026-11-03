@@ -5,9 +5,10 @@
 
 /* 1) Save bookmark pop -- one-shot scale spring on save/unsave. */
 @keyframes save-pop {
-  0%   { transform: scale(1); }
-  40%  { transform: scale(1.25); }
-  100% { transform: scale(1); }
+  0%   { transform: scale(1) rotate(0deg); }
+  42%  { transform: scale(1.18) rotate(-4deg); }
+  72%  { transform: scale(0.97) rotate(1deg); }
+  100% { transform: scale(1) rotate(0deg); }
 }
 .save-pop { animation: save-pop 320ms var(--motion-ease-out); }
 
@@ -37,11 +38,12 @@
   animation: tour-backdrop-in 220ms var(--motion-ease-out) both;
 }
 .tour-spotlight {
-  transition: top 280ms var(--motion-ease-out),
-    left 280ms var(--motion-ease-out),
-    width 280ms var(--motion-ease-out),
-    height 280ms var(--motion-ease-out),
-    opacity var(--motion-duration-overlay) var(--motion-ease-out);
+  top: 0;
+  left: 0;
+  width: var(--tour-width, 0px);
+  height: var(--tour-height, 0px);
+  transform: translate3d(var(--tour-left, 0px), var(--tour-top, 0px), 0);
+  will-change: transform, width, height, opacity;
   animation: tour-spotlight-in 260ms var(--motion-ease-out) both;
 }
 .tour-card {
@@ -54,6 +56,36 @@
 }
 .tour-card-content {
   animation: tour-content-in 220ms var(--motion-ease-out) both;
+}
+/* First-save feedback is one-shot and never blocks the optimistic save. */
+.save-celebration { animation: save-card-lift 620ms var(--motion-ease-out) both; }
+.save-ripple,
+.save-halo {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.save-ripple {
+  border: 1px solid rgba(21, 112, 90, 0.28);
+  animation: save-ripple 620ms var(--motion-ease-out) both;
+}
+.save-halo {
+  box-shadow: 0 0 0 1px rgba(21, 112, 90, 0.2), 0 8px 28px rgba(21, 112, 90, 0.12);
+  animation: save-halo 760ms ease-out both;
+}
+@keyframes save-card-lift {
+  0%, 100% { transform: translateY(0); }
+  35% { transform: translateY(-3px); }
+}
+@keyframes save-ripple {
+  0% { opacity: 0.65; transform: scale(0.985); }
+  100% { opacity: 0; transform: scale(1.015); }
+}
+@keyframes save-halo {
+  0% { opacity: 0; }
+  24% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 /* Progressive reveal for a single meaningful content group. The element is
@@ -274,8 +306,8 @@
   to { opacity: 1; }
 }
 @keyframes tour-spotlight-in {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 @keyframes tour-card-in {
   from { opacity: 0; }
@@ -301,10 +333,12 @@
     visibility: hidden;
   }
   .save-pop, .status-flash,
-  .tour-shell, .tour-backdrop, .tour-spotlight, .tour-card, .tour-card-content {
+  .tour-shell, .tour-backdrop, .tour-spotlight, .tour-card, .tour-card-content,
+  .save-celebration, .save-ripple, .save-halo {
     animation: none;
     transition: none;
   }
+  .tour-spotlight { transform: translate3d(var(--tour-left, 0px), var(--tour-top, 0px), 0); }
   .status-flash { opacity: 0; }
 }
 

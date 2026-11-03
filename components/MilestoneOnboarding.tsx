@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { track } from "@/lib/analytics";
+import { useSpringValue } from "@/lib/motion/useSpring";
 
 type MilestoneId = "welcome_tour" | "discover_tip" | "saved_tip" | "application_tip";
 type Context = "dashboard" | "discover" | "applications";
@@ -115,8 +116,9 @@ function getTargetElement(target?: string): Element | null {
 function getTargetRect(target?: string): TargetRect | null {
   if (!target || typeof document === "undefined") return null;
   const element = getTargetElement(target);
-  if (!element) return null;
+  if (!element || !element.isConnected) return null;
   const rect = element.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return null;
   return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
 }
 
@@ -127,6 +129,9 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
   const [contextStep, setContextStep] = useState<TourStep | null>(null);
   const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const spotlightRef = useRef<HTMLDivElement>(null);
+  const transitionTimerRef = useRef<number | null>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   const dashboardTour = context === "dashboard" ? DASHBOARD_STEPS : [];
   const activeStep = contextStep ?? (tourIndex === null ? null : dashboardTour[tourIndex]);
@@ -179,14 +184,30 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
       frame = requestAnimationFrame(() => setTargetRect(getTargetRect(activeStep.target)));
     };
     update();
+    const target = getTargetElement(activeStep.target);
+    const observer = typeof ResizeObserver === "undefined" || !target ? null : new ResizeObserver(update);
+    if (observer && target) observer.observe(target);
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
     return () => {
       cancelAnimationFrame(frame);
+      observer?.disconnect();
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
     };
   }, [activeStep]);
+
+  const spotlightTop = targetRect ? targetRect.top - 8 : 0;
+  const spotlightLeft = targetRect ? targetRect.left - 8 : 0;
+  const spotlightWidth = targetRect ? targetRect.width + 16 : 0;
+  const spotlightHeight = targetRect ? targetRect.height + 16 : 0;
+  useSpringValue(spotlightTop, (value) => spotlightRef.current?.style.setProperty("--tour-top", `${value}px`));
+  useSpringValue(spotlightLeft, (value) => spotlightRef.current?.style.setProperty("--tour-left", `${value}px`));
+  useSpringValue(spotlightWidth, (value) => spotlightRef.current?.style.setProperty("--tour-width", `${value}px`));
+  useSpringValue(spotlightHeight, (value) => spotlightRef.current?.style.setProperty("--tour-height", `${value}px`));
+  useEffect(() => {
+    if (spotlightRef.current) spotlightRef.current.style.opacity = targetRect ? "1" : "0";
+  }, [targetRect]);
 
   useEffect(() => {
     if (!activeStep) return;
@@ -211,6 +232,10 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
     // The active step is the only value that needs to rebind the escape action.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeStep?.id, isDashboardTour]);
+
+  useEffect(() => () => {
+    if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
+  }, []);
 
   const tooltipStyle = useMemo(() => {
     if (!targetRect) {
@@ -247,6 +272,7 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
   }
 
   function next() {
+    if (isTransitioning) return;
     if (contextStep) {
       finishContextStep();
       return;
@@ -257,7 +283,9 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
       return;
     }
     track("onboarding_step_completed", { step: tourIndex, label: activeStep?.id ?? "unknown", path: "milestone" });
+    setIsTransitioning(true);
     setTourIndex((index) => (index === null ? null : index + 1));
+    transitionTimerRef.current = window.setTimeout(() => setIsTransitioning(false), 280);
   }
 
   function skip() {
@@ -269,16 +297,12 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
     track("onboarding_abandoned", { step: tourIndex ?? 0, label: activeStep?.id ?? "unknown", reason: "skip_milestone_tour" });
   }
 
-  const spotlightStyle = targetRect
-    ? { top: targetRect.top - 8, left: targetRect.left - 8, width: targetRect.width + 16, height: targetRect.height + 16 }
-    : undefined;
-
   return (
     <div className="tour-shell fixed inset-0 z-[90]" role="presentation">
-      {spotlightStyle ? (
+      {targetRect ? (
         <div
+          ref={spotlightRef}
           className="tour-spotlight absolute rounded-2xl border-2 border-white/90 shadow-[0_0_0_9999px_rgba(11,30,61,0.7)]"
-          style={spotlightStyle}
           aria-hidden="true"
         />
       ) : (
@@ -302,7 +326,7 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
           <p className="text-sm leading-6 text-navy-light">{activeStep.body}</p>
           <div className="mt-5 flex items-center justify-between gap-3">
             {!isDashboardTour ? <span className="text-xs text-navy-light">You can revisit this anytime.</span> : <span />}
-            <button type="button" onClick={next} className="inline-flex min-h-[44px] items-center justify-center rounded-seal bg-navy px-5 py-2.5 text-sm font-medium text-white hover:bg-navy-light">{activeStep.action}</button>
+            <button type="button" onClick={next} disabled={isTransitioning} className="inline-flex min-h-[44px] items-center justify-center rounded-seal bg-navy px-5 py-2.5 text-sm font-medium text-white hover:bg-navy-light disabled:cursor-wait disabled:opacity-70">{activeStep.action}</button>
           </div>
         </div>
       </div>

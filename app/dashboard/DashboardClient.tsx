@@ -186,6 +186,8 @@ export function DashboardClient({
   const [saved, setSaved] = useState<SavedApiItem[]>(initialSaved);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set(initialSaved.map((s) => s.scholarship.id)));
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  const firstSaveCelebratedRef = useRef(false);
+  const [celebrationId, setCelebrationId] = useState<string | null>(null);
   const [tab, setTab] = useState<"all" | MatchTier>("all");
   useEffect(() => {
     setGreeting(timeGreeting());
@@ -277,6 +279,12 @@ export function DashboardClient({
   }, [matches, saved]);
   async function toggleSave(scholarshipId: string) {
     const wasSaved = savedIds.has(scholarshipId);
+    const firstSave = !wasSaved && saved.length === 0 && !firstSaveCelebratedRef.current;
+    if (firstSave) {
+      firstSaveCelebratedRef.current = true;
+      setCelebrationId(scholarshipId);
+      window.setTimeout(() => setCelebrationId(null), 800);
+    }
     setSavedIds((prev) => { const n = new Set(prev); if (wasSaved) n.delete(scholarshipId); else n.add(scholarshipId); return n; });
     setPendingIds((prev) => new Set(prev).add(scholarshipId));
     try {
@@ -292,14 +300,18 @@ export function DashboardClient({
         handled = await queueScholarshipSavedState(userId, scholarshipId, !wasSaved);
       }
       if (!handled) {
+        if (firstSave) { firstSaveCelebratedRef.current = false; setCelebrationId(null); }
         setSavedIds((prev) => { const n = new Set(prev); if (wasSaved) n.add(scholarshipId); else n.delete(scholarshipId); return n; });
       } else if (res.ok) {
         await refreshSaved();
-        if (!wasSaved) announceMilestone("saved_tip");
+        if (!wasSaved) window.setTimeout(() => announceMilestone("saved_tip"), firstSave ? 420 : 0);
       }
     } catch (err) {
       const queued = await queueScholarshipSavedState(userId, scholarshipId, !wasSaved);
-      if (!queued) setSavedIds((prev) => { const n = new Set(prev); if (wasSaved) n.add(scholarshipId); else n.delete(scholarshipId); return n; });
+      if (!queued) {
+        if (firstSave) { firstSaveCelebratedRef.current = false; setCelebrationId(null); }
+        setSavedIds((prev) => { const n = new Set(prev); if (wasSaved) n.add(scholarshipId); else n.delete(scholarshipId); return n; });
+      }
     }
     setPendingIds((prev) => { const n = new Set(prev); n.delete(scholarshipId); return n; });
   }
@@ -401,7 +413,7 @@ export function DashboardClient({
             return (
               <div key={m.id} data-tour={i === 0 ? "save" : undefined}>
                 <ScholarshipCard scholarship={m} score={m.score} metCount={met} totalCount={total} missingLabels={missingLabels}
-                  saved={savedIds.has(m.id)} pending={pendingIds.has(m.id)} onToggleSave={() => toggleSave(m.id)} sharerId={userId} />
+                  saved={savedIds.has(m.id)} pending={pendingIds.has(m.id)} onToggleSave={() => toggleSave(m.id)} sharerId={userId} firstSaveCelebration={celebrationId === m.id} />
               </div>
             );
           })}
@@ -418,7 +430,7 @@ export function DashboardClient({
               const missingLabels = m.requirements.filter((r) => r.status === "missing_data").map((r) => r.label);
               return (
                 <ScholarshipCard key={m.id} scholarship={m} score={m.score} metCount={met} totalCount={total} missingLabels={missingLabels}
-                  saved={savedIds.has(m.id)} pending={pendingIds.has(m.id)} onToggleSave={() => toggleSave(m.id)} sharerId={userId} />
+                  saved={savedIds.has(m.id)} pending={pendingIds.has(m.id)} onToggleSave={() => toggleSave(m.id)} sharerId={userId} firstSaveCelebration={celebrationId === m.id} />
               );
             })}
           </div>

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { MatchSeal } from "@/components/MatchSeal";
 import { ProviderMonogram } from "@/components/ProviderMonogram";
@@ -72,6 +72,7 @@ export function ScholarshipCard({
   onToggleSave,
   pending,
   sharerId,
+  firstSaveCelebration = false,
 }: {
   scholarship: CardScholarship;
   score?: number;
@@ -82,7 +83,15 @@ export function ScholarshipCard({
   onToggleSave: () => void;
   pending?: boolean;
   sharerId?: string;
+  firstSaveCelebration?: boolean;
 }) {
+  const [celebrationActive, setCelebrationActive] = useState(firstSaveCelebration);
+  useEffect(() => {
+    if (!firstSaveCelebration) return;
+    setCelebrationActive(true);
+    const timer = window.setTimeout(() => setCelebrationActive(false), 760);
+    return () => window.clearTimeout(timer);
+  }, [firstSaveCelebration]);
   const opensIn = scholarship.opens_at ? daysUntil(scholarship.opens_at) : null;
   const opensSoon = scholarship.isOpenNow === false && opensIn !== null && opensIn > 0;
   const closedUnknownReopen =
@@ -92,7 +101,7 @@ export function ScholarshipCard({
     // so every part of the card navigates, not just the inner content.
     // Save/Share sit at z-10 above the overlay so they stay independently
     // clickable. Press feedback scales the whole card via has-[a:active].
-    <div className="group relative bg-white rounded-2xl border border-hairline p-5 flex flex-col gap-4 sm:flex-row shadow-card focus-within:ring-2 focus-within:ring-emerald focus-within:ring-offset-2 focus-within:ring-offset-parchment transition-[transform,box-shadow,border-color] duration-150 hover:border-navy/20 hover:shadow-md motion-reduce:transition-none has-[a:active]:scale-[0.99] motion-reduce:has-[a:active]:scale-100">
+    <div className={["scholarship-card group relative bg-white rounded-2xl border border-hairline p-5 flex flex-col gap-4 sm:flex-row shadow-card focus-within:ring-2 focus-within:ring-emerald focus-within:ring-offset-2 focus-within:ring-offset-parchment transition-[transform,box-shadow,border-color] duration-150 hover:border-navy/20 hover:shadow-md motion-reduce:transition-none has-[a:active]:scale-[0.99] motion-reduce:has-[a:active]:scale-100", celebrationActive ? "save-celebration" : ""].join(" ")}>
       {/* RETURN-SCROLL: record the list's scroll offset at tap time so
           "Back to matches" can restore it (see lib/scrollRestore.ts). */}
       <Link
@@ -150,6 +159,12 @@ export function ScholarshipCard({
         )}
         <SaveButton saved={saved} pending={pending} onToggle={onToggleSave} />
       </div>
+      {celebrationActive && (
+        <>
+          <span className="save-ripple" aria-hidden="true" />
+          <span className="save-halo" aria-hidden="true" />
+        </>
+      )}
     </div>
   );
 }
