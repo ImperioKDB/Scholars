@@ -14,6 +14,7 @@ import { safeNextPath } from "@/lib/validate";
 import { AUTH_NEXT_COOKIE } from "@/components/AuthRescue";
 import { getAuthCookieDomain } from "@/lib/auth/cookie-domain";
 import { getAuthRedirectOrigin } from "@/lib/auth/redirect-origin";
+import { recordConfirmationEmailEvent } from "@/lib/auth/confirmation-email-analytics";
 
 function appBase(): string {
   if (typeof window === "undefined") return process.env.NEXT_PUBLIC_APP_URL || "";
@@ -77,6 +78,12 @@ function SignupForm() {
     });
     setLoading(false);
     if (signUpError) {
+      void recordConfirmationEmailEvent({
+        email: cleanEmail,
+        kind: "signup",
+        status: "failed",
+        errorCode: signUpError.code ?? "auth_error",
+      });
       if (signUpError.code === "user_already_registered") {
         setError("An account with this email already exists. Try logging in or resetting your password.");
       } else if (signUpError.code === "over_email_send_rate_limit") {
@@ -85,6 +92,14 @@ function SignupForm() {
         setError("We couldn't create your account. Check your details and try again.");
       }
       return;
+    }
+    if (!data.session) {
+      void recordConfirmationEmailEvent({
+        email: cleanEmail,
+        kind: "signup",
+        status: "accepted",
+        userId: data.user?.id,
+      });
     }
     if (data.session) {
       router.push(next);
@@ -107,6 +122,12 @@ function SignupForm() {
 
   async function handleResend(): Promise<string | null> {
     const { error: resendError } = await supabase.auth.resend({ type: "signup", email: cleanEmail });
+    void recordConfirmationEmailEvent({
+      email: cleanEmail,
+      kind: "resend",
+      status: resendError ? "failed" : "accepted",
+      errorCode: resendError?.code ?? null,
+    });
     return resendError ? "We couldn't resend the link right now. Please try again shortly." : null;
   }
 

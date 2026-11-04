@@ -14,6 +14,7 @@ import { safeNextPath } from "@/lib/validate";
 import { AUTH_NEXT_COOKIE } from "@/components/AuthRescue";
 import { getAuthCookieDomain } from "@/lib/auth/cookie-domain";
 import { getAuthRedirectOrigin } from "@/lib/auth/redirect-origin";
+import { recordConfirmationEmailEvent } from "@/lib/auth/confirmation-email-analytics";
 
 // AUTH SECURITY AUDIT (brute-force brake, client side): progressive
 // lockout stored in localStorage. UX-level only -- the real brakes are
@@ -120,6 +121,12 @@ function LoginForm() {
     if (signInError) {
       if (signInError.code === "email_not_confirmed" || signInError.message.toLowerCase().includes("email not confirmed")) {
         const { error: resendError } = await supabase.auth.resend({ type: "signup", email: cleanEmail });
+        void recordConfirmationEmailEvent({
+          email: cleanEmail,
+          kind: "resend",
+          status: resendError ? "failed" : "accepted",
+          errorCode: resendError?.code ?? null,
+        });
         if (resendError) {
           setError("Your email is not confirmed yet, and we couldn't resend the link. Try again shortly or check your inbox for the original link.");
         } else {
@@ -153,6 +160,12 @@ function LoginForm() {
 
   async function handleResendConfirmation(): Promise<string | null> {
     const { error: resendError } = await supabase.auth.resend({ type: "signup", email: confirmationEmail ?? "" });
+    void recordConfirmationEmailEvent({
+      email: confirmationEmail ?? "",
+      kind: "resend",
+      status: resendError ? "failed" : "accepted",
+      errorCode: resendError?.code ?? null,
+    });
     return resendError ? "We couldn't resend the link right now. Please try again shortly." : null;
   }
 
