@@ -21,6 +21,11 @@ type Analytics = {
 };
 type VisitorMetric = { day: string; visitors: number; page_views: number };
 type VisitorAnalytics = { total_visitors?: number; total_page_views?: number; daily?: VisitorMetric[] };
+type ConfirmationEmailAnalytics = {
+  summary?: { accepted?: number; failed?: number; confirmed?: number; pending?: number; confirmation_rate?: number };
+  daily?: { day: string; accepted: number; failed: number; confirmed: number }[];
+  recent?: { id: number; requested_at: string; request_kind: string; request_status: string; email_domain: string; error_code: string | null; confirmed: boolean; confirmed_at: string | null }[];
+};
 
 
 const number = (value: number | undefined) => (value ?? 0).toLocaleString();
@@ -44,10 +49,13 @@ export default async function ProviderAnalyticsPage({ searchParams }: { searchPa
   const { since, until } = getProviderAnalyticsWindow(range);
   const supabase = createClient();
   const { data, error } = await supabase.rpc("get_provider_analytics", { p_since: since.toISOString(), p_until: until.toISOString(), p_scholarship_id: null });
-  const [{ data: monitoringLogs, error: monitoringError }, fixLogs, { data: visitorData, error: visitorError }] = await Promise.all([
+  const confirmationSince = new Date(since);
+  confirmationSince.setDate(confirmationSince.getDate() - 30);
+  const [{ data: monitoringLogs, error: monitoringError }, fixLogs, { data: visitorData, error: visitorError }, { data: confirmationData, error: confirmationError }] = await Promise.all([
     supabase.from("monitoring_error_events").select("id, kind, message, source, pathname, digest, created_at").order("created_at", { ascending: false }).limit(200),
     getAutonomousFixLogs(),
     supabase.rpc("get_daily_visitor_metrics", { p_since: since.toISOString(), p_until: until.toISOString() }),
+    supabase.rpc("get_auth_confirmation_email_analytics", { p_since: confirmationSince.toISOString(), p_until: until.toISOString() }),
   ]);
   const analytics = (data ?? {}) as Analytics;
   const growth = analytics.growth ?? {};
@@ -55,6 +63,8 @@ export default async function ProviderAnalyticsPage({ searchParams }: { searchPa
   const retention = analytics.retention ?? {};
   const funnel = analytics.scholarship_funnel ?? [];
   const visitors = (visitorData ?? {}) as VisitorAnalytics;
+  const confirmation = (confirmationData ?? {}) as ConfirmationEmailAnalytics;
+  const confirmationSummary = confirmation.summary ?? {};
   const dailyVisitors = visitors.daily ?? [];
   const peakVisitors = dailyVisitors.reduce((max, row) => Math.max(max, row.visitors), 0);
   const periodLabel = PROVIDER_ANALYTICS_RANGE_LABELS[range];
@@ -64,6 +74,13 @@ export default async function ProviderAnalyticsPage({ searchParams }: { searchPa
     <section className="mb-8 rounded-xl border border-hairline bg-parchment p-4"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-semibold uppercase tracking-wide text-navy-light">Reporting period</p><p className="mt-1 text-sm text-navy">Showing statistics for <strong>{periodLabel.toLowerCase()}</strong></p></div><span className="rounded-full bg-white px-3 py-1 text-xs text-navy-light">All sections update together</span></div><PeriodSelector selected={range} /></section>
     {error && <div className="mb-6 rounded-lg bg-rose-light px-4 py-3 text-sm text-rose">Analytics data could not be loaded. Check the database migration and administrator permissions, then try again.</div>}
     <section className="mb-8"><h2 className="mb-3 font-display text-lg font-semibold text-navy">Growth and activation</h2><div className="grid grid-cols-2 gap-3 md:grid-cols-5"><Metric label="Registered users" value={number(growth.total_registered)} /><Metric label="Active users" value={number(growth.mau)} hint={`Events in ${periodLabel.toLowerCase()}`} /><Metric label="Returning users" value={number(growth.returning_users)} /><Metric label="Activated" value={number(activation.activated)} hint={`${rate(activation.activated, activation.signups)} of signups`} /><Metric label="Profile completed" value={number(activation.completed_profiles)} hint={`${rate(activation.completed_profiles, activation.signups)} of signups`} /></div></section>
+    <section className="mb-8 rounded-xl border border-hairline bg-white p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-display text-lg font-semibold text-navy">Confirmation-email delivery funnel</h2><p className="mt-1 max-w-3xl text-sm text-navy-light">Last 30 days of signup and resend requests. “Accepted” means Supabase Auth accepted the request for sending; “Confirmed” is read from the user’s verified account state. Brevo inbox delivery events are not claimed here.</p></div><span className="rounded-full bg-parchment px-3 py-1 text-xs text-navy-light">{confirmationSummary.confirmation_rate ?? 0}% confirmed</span></div>
+      {confirmationError ? <p className="mt-4 rounded-lg bg-amber-light px-4 py-3 text-sm text-amber">Confirmation analytics are temporarily unavailable. Check that migration 0103 is applied.</p> : <>
+        <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4"><Metric label="Accepted requests" value={number(confirmationSummary.accepted)} /><Metric label="Failed requests" value={number(confirmationSummary.failed)} /><Metric label="Confirmed accounts" value={number(confirmationSummary.confirmed)} /><Metric label="Still pending" value={number(confirmationSummary.pending)} /></div>
+        <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead><tr className="border-b border-hairline text-xs text-navy-light"><th className="px-3 py-2">Requested</th><th className="px-3 py-2">Type</th><th className="px-3 py-2">Domain</th><th className="px-3 py-2">Request</th><th className="px-3 py-2">Account</th><th className="px-3 py-2">Error</th></tr></thead><tbody>{(confirmation.recent ?? []).map((row) => <tr key={row.id} className="border-b border-hairline last:border-0"><td className="whitespace-nowrap px-3 py-3 text-xs text-navy-light">{new Date(row.requested_at).toLocaleString()}</td><td className="px-3 py-3 capitalize">{row.request_kind}</td><td className="px-3 py-3 text-navy-light">{row.email_domain}</td><td className="px-3 py-3"><span className={`rounded-full px-2 py-1 text-xs ${row.request_status === "accepted" ? "bg-emerald-light text-emerald" : "bg-rose-light text-rose"}`}>{row.request_status}</span></td><td className="px-3 py-3">{row.confirmed ? <span className="text-emerald">Confirmed</span> : <span className="text-navy-light">Pending</span>}</td><td className="px-3 py-3 text-xs text-rose">{row.error_code ?? "—"}</td></tr>)}</tbody></table>{!(confirmation.recent ?? []).length && <p className="py-5 text-sm text-navy-light">No confirmation requests recorded in this period.</p>}</div>
+      </>}
+    </section>
     <section className="mb-8 rounded-xl border border-hairline bg-white p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><h2 className="font-display text-lg font-semibold text-navy">Daily visitors</h2><p className="mt-1 max-w-2xl text-sm text-navy-light">Unique visitors per UTC day, including public visitors from the new opaque visitor cookie and signed-in visitors from the historical event log. No IP addresses are stored.</p></div>
