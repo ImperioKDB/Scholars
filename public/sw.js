@@ -1,4 +1,5 @@
-const CACHE_NAME = "scholars-static-v2";
+// v3: bumped so returning users drop the cached (cache-first) old /logo.svg.
+const CACHE_NAME = "scholars-static-v3";
 const OFFLINE_URL = "/offline.html";
 
 self.addEventListener("install", (event) => {
