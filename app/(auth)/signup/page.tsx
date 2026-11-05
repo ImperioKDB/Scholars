@@ -107,16 +107,31 @@ function SignupForm() {
     setVerificationEmail(cleanEmail);
   }
 
-  async function handleGoogle() {
+  async function handleGoogle(): Promise<string | null> {
     setError(null);
     setGoogleLoading(true);
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${appBase()}/auth/callback?next=${encodeURIComponent(next)}`,
-        queryParams: { prompt: "select_account" },
-      },
-    });
+    rememberAuthNext(next);
+    try {
+      const { error: googleError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${appBase()}/auth/callback?next=${encodeURIComponent(next)}`,
+          queryParams: { prompt: "select_account" },
+        },
+      });
+      if (googleError) {
+        setGoogleLoading(false);
+        const message = "We couldn't start Google sign-in. Please try again.";
+        setError(message);
+        return message;
+      }
+    } catch {
+      setGoogleLoading(false);
+      const message = "We couldn't start Google sign-in. Please try again.";
+      setError(message);
+      return message;
+    }
+    return null;
   }
 
   async function handleVerify(token: string): Promise<string | null> {
@@ -150,6 +165,7 @@ function SignupForm() {
         purpose="signup"
         onVerify={handleVerify}
         onResend={handleResend}
+        onGoogle={handleGoogle}
         onBack={() => setVerificationEmail(null)}
       />
     );
