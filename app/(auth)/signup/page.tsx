@@ -7,7 +7,7 @@ import { AuthShell } from "@/components/AuthShell";
 import { FormField, inputClass } from "@/components/FormField";
 import { StatusMessage } from "@/components/StatusMessage";
 import { PasswordField } from "@/components/PasswordField";
-import { AuthConfirmation } from "@/components/AuthConfirmation";
+import { AuthOtp } from "@/components/AuthOtp";
 import { validatePasswordStrength } from "@/lib/auth/password";
 import { normalizeEmail } from "@/lib/auth/email";
 import { safeNextPath } from "@/lib/validate";
@@ -37,7 +37,7 @@ function SignupForm() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
   const cleanEmail = normalizeEmail(email);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -73,7 +73,6 @@ function SignupForm() {
       password,
       options: {
         data: { full_name: fullName },
-        emailRedirectTo: `${appBase()}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
     setLoading(false);
@@ -105,7 +104,7 @@ function SignupForm() {
       router.push(next);
       return;
     }
-    setAwaitingConfirmation(true);
+    setVerificationEmail(cleanEmail);
   }
 
   async function handleGoogle() {
@@ -120,6 +119,19 @@ function SignupForm() {
     });
   }
 
+  async function handleVerify(token: string): Promise<string | null> {
+    const { data, error: verifyError } = await supabase.auth.verifyOtp({
+      email: verificationEmail ?? cleanEmail,
+      token,
+      type: "signup",
+    });
+    if (verifyError) return "That code is invalid or has expired. Request a new code and try again.";
+    if (!data.session) return "Your email was verified, but we couldn't start your session. Please log in.";
+    router.push(next);
+    router.refresh();
+    return null;
+  }
+
   async function handleResend(): Promise<string | null> {
     const { error: resendError } = await supabase.auth.resend({ type: "signup", email: cleanEmail });
     void recordConfirmationEmailEvent({
@@ -128,11 +140,19 @@ function SignupForm() {
       status: resendError ? "failed" : "accepted",
       errorCode: resendError?.code ?? null,
     });
-    return resendError ? "We couldn't resend the link right now. Please try again shortly." : null;
+    return resendError ? "We couldn't send a new code right now. Please try again shortly." : null;
   }
 
-  if (awaitingConfirmation) {
-    return <AuthConfirmation email={cleanEmail} onResend={handleResend} />;
+  if (verificationEmail) {
+    return (
+      <AuthOtp
+        email={verificationEmail}
+        purpose="signup"
+        onVerify={handleVerify}
+        onResend={handleResend}
+        onBack={() => setVerificationEmail(null)}
+      />
+    );
   }
 
   return (
