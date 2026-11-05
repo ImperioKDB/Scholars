@@ -9,7 +9,7 @@ import { StatusMessage } from "@/components/StatusMessage";
 import { PasswordField } from "@/components/PasswordField";
 import { normalizeEmail } from "@/lib/auth/email";
 import { LogoLoader } from "@/components/LogoLoader";
-import { AuthConfirmation } from "@/components/AuthConfirmation";
+import { AuthOtp } from "@/components/AuthOtp";
 import { safeNextPath } from "@/lib/validate";
 import { AUTH_NEXT_COOKIE } from "@/components/AuthRescue";
 import { getAuthCookieDomain } from "@/lib/auth/cookie-domain";
@@ -155,15 +155,30 @@ function LoginForm() {
       status: resendError ? "failed" : "accepted",
       errorCode: resendError?.code ?? null,
     });
-    return resendError ? "We couldn't resend the link right now. Please try again shortly." : null;
+    return resendError ? "We couldn't send a new code right now. Please try again shortly." : null;
+  }
+
+  async function handleVerifyConfirmation(token: string): Promise<string | null> {
+    const { data, error: verifyError } = await supabase.auth.verifyOtp({
+      email: confirmationEmail ?? cleanEmail,
+      token,
+      type: "signup",
+    });
+    if (verifyError) return "That code is invalid or has expired. Request a new code and try again.";
+    if (!data.session) return "Your email was verified, but we couldn't start your session. Please log in.";
+    router.push(next);
+    router.refresh();
+    return null;
   }
 
   if (confirmationEmail) {
     return (
-      <AuthConfirmation
+      <AuthOtp
         email={confirmationEmail}
+        purpose="signup"
+        onVerify={handleVerifyConfirmation}
         onResend={handleResendConfirmation}
-        allowImmediateResend
+        onBack={() => setConfirmationEmail(null)}
       />
     );
   }
