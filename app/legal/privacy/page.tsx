@@ -68,7 +68,7 @@ export default function PrivacyPolicyPage() {
           <li>To track your applications and follow up on them, including Ade&apos;s check-in prompts and deadline reminders.</li>
           <li>To generate draft application letters when you ask for them.</li>
           <li>To run the XP, level and achievement system and award referral bonuses.</li>
-          <li>To send account-confirmation links and password-reset links when you request those account actions. Other email is sent only when an administrator explicitly initiates it.</li>
+          <li>To send an account-confirmation link after you submit sign-up and a password-reset link after you request a reset. Other email is sent only after an administrator explicitly initiates it.</li>
           <li>To improve matching rules and fix problems.</li>
         </ul>
         <p>
