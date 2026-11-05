@@ -1,28 +1,20 @@
-name: digest-cron
+name: Manual deadline and push check
 
-# Free cron replacement for Vercel Hobby (which caps crons at once/day).
-# Every 2 hours UTC it calls the Scholars cron endpoint with the repo
-# secret. workflow_dispatch also gives a manual "Run workflow" button in
-# the Actions tab, so the owner can fire the digest from a phone anytime.
-#
-# SETUP (one time): add a repository secret named CRON_SECRET whose value
-# matches the CRON_SECRET env var on Vercel. GitHub -> repo -> Settings ->
-# Secrets and variables -> Actions -> New repository secret.
+# This endpoint is push-only. Keep it manually dispatchable, but never run it
+# on a timer: all non-authentication email must require a human action.
 on:
-  schedule:
-    - cron: "0 */2 * * *"
   workflow_dispatch: {}
 
 concurrency:
-  group: digest-cron
+  group: manual-deadline-push-check
   cancel-in-progress: false
 
 jobs:
-  trigger-digest:
+  trigger-deadline-push-check:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Trigger Scholars deadline-check digest
+      - name: Trigger the push-only Scholars deadline check
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           APP_URL: ${{ vars.APP_URL || 'https://www.scholars.com.ng' }}

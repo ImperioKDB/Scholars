@@ -1,8 +1,7 @@
 // lib/email/profileNudges.ts
-// Profile completion nudges, shared by the scheduled cron
-// (app/api/cron/deadline-check/route.ts, Phase 1b) and the admin manual
-// triggers (app/api/admin/profile-nudges/route.ts) so both run identical
-// logic -- same pattern as the new-listing digest in lib/email/digest.ts.
+// Profile completion nudges, invoked only by the explicit admin action
+// (app/api/admin/profile-nudges/route.ts). The scheduled email worker is paused
+// and the shared sender rejects non-manual calls.
 //
 // Semantics:
 //   - Targets profiles with profile_completeness < 100, under the
@@ -10,22 +9,15 @@
 //     whose last nudge is null or older than minIntervalMs (default 2
 //     days). Batch-capped per run (PROFILE_NUDGE_BATCH, or
 //     PROFILE_NUDGE_FORCE_BATCH for override sends); leftovers are picked
-//     up by the next tick or the next override press, oldest/never-emailed
-//     first.
+//     up by the next manual pass, oldest/never-emailed first.
 //   - Every successful send updates profile_reminder_last_sent_at and
-//     increments profile_reminder_count (migration 0018). Cron, routine
-//     button, and override button all share that one ledger, so a send
-//     from any path pushes the next scheduled send 2 days out: an
-//     override press today keeps the GitHub Actions cron quiet until the
-//     interval expires, and a recent cron pass is exactly what the
-//     routine button skips (and what the override ignores).
+//     increments profile_reminder_count (migration 0018). The routine and
+//     override admin buttons share that ledger; only the buttons can send.
 //   - ignoreCap (override sends only) drops the 5-email cap filter so a
 //     one-off campaign reaches every incomplete profile, including
 //     students who already received the maximum routine reminders.
-//   - The Lagos daytime window (07:00-19:59 WAT) is enforced for the cron
-//     only (enforceSendWindow). Both manual paths are deliberate human
-//     actions, so they own their timing; the routine one still keeps
-//     interval + cap.
+//   - The Lagos daytime window (07:00-19:59 WAT) is available as a guard for
+//     scheduled processing, but the current manual admin paths do not use it.
 //   - Column probe: if migration 0018 hasn't been applied yet, all
 //     callers skip gracefully with skipped_missing_columns instead of
 //     failing.
@@ -71,8 +63,8 @@ dry_run: boolean
 first_error: string | null
 }
 // Daytime-only sends, Africa/Lagos (UTC+1, no DST): 07:00 to 19:59 local.
-// A 2am nudge would just burn goodwill; if a cron tick lands outside the
-// window, the phase skips and the next tick inside the window handles it.
+// Keep the optional send-window guard available for any future scheduled
+// workflow, but no scheduled profile email currently runs.
 function inLagosSendWindow(now: Date): boolean {
 const hourWAT = (now.getUTCHours() + 1) % 24
 return hourWAT >= 7 && hourWAT < 20

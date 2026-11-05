@@ -1,10 +1,6 @@
-name: Notification worker
+name: Manual paused notification-worker check
 
 on:
-  schedule:
-    # GitHub Actions cron is UTC. The worker is lease-safe, so a delayed or
-    # overlapping invocation cannot claim the same delivery twice.
-    - cron: '0 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -19,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Dispatch retryable notifications
+      - name: Confirm outbound email delivery remains paused
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |

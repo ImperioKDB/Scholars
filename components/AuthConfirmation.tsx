@@ -10,6 +10,7 @@ const RESEND_COOLDOWN_SECONDS = 60;
 type Props = {
   email: string;
   onResend: () => Promise<string | null>;
+  allowImmediateResend?: boolean;
   heading?: string;
   sub?: string;
 };
@@ -17,10 +18,13 @@ type Props = {
 export function AuthConfirmation({
   email,
   onResend,
+  allowImmediateResend = false,
   heading = "Check your email",
   sub = "One more step before you can sign in.",
 }: Props) {
-  const [secondsLeft, setSecondsLeft] = useState(RESEND_COOLDOWN_SECONDS);
+  const [secondsLeft, setSecondsLeft] = useState(
+    allowImmediateResend ? 0 : RESEND_COOLDOWN_SECONDS,
+  );
   const [resending, setResending] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -50,8 +54,9 @@ export function AuthConfirmation({
     <AuthShell heading={heading} sub={sub}>
       <div className="rounded-xl border border-hairline bg-navy-50 p-5 mb-6" aria-live="polite">
         <p className="text-sm text-ink">
-          We sent a confirmation link to <span className="font-medium break-all">{email}</span>.
-          Open it to activate your account, then return here to log in.
+          Check <span className="font-medium break-all">{email}</span> for a confirmation link.
+          Open it to activate your account, then return here to log in. If it is missing, request
+          another link below.
         </p>
       </div>
       {status && (
