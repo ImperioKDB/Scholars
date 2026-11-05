@@ -21,14 +21,16 @@ type Props = {
   purpose: "signup" | "recovery";
   onVerify: (token: string) => Promise<string | null>;
   onResend: () => Promise<string | null>;
+  onGoogle?: () => Promise<string | null>;
   onBack?: () => void;
 };
 
-export function AuthOtp({ email, purpose, onVerify, onResend, onBack }: Props) {
+export function AuthOtp({ email, purpose, onVerify, onResend, onGoogle, onBack }: Props) {
   const [digits, setDigits] = useState<string[]>(() => Array(OTP_LENGTH).fill(""));
   const [secondsLeft, setSecondsLeft] = useState(RESEND_COOLDOWN_SECONDS);
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
@@ -127,6 +129,23 @@ export function AuthOtp({ email, purpose, onVerify, onResend, onBack }: Props) {
     inputRefs.current[0]?.focus();
   }
 
+  async function handleGoogle() {
+    if (!onGoogle || googleLoading || verifying) return;
+    setGoogleLoading(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const googleError = await onGoogle();
+      if (googleError) {
+        setGoogleLoading(false);
+        setError(googleError);
+      }
+    } catch {
+      setGoogleLoading(false);
+      setError("We couldn't start Google sign-in. Please try again.");
+    }
+  }
+
   const heading = purpose === "signup" ? "Verify your email" : "Enter your reset code";
   const sub = purpose === "signup"
     ? "One quick step before you start discovering scholarships."
@@ -180,10 +199,44 @@ export function AuthOtp({ email, purpose, onVerify, onResend, onBack }: Props) {
           Use a different email
         </button>
       )}
+      {onGoogle && (
+        <div className="mt-7 border-t border-hairline pt-6">
+          <div className="flex items-center justify-center gap-3 text-xs text-navy-light" aria-hidden="true">
+            <span className="h-px flex-1 bg-hairline" />
+            <span>OR</span>
+            <span className="h-px flex-1 bg-hairline" />
+          </div>
+          <button
+            type="button"
+            onClick={handleGoogle}
+            disabled={googleLoading || verifying}
+            aria-busy={googleLoading}
+            className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-3 rounded-lg border border-hairline bg-white px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-navy-50 disabled:opacity-60"
+          >
+            {googleLoading ? <SpinnerIcon className="h-4 w-4" /> : <GoogleIcon />}
+            {googleLoading ? "Redirecting to Google…" : "Continue with Google instead"}
+          </button>
+          <p className="mt-3 text-center text-xs leading-relaxed text-navy-light">
+            Can&apos;t receive your verification code? Continue with Google instead. Use the Google
+            account that matches the email above; a different email starts a separate account.
+          </p>
+        </div>
+      )}
       <p className="mt-8 text-center text-sm text-navy-light">
         Remembered your password?{" "}
         <Link href="/login" className="font-medium text-navy hover:underline">Log in</Link>
       </p>
     </AuthShell>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="#4285F4" d="M21.35 12.23c0-.72-.06-1.42-.18-2.09H12v3.96h5.24a4.48 4.48 0 0 1-1.94 2.94v2.45h3.14c1.84-1.69 2.91-4.18 2.91-7.26Z" />
+      <path fill="#34A853" d="M12 21.55c2.63 0 4.84-.87 6.45-2.36l-3.14-2.45c-.87.58-1.98.92-3.31.92-2.54 0-4.7-1.72-5.47-4.03H3.28v2.53A9.74 9.74 0 0 0 12 21.55Z" />
+      <path fill="#FBBC05" d="M6.53 13.63A5.86 5.86 0 0 1 6.22 12c0-.57.11-1.12.31-1.63V7.84H3.28A9.74 9.74 0 0 0 2.25 12c0 1.57.38 3.05 1.03 4.16l3.25-2.53Z" />
+      <path fill="#EA4335" d="M12 6.34c1.43 0 2.71.49 3.72 1.45l2.79-2.79C16.84 3.42 14.63 2.45 12 2.45a9.74 9.74 0 0 0-8.72 5.39l3.25 2.53C7.3 8.06 9.46 6.34 12 6.34Z" />
+    </svg>
   );
 }

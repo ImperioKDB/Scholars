@@ -134,17 +134,31 @@ function LoginForm() {
     router.refresh();
   }
 
-  async function handleGoogle() {
+  async function handleGoogle(): Promise<string | null> {
     setError(null);
     setGoogleLoading(true);
     rememberAuthNext(next);
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${appBase()}/auth/callback?next=${encodeURIComponent(next)}`,
-        queryParams: { prompt: "select_account" },
-      },
-    });
+    try {
+      const { error: googleError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${appBase()}/auth/callback?next=${encodeURIComponent(next)}`,
+          queryParams: { prompt: "select_account" },
+        },
+      });
+      if (googleError) {
+        setGoogleLoading(false);
+        const message = "We couldn't start Google sign-in. Please try again.";
+        setError(message);
+        return message;
+      }
+    } catch {
+      setGoogleLoading(false);
+      const message = "We couldn't start Google sign-in. Please try again.";
+      setError(message);
+      return message;
+    }
+    return null;
   }
 
   async function handleResendConfirmation(): Promise<string | null> {
@@ -178,6 +192,7 @@ function LoginForm() {
         purpose="signup"
         onVerify={handleVerifyConfirmation}
         onResend={handleResendConfirmation}
+        onGoogle={handleGoogle}
         onBack={() => setConfirmationEmail(null)}
       />
     );
