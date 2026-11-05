@@ -33,7 +33,7 @@ begin
       verified,
       research_notes
     ) values (
-      'scholarship',
+      'fellowship',
       'Airtel Africa Foundation Undergraduate Tech Scholarship 2026/2027 - Nigeria',
       'Airtel Africa Foundation',
       'An undergraduate technology scholarship supporting Nigerian students pursuing technology, science, engineering, and other ICT-related degrees at participating public universities. The Airtel Africa Foundation describes the wider Airtel Africa Tech Fellowship as a full scholarship programme that also supports career readiness, mentorship, internships, and early-career pathways.',
@@ -51,7 +51,7 @@ begin
     ) returning id into v_id;
   else
     update public.opportunities set
-      type = 'scholarship',
+      type = 'fellowship',
       title = 'Airtel Africa Foundation Undergraduate Tech Scholarship 2026/2027 - Nigeria',
       provider_name = 'Airtel Africa Foundation',
       description = 'An undergraduate technology scholarship supporting Nigerian students pursuing technology, science, engineering, and other ICT-related degrees at participating public universities. The Airtel Africa Foundation describes the wider Airtel Africa Tech Fellowship as a full scholarship programme that also supports career readiness, mentorship, internships, and early-career pathways.',
