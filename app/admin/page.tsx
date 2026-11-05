@@ -298,8 +298,8 @@ export default async function AdminOverviewPage() {
         <h2 className="font-display text-lg font-semibold text-navy mb-1">New-listing email digest</h2>
         <p className="text-sm text-navy-light mb-4">
           Bundles every verified scholarship and opportunity added in the last 7 days into one email
-          per student, skipping anything they have already been told about. The scheduled job runs
-          daily at 9:00am Nigeria time; press this to send immediately after adding listings. Each
+          per student, skipping anything they have already been told about. This is manual-only: no
+          scheduled digest email is sent. Press the button to send after reviewing the listings. Each
           listing reaches each student at most once, so pressing twice the same day only sends what
           was verified since the first press.
         </p>
@@ -309,18 +309,18 @@ export default async function AdminOverviewPage() {
         <h2 className="font-display text-lg font-semibold text-navy mb-1">Profile completion reminders</h2>
         <p className="text-sm text-navy-light mb-4">
           Emails students whose profile is under 100%, naming the exact fields they&apos;re missing so
-          they know what to add. The scheduled job runs daily at 9:00am Nigeria time, at most once
-          every 2 days per student, and stops after 5 emails. The navy button runs the same pass
-          immediately, skipping anyone reminded in the last 2 days. The outlined button overrides
-          both guards and emails every incomplete profile right now, for one-off campaigns only.
+          they know what to add. This is manual-only: no scheduled reminder email is sent. The navy
+          button skips anyone reminded in the last 2 days and stops after 5 reminders. The outlined
+          button overrides both guards and emails every incomplete profile right now, for a
+          one-off campaign only.
         </p>
         <SendProfileNudgesButton lastNudgeAt={stats.lastNudgeAt} />
       </div>
       <div className="bg-white rounded-xl border border-hairline p-5 mb-10">
         <h2 className="font-display text-lg font-semibold text-navy mb-1">Inngest delivery test</h2>
         <p className="text-sm text-navy-light mb-4">
-          Sends one profile-nudge test email to the approved admin address through the production
-          Inngest worker. This action is restricted to admins and cannot target another address.
+          Outbound email delivery is paused. This test endpoint currently records a test event but
+          does not send an email. It is restricted to admins and cannot target another address.
         </p>
         <SendTestProfileNudgeButton />
       </div>

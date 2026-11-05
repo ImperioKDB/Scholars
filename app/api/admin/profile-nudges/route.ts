@@ -1,8 +1,8 @@
 // app/api/admin/profile-nudges/route.ts
 // POST /api/admin/profile-nudges -- the admin profile-reminder buttons.
-//   body {}              routine pass: same 2-day interval as the cron, so
-//                        pressing twice in one day sends nothing new the
-//                        second time; the 5-email cap holds.
+//   body {}              routine pass: respects the 2-day interval and
+//                        5-email cap; pressing twice in one day sends
+//                        nothing new the second time.
 //   body { force: true } override pass: ignores the 2-day wait AND the
 //                        5-email cap, emailing every profile under 100%
 //                        right now (batch-capped at
@@ -15,9 +15,8 @@
 // stuck button cannot fan out sends. maxDuration 300 so a large student
 // base is not cut off mid-send.
 //
-// Both paths write the same ledger columns (migration 0018), so an
-// override press today keeps the GitHub Actions cron quiet for the next
-// 2 days, and a recent cron pass is exactly what the override ignores.
+// Both paths write the same ledger columns (migration 0018). This route is
+// called only by an explicit admin action; no scheduled job sends these emails.
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'

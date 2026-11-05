@@ -120,18 +120,7 @@ function LoginForm() {
     setLoading(false);
     if (signInError) {
       if (signInError.code === "email_not_confirmed" || signInError.message.toLowerCase().includes("email not confirmed")) {
-        const { error: resendError } = await supabase.auth.resend({ type: "signup", email: cleanEmail });
-        void recordConfirmationEmailEvent({
-          email: cleanEmail,
-          kind: "resend",
-          status: resendError ? "failed" : "accepted",
-          errorCode: resendError?.code ?? null,
-        });
-        if (resendError) {
-          setError("Your email is not confirmed yet, and we couldn't resend the link. Try again shortly or check your inbox for the original link.");
-        } else {
-          setConfirmationEmail(cleanEmail);
-        }
+        setConfirmationEmail(cleanEmail);
         return;
       }
       const count = lock.count + 1;
@@ -170,7 +159,13 @@ function LoginForm() {
   }
 
   if (confirmationEmail) {
-    return <AuthConfirmation email={confirmationEmail} onResend={handleResendConfirmation} />;
+    return (
+      <AuthConfirmation
+        email={confirmationEmail}
+        onResend={handleResendConfirmation}
+        allowImmediateResend
+      />
+    );
   }
 
   return (

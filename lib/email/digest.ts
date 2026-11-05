@@ -1,6 +1,6 @@
 // lib/email/digest.ts
-// New-listing digest, shared by the scheduled cron and the admin manual
-// trigger (app/api/admin/digest/route.ts) so both run identical logic.
+// New-listing digest, invoked only by the explicit admin action
+// (app/api/admin/digest/route.ts). The shared sender rejects non-manual calls.
 //
 // Semantics:
 //   - Collect every verified scholarship (undergrad or both) and every
@@ -9,10 +9,9 @@
 //     the full history so a previously sent listing is never re-announced.
 //   - Send only the newest pending listing, rather than bundling a backlog
 //     of older listings into a student email.
-//   - minIntervalMs is the per-student re-blast throttle. The cron passes
-//     2 hours; the admin button passes 0 because an admin pressing it just
-//     added listings and wants them out now. Listing-level dedupe still
-//     holds either way.
+//   - minIntervalMs is the per-student re-blast throttle. The admin button
+//     passes 0 because the admin may have just added listings. Listing-level
+//     dedupe prevents previously announced listings from being resent.
 //   - Record every pending listing in announcement_log after a successful
 //     send (or a dry run), so stale pending listings do not return later.
 import { createServiceClient } from '@/lib/supabase/service'

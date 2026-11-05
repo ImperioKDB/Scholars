@@ -1,6 +1,6 @@
 // lib/email/send.ts
-// Shared Brevo transactional send wrapper so the cron and the admin
-// manual trigger use one implementation.
+// Shared Brevo sender for explicitly initiated admin actions.
+// Authentication confirmation and password-reset emails are sent by Supabase Auth.
 //
 // Dry-run safe: missing BREVO_API_KEY or REMINDER_FROM_EMAIL logs and
 // returns dry:true instead of throwing, so a misconfigured environment
