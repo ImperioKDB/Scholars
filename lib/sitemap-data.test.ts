@@ -52,14 +52,15 @@ describe("sitemap data reader", () => {
     mockFrom.mockReset();
   });
 
-  it("retrieves all records across 500-row batches without omissions or duplicate URLs", async () => {
+  it("retrieves all records across 500-row batches without omissions", async () => {
     const scholarshipRows = [...rows("scholarship", SITEMAP_BATCH_SIZE), ...rows("scholarship", 1, SITEMAP_BATCH_SIZE)];
     const { chain, calls } = configureTable("scholarships", [scholarshipRows.slice(0, SITEMAP_BATCH_SIZE), scholarshipRows.slice(SITEMAP_BATCH_SIZE)]);
 
     const result = await readAllPublicRows("scholarships", "id, slug, updated_at");
 
     expect(result).toHaveLength(501);
-    expect(new Set(result.map((row) => row.slug)).size).toBe(501);
+    // The fixtures use unique slugs; this confirms every fixture row is retained.
+    expect(result.map((row) => row.slug)).toEqual(scholarshipRows.map((row) => row.slug));
     expect(calls).toEqual([[0, 499], [500, 999]]);
     expect(chain.eq).toHaveBeenCalledWith("verified", true);
     expect(chain.not).toHaveBeenCalledWith("slug", "is", null);
