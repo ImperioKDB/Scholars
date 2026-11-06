@@ -3,7 +3,7 @@ import { cache } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { createPublicClient } from "@/lib/supabase/public";
-import { formatVerifiedOn, todayUtcIso } from "@/lib/dates";
+import { formatVerifiedOn, isClosedListing } from "@/lib/dates";
 import { Breadcrumbs, SeoJsonLd } from "@/components/SeoJsonLd";
 import { PublicScholarshipCommunity } from "@/components/PublicScholarshipCommunity";
 import { isUuid } from "@/lib/validate";
@@ -39,6 +39,7 @@ type PublicScholarship = {
   description: string | null;
   amount: string | null;
   deadline: string | null;
+  last_cycle_closed_at: string | null;
   level: "undergrad" | "postgrad" | "both";
   discipline: string | null;
   verified: boolean;
@@ -51,8 +52,6 @@ const loadScholarship = cache(async (slug: string): Promise<PublicScholarship | 
     .select(PUBLIC_COLUMNS)
     .eq("slug", slug)
     .eq("verified", true)
-    .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
-    .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`)
     .maybeSingle();
   if (slugData) return slugData as PublicScholarship;
   if (!isUuid(slug)) return null;
@@ -61,8 +60,6 @@ const loadScholarship = cache(async (slug: string): Promise<PublicScholarship | 
     .select(PUBLIC_COLUMNS)
     .eq("id", slug)
     .eq("verified", true)
-    .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
-    .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`)
     .maybeSingle();
   return idData as PublicScholarship | null;
 });
@@ -74,11 +71,12 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   }
   const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
   const title = scholarship.title;
+  const closed = isClosedListing(scholarship);
   const description =
     scholarship.provider_name +
-    (scholarship.amount ? " \u00b7 " + scholarship.amount : "") +
-    (scholarship.deadline ? " \u00b7 Deadline " + formatDeadline(scholarship.deadline) : "") +
-    ". See if you qualify on Scholars.";
+    (scholarship.amount ? " · " + scholarship.amount : "") +
+    (scholarship.deadline ? " · Deadline " + formatDeadline(scholarship.deadline) : "") +
+    (closed ? ". This application cycle is closed." : ". See if you qualify on Scholars.");
   const canonicalSlug = scholarship.slug || slug;
   const image = `${base}/scholarship/${canonicalSlug}/opengraph-image`;
   return {
@@ -122,6 +120,7 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
   }
   const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
   const publicUrl = `${base}/scholarship/${scholarship.slug || slug}`;
+  const closed = isClosedListing(scholarship);
   const returnTo = `/scholarship/${scholarship.slug || slug}`;
   const onboardingPath = `/onboarding?next=${encodeURIComponent(returnTo)}`;
   const signupPath = `/signup?next=${encodeURIComponent(onboardingPath)}`;
@@ -132,12 +131,18 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
         <div className="mb-6">
           <Logo className="text-navy" />
         </div>
-        <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Scholarship", href: "/" }, { name: scholarship.title }]} />
+        <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Scholarships in Nigeria", href: "/scholarships-in-nigeria" }, { name: scholarship.title }]} />
         <div className="bg-white rounded-2xl border border-hairline shadow-card p-6">
           <p className="text-xs font-medium text-navy-light mb-1">{scholarship.provider_name}</p>
           <h1 className="font-display text-2xl font-semibold text-navy leading-snug mb-4">
             {scholarship.title}
           </h1>
+          {closed && (
+            <div className="mb-5 rounded-xl border border-amber/30 bg-amber-light px-4 py-3 text-sm text-amber-900">
+              <p className="font-medium">Applications closed</p>
+              <p className="mt-1">This page is kept for historical reference. It is not an active application opportunity.</p>
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-2 mb-5">
             {scholarship.amount && (
               <span className="text-xs font-mono font-medium text-emerald bg-emerald-light px-2.5 py-1 rounded-full">

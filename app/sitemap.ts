@@ -1,19 +1,9 @@
 import type { MetadataRoute } from "next";
-import { createPublicClient } from "@/lib/supabase/public";
-import { todayUtcIso } from "@/lib/dates";
+import { readAllPublicRows, type SitemapRow } from "@/lib/sitemap-data";
 
-// app/sitemap.ts
-// Auto-served at /sitemap.xml. Lists the static public routes plus every
-// verified share page: /s/[id] for undergraduate-facing scholarships and
-// /o/[id] for opportunities (fellowships, internships, competitions,
-// mentorships). These are the surfaces we actually want indexed -- each one
-// is a standalone, unauthenticated landing page for a real listing.
-// /reviews added: the public reviews page is a real indexed surface now.
-//
-// revalidate = 3600 caps rebuild cost at one regeneration per hour while
-// keeping new listings discoverable within a day of verification.
-export const revalidate = 3600;
-
+// Query Supabase at request time so CI/build prerendering does not require live
+// public data. Fail-closed behavior remains active when the route is requested.
+export const dynamic = "force-dynamic";
 const STATIC_PATHS = [
   "/",
   "/about",
@@ -31,39 +21,35 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     changeFrequency: path === "/" ? "daily" : "monthly",
     priority: path === "/" ? 1.0 : 0.5,
   }));
-  // Public anon client: verified rows are readable by the public role
-  // (scholarships_select_verified / opportunities_select_verified), so no
-  // session or service key is needed.
-  const supabase = createPublicClient();
-  const [{ data: scholarships }, { data: opportunities }] = await Promise.all([
-    supabase
-      .from("scholarships")
-      .select("id, slug, updated_at, deadline, last_cycle_closed_at")
-      .eq("verified", true)
-      .in("level", ["undergrad", "both"])
-      .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
-      .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`)
-      .order("updated_at", { ascending: false })
-      .limit(1000),
-    supabase
-      .from("opportunities")
-      .select("id, slug, updated_at, deadline")
-      .eq("verified", true)
-      .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
-      .order("updated_at", { ascending: false })
-      .limit(1000),
+
+  // Verified rows are the public source of truth. Closed records remain
+  // eligible for the sitemap when their detail pages retain useful history;
+  // active feeds still apply their own deadline filters.
+  const [scholarships, opportunities] = await Promise.all([
+    readAllPublicRows<SitemapRow>("scholarships", "id, slug, updated_at"),
+    readAllPublicRows<SitemapRow>("opportunities", "id, slug, updated_at"),
   ]);
-  const shareRoutes: MetadataRoute.Sitemap = (scholarships ?? []).map((row) => ({
-    url: `${base}/scholarship/${row.slug}`,
-    lastModified: new Date(row.updated_at),
-    changeFrequency: "weekly",
-    priority: 0.8,
-  }));
-  const opportunityRoutes: MetadataRoute.Sitemap = (opportunities ?? []).map((row) => ({
-    url: `${base}/opportunity/${row.slug}`,
-    lastModified: new Date(row.updated_at),
-    changeFrequency: "weekly",
-    priority: 0.7,
-  }));
-  return [...staticRoutes, ...shareRoutes, ...opportunityRoutes];
+
+  const scholarshipRoutes: MetadataRoute.Sitemap = scholarships.flatMap((row) =>
+    row.slug
+      ? [{
+          url: `${base}/scholarship/${row.slug}`,
+          lastModified: new Date(row.updated_at),
+          changeFrequency: "weekly" as const,
+          priority: 0.8,
+        }]
+      : [],
+  );
+  const opportunityRoutes: MetadataRoute.Sitemap = opportunities.flatMap((row) =>
+    row.slug
+      ? [{
+          url: `${base}/opportunity/${row.slug}`,
+          lastModified: new Date(row.updated_at),
+          changeFrequency: "weekly" as const,
+          priority: 0.7,
+        }]
+      : [],
+  );
+
+  return [...staticRoutes, ...scholarshipRoutes, ...opportunityRoutes];
 }

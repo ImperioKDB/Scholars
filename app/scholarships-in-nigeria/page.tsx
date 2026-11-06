@@ -3,28 +3,39 @@ import Link from "next/link";
 import { createPublicClient } from "@/lib/supabase/public";
 import { SeoJsonLd } from "@/components/SeoJsonLd";
 import { todayUtcIso } from "@/lib/dates";
+import { pageHref, pageStart, parsePublicPage, PUBLIC_PAGE_SIZE } from "@/lib/public-pagination";
+
+const PATH = "/scholarships-in-nigeria";
+const TITLE = "Undergraduate Scholarships in Nigeria";
+const DESCRIPTION =
+  "Browse verified undergraduate scholarships in Nigeria, including deadlines, providers, awards, and study disciplines.";
 
 export const revalidate = 300;
 
-export const metadata: Metadata = {
-  title: "Undergraduate Scholarships in Nigeria",
-  description:
-    "Browse verified undergraduate scholarships in Nigeria, including deadlines, providers, awards, and study disciplines.",
-  alternates: { canonical: "/scholarships-in-nigeria" },
-  openGraph: {
-    title: "Undergraduate Scholarships in Nigeria",
-    description:
-      "Browse verified undergraduate scholarships in Nigeria, including deadlines, providers, awards, and study disciplines.",
-    url: "/scholarships-in-nigeria",
-    type: "website",
-  },
-  twitter: {
-    card: "summary",
-    title: "Undergraduate Scholarships in Nigeria",
-    description:
-      "Browse verified undergraduate scholarships in Nigeria, including deadlines, providers, awards, and study disciplines.",
-  },
-};
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}): Promise<Metadata> {
+  const page = parsePublicPage((await searchParams).page);
+  return {
+    title: page === 1 ? TITLE : `${TITLE} — Page ${page}`,
+    description: DESCRIPTION,
+    alternates: { canonical: page === 1 ? PATH : `${PATH}?page=${page}` },
+    robots: page === 1 ? { index: true, follow: true } : { index: false, follow: true },
+    openGraph: {
+      title: page === 1 ? TITLE : `${TITLE} — Page ${page}`,
+      description: DESCRIPTION,
+      url: page === 1 ? PATH : `${PATH}?page=${page}`,
+      type: "website",
+    },
+    twitter: {
+      card: "summary",
+      title: page === 1 ? TITLE : `${TITLE} — Page ${page}`,
+      description: DESCRIPTION,
+    },
+  };
+}
 
 type Scholarship = {
   id: string;
@@ -32,29 +43,37 @@ type Scholarship = {
   title: string;
   provider_name: string;
   amount: string | null;
-  deadline: string;
+  deadline: string | null;
   discipline: string | null;
 };
 
-function formatDeadline(value: string) {
+function formatDeadline(value: string | null) {
+  if (!value) return "Rolling";
   const date = new Date(`${value}T00:00:00Z`);
   return Number.isNaN(date.getTime())
     ? value
     : date.toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 }
 
-export default async function ScholarshipsInNigeriaPage() {
+export default async function ScholarshipsInNigeriaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const page = parsePublicPage((await searchParams).page);
   const supabase = createPublicClient();
-  const { data } = await supabase
+  const { data, count } = await supabase
     .from("scholarships")
-    .select("id, slug, title, provider_name, amount, deadline, last_cycle_closed_at, discipline")
+    .select("id, slug, title, provider_name, amount, deadline, last_cycle_closed_at, discipline", { count: "exact" })
     .eq("verified", true)
     .in("level", ["undergrad", "both"])
     .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
     .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`)
-    .order("deadline", { ascending: true })
-    .limit(50);
+    .order("deadline", { ascending: true, nullsFirst: true })
+    .order("id", { ascending: true })
+    .range(pageStart(page), pageStart(page) + PUBLIC_PAGE_SIZE - 1);
   const scholarships = (data ?? []) as Scholarship[];
+  const totalPages = Math.max(1, Math.ceil((count ?? 0) / PUBLIC_PAGE_SIZE));
   const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
 
   return (
@@ -71,10 +90,10 @@ export default async function ScholarshipsInNigeriaPage() {
         <section className="mt-10" aria-labelledby="scholarship-list-heading">
           <div className="flex items-end justify-between gap-4 mb-4">
             <h2 id="scholarship-list-heading" className="font-display text-2xl font-semibold text-navy">Current verified scholarships</h2>
-            <span className="text-sm text-navy-light">{scholarships.length} listing{scholarships.length === 1 ? "" : "s"}</span>
+            <span className="text-sm text-navy-light">Page {page} of {totalPages}</span>
           </div>
           {scholarships.length === 0 ? (
-            <div className="rounded-2xl border border-hairline bg-white p-6 text-sm text-navy-light">New verified scholarships are being researched. Please check back soon.</div>
+            <div className="rounded-2xl border border-hairline bg-white p-6 text-sm text-navy-light">No more current verified scholarships are available on this page.</div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {scholarships.map((scholarship) => (
@@ -93,13 +112,19 @@ export default async function ScholarshipsInNigeriaPage() {
               ))}
             </div>
           )}
+          {totalPages > 1 && (
+            <nav aria-label="Scholarship pages" className="mt-8 flex items-center justify-between gap-4 text-sm">
+              {page > 1 ? <Link href={pageHref(PATH, page - 1)} className="font-medium text-navy underline">Previous</Link> : <span />}
+              {page < totalPages ? <Link href={pageHref(PATH, page + 1)} className="font-medium text-navy underline">Next</Link> : <span />}
+            </nav>
+          )}
         </section>
         <section className="mt-12 max-w-2xl border-t border-hairline pt-8">
           <h2 className="font-display text-2xl font-semibold text-navy">How Scholars helps</h2>
           <p className="mt-3 text-sm leading-6 text-navy-light">Create one free profile to compare your course, institution, location, academic results, and other eligibility details with the requirements attached to each verified listing.</p>
           <Link href="/signup" className="mt-5 inline-block rounded-seal bg-navy px-5 py-3 text-sm font-medium text-white hover:bg-navy-light">Create your free profile</Link>
         </section>
-        <SeoJsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: "Undergraduate scholarships in Nigeria", url: `${base}/scholarships-in-nigeria`, mainEntity: { "@type": "ItemList", numberOfItems: scholarships.length, itemListElement: scholarships.map((item, index) => ({ "@type": "ListItem", position: index + 1, name: item.title, url: `${base}/scholarship/${item.slug}` })) } }} />
+        <SeoJsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: TITLE, url: `${base}${page === 1 ? PATH : `${PATH}?page=${page}`}`, mainEntity: { "@type": "ItemList", numberOfItems: scholarships.length, itemListElement: scholarships.map((item, index) => ({ "@type": "ListItem", position: pageStart(page) + index + 1, name: item.title, url: `${base}/scholarship/${item.slug}` })) } }} />
       </div>
     </main>
   );
