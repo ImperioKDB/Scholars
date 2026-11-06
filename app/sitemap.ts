@@ -1,19 +1,9 @@
 import type { MetadataRoute } from "next";
 import { createPublicClient } from "@/lib/supabase/public";
-import { todayUtcIso } from "@/lib/dates";
 
-// app/sitemap.ts
-// Auto-served at /sitemap.xml. Lists the static public routes plus every
-// verified share page: /s/[id] for undergraduate-facing scholarships and
-// /o/[id] for opportunities (fellowships, internships, competitions,
-// mentorships). These are the surfaces we actually want indexed -- each one
-// is a standalone, unauthenticated landing page for a real listing.
-// /reviews added: the public reviews page is a real indexed surface now.
-//
-// revalidate = 3600 caps rebuild cost at one regeneration per hour while
-// keeping new listings discoverable within a day of verification.
 export const revalidate = 3600;
 
+const SITEMAP_BATCH_SIZE = 500;
 const STATIC_PATHS = [
   "/",
   "/about",
@@ -24,6 +14,39 @@ const STATIC_PATHS = [
   "/legal/terms",
 ];
 
+type SitemapRow = {
+  slug: string | null;
+  updated_at: string;
+};
+
+async function readAllPublicRows<T extends SitemapRow>(
+  table: "scholarships" | "opportunities",
+  select: string,
+): Promise<T[]> {
+  const supabase = createPublicClient();
+  const rows: T[] = [];
+
+  for (let from = 0; ; from += SITEMAP_BATCH_SIZE) {
+    const { data, error } = await supabase
+      .from(table)
+      .select(select)
+      .eq("verified", true)
+      .not("slug", "is", null)
+      .order("updated_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, from + SITEMAP_BATCH_SIZE - 1);
+
+    if (error) {
+      console.error(`[sitemap] failed to read public ${table}`, error);
+      throw new Error(`Unable to build sitemap from public ${table}`);
+    }
+
+    const batch = (data ?? []) as unknown as T[];
+    rows.push(...batch);
+    if (batch.length < SITEMAP_BATCH_SIZE) return rows;
+  }
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
   const staticRoutes: MetadataRoute.Sitemap = STATIC_PATHS.map((path) => ({
@@ -31,39 +54,35 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     changeFrequency: path === "/" ? "daily" : "monthly",
     priority: path === "/" ? 1.0 : 0.5,
   }));
-  // Public anon client: verified rows are readable by the public role
-  // (scholarships_select_verified / opportunities_select_verified), so no
-  // session or service key is needed.
-  const supabase = createPublicClient();
-  const [{ data: scholarships }, { data: opportunities }] = await Promise.all([
-    supabase
-      .from("scholarships")
-      .select("id, slug, updated_at, deadline, last_cycle_closed_at")
-      .eq("verified", true)
-      .in("level", ["undergrad", "both"])
-      .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
-      .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`)
-      .order("updated_at", { ascending: false })
-      .limit(1000),
-    supabase
-      .from("opportunities")
-      .select("id, slug, updated_at, deadline")
-      .eq("verified", true)
-      .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
-      .order("updated_at", { ascending: false })
-      .limit(1000),
+
+  // Verified rows are the public source of truth. Closed records remain
+  // eligible for the sitemap when their detail pages retain useful history;
+  // active feeds still apply their own deadline filters.
+  const [scholarships, opportunities] = await Promise.all([
+    readAllPublicRows<SitemapRow>("scholarships", "id, slug, updated_at"),
+    readAllPublicRows<SitemapRow>("opportunities", "id, slug, updated_at"),
   ]);
-  const shareRoutes: MetadataRoute.Sitemap = (scholarships ?? []).map((row) => ({
-    url: `${base}/scholarship/${row.slug}`,
-    lastModified: new Date(row.updated_at),
-    changeFrequency: "weekly",
-    priority: 0.8,
-  }));
-  const opportunityRoutes: MetadataRoute.Sitemap = (opportunities ?? []).map((row) => ({
-    url: `${base}/opportunity/${row.slug}`,
-    lastModified: new Date(row.updated_at),
-    changeFrequency: "weekly",
-    priority: 0.7,
-  }));
-  return [...staticRoutes, ...shareRoutes, ...opportunityRoutes];
+
+  const scholarshipRoutes: MetadataRoute.Sitemap = scholarships.flatMap((row) =>
+    row.slug
+      ? [{
+          url: `${base}/scholarship/${row.slug}`,
+          lastModified: new Date(row.updated_at),
+          changeFrequency: "weekly" as const,
+          priority: 0.8,
+        }]
+      : [],
+  );
+  const opportunityRoutes: MetadataRoute.Sitemap = opportunities.flatMap((row) =>
+    row.slug
+      ? [{
+          url: `${base}/opportunity/${row.slug}`,
+          lastModified: new Date(row.updated_at),
+          changeFrequency: "weekly" as const,
+          priority: 0.7,
+        }]
+      : [],
+  );
+
+  return [...staticRoutes, ...scholarshipRoutes, ...opportunityRoutes];
 }

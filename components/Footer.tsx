@@ -8,10 +8,8 @@ import { Logo, LogoMark } from "@/components/Logo";
 // Deliberately different from the reference in two places:
 // - No newsletter email box -- we don't have that backend, and a form that
 //   doesn't actually do anything is worse than not having one.
-// - No "Collections"/social column -- those don't map to any real page or
-//   account we have today. Only links to routes that actually exist
-//   (Home, About, the how-it-works anchor, Log in, and the two /legal
-//   pages) so nothing here is a dead link.
+// - The public scholarship and opportunity collections are linked directly so
+//   search engines and students can reach the canonical discovery surfaces.
 export function Footer() {
   return (
     <footer className="border-t border-hairline bg-white overflow-hidden">
@@ -36,6 +34,21 @@ export function Footer() {
             <li>
               <Link href="/about" className="text-navy-light hover:text-navy">
                 About
+              </Link>
+            </li>
+            <li>
+              <Link href="/scholarships-in-nigeria" className="text-navy-light hover:text-navy">
+                Scholarships in Nigeria
+              </Link>
+            </li>
+            <li>
+              <Link href="/opportunities-for-students" className="text-navy-light hover:text-navy">
+                Opportunities for students
+              </Link>
+            </li>
+            <li>
+              <Link href="/reviews" className="text-navy-light hover:text-navy">
+                Student reviews
               </Link>
             </li>
             <li>

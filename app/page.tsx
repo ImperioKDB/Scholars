@@ -156,7 +156,7 @@ export default async function LandingPage() {
                   ))}
                 </ul>
               )}
-              <Link href="/discover" className="mt-5 inline-flex min-h-[44px] items-center text-sm font-medium text-navy hover:underline">
+              <Link href="/scholarships-in-nigeria" className="mt-5 inline-flex min-h-[44px] items-center text-sm font-medium text-navy hover:underline">
                 Browse all active scholarships <span aria-hidden="true" className="ml-1">&rarr;</span>
               </Link>
             </div>

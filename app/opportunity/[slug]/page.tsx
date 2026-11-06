@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { createPublicClient } from "@/lib/supabase/public";
-import { todayUtcIso } from "@/lib/dates";
+import { isClosedListing } from "@/lib/dates";
 import { Breadcrumbs, SeoJsonLd } from "@/components/SeoJsonLd";
 
 // app/opportunity/[slug]/page.tsx
@@ -73,7 +73,6 @@ const loadOpportunity = cache(async (slug: string): Promise<PublicOpportunity | 
     .select(PUBLIC_COLUMNS)
     .eq("slug", slug)
     .eq("verified", true)
-    .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
     .maybeSingle();
   return data as PublicOpportunity | null;
 });
@@ -85,11 +84,12 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     return { title: "Opportunity not found -- Scholars" };
   }
   const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
+  const closed = isClosedListing(opportunity);
   const description =
     opportunity.provider_name +
-    (opportunity.compensation ? " \u00b7 " + opportunity.compensation : "") +
-    (opportunity.deadline ? " \u00b7 Deadline " + opportunity.deadline : " \u00b7 Rolling") +
-    ". Find it on Scholars.";
+    (opportunity.compensation ? " · " + opportunity.compensation : "") +
+    (opportunity.deadline ? " · Deadline " + opportunity.deadline : " · Rolling") +
+    (closed ? ". This application is closed." : ". Find it on Scholars.");
   return {
     title: opportunity.title,
     description,
@@ -134,13 +134,14 @@ export default async function PublicOpportunityPage({ params }: { params: Promis
   }
   const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
   const publicUrl = `${base}/opportunity/${slug}`;
+  const closed = isClosedListing(opportunity);
   return (
     <div className="min-h-screen bg-parchment flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
         <div className="mb-6">
           <Logo className="text-navy" />
         </div>
-        <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Opportunity", href: "/" }, { name: opportunity.title }]} />
+        <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Opportunities for students", href: "/opportunities-for-students" }, { name: opportunity.title }]} />
         <div className="bg-white rounded-2xl border border-hairline shadow-card p-6">
           <div className="flex items-center gap-2 mb-3">
             <span className={`text-xs font-medium px-2 py-1 rounded-full ${TYPE_TONES[opportunity.type]}`}>
@@ -151,6 +152,12 @@ export default async function PublicOpportunityPage({ params }: { params: Promis
           <h1 className="font-display text-2xl font-semibold text-navy leading-snug mb-4">
             {opportunity.title}
           </h1>
+          {closed && (
+            <div className="mb-5 rounded-xl border border-amber/30 bg-amber-light px-4 py-3 text-sm text-amber-900">
+              <p className="font-medium">Applications closed</p>
+              <p className="mt-1">This page is kept for historical reference. It is not an active application opportunity.</p>
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-2 mb-5">
             {opportunity.compensation && (
               <span className="text-xs font-mono font-medium text-emerald bg-emerald-light px-2.5 py-1 rounded-full">
@@ -180,7 +187,7 @@ export default async function PublicOpportunityPage({ params }: { params: Promis
               <h2 className="font-display text-lg font-semibold text-navy">Application details</h2>
               {opportunity.duration && <p className="text-sm text-navy-light"><span className="font-medium text-navy">Duration:</span> {opportunity.duration}</p>}
               {opportunity.how_to_apply && <p className="text-sm text-navy-light leading-relaxed">{opportunity.how_to_apply}</p>}
-              {opportunity.application_url && <a href={opportunity.application_url} rel="nofollow" className="inline-block text-sm font-medium text-navy underline">Visit the official application page</a>}
+              {opportunity.application_url && <a href={opportunity.application_url} rel="nofollow" className="inline-block text-sm font-medium text-navy underline">{closed ? "View the official page for historical details" : "Visit the official application page"}</a>}
             </div>
           )}
           <div className="flex items-start gap-3 bg-navy-50 rounded-xl p-4 mb-5">
@@ -189,15 +196,15 @@ export default async function PublicOpportunityPage({ params }: { params: Promis
               <path d="M8 10V7a4 4 0 0 1 8 0v3" />
             </svg>
             <p className="text-sm text-navy-light leading-relaxed">
-              <span className="font-medium text-navy">Opportunities like this aren&apos;t scored on Scholars.</span>{" "}
-              Create a free account to save it, track your application, and get reminded before it closes.
+              <span className="font-medium text-navy">{closed ? "This opportunity is closed." : "Opportunities like this aren&apos;t scored on Scholars."}</span>{" "}
+              {closed ? "Create a free account to keep it in your history." : "Create a free account to save it, track your application, and get reminded before it closes."}
             </p>
           </div>
           <Link
             href="/signup?next=/onboarding"
             className="block text-center rounded-seal bg-navy text-white text-sm font-medium px-6 py-3.5 hover:bg-navy-light transition-colors"
           >
-            Track this opportunity -- join free
+            {closed ? "Save this opportunity -- join free" : "Track this opportunity -- join free"}
           </Link>
           <p className="text-sm text-navy-light mt-4 text-center">
             Already have an account?{" "}

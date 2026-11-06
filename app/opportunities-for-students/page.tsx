@@ -3,28 +3,39 @@ import Link from "next/link";
 import { createPublicClient } from "@/lib/supabase/public";
 import { todayUtcIso } from "@/lib/dates";
 import { SeoJsonLd } from "@/components/SeoJsonLd";
+import { pageHref, pageStart, parsePublicPage, PUBLIC_PAGE_SIZE } from "@/lib/public-pagination";
+
+const PATH = "/opportunities-for-students";
+const TITLE = "Student Fellowships, Internships and Opportunities";
+const DESCRIPTION =
+  "Find verified fellowships, internships, competitions, mentorship, and training opportunities for students in Nigeria and beyond.";
 
 export const revalidate = 300;
 
-export const metadata: Metadata = {
-  title: "Student Fellowships, Internships and Opportunities",
-  description:
-    "Find verified fellowships, internships, competitions, mentorship, and training opportunities for students in Nigeria and beyond.",
-  alternates: { canonical: "/opportunities-for-students" },
-  openGraph: {
-    title: "Student Fellowships, Internships and Opportunities",
-    description:
-      "Find verified fellowships, internships, competitions, mentorship, and training opportunities for students in Nigeria and beyond.",
-    url: "/opportunities-for-students",
-    type: "website",
-  },
-  twitter: {
-    card: "summary",
-    title: "Student Fellowships, Internships and Opportunities",
-    description:
-      "Find verified fellowships, internships, competitions, mentorship, and training opportunities for students in Nigeria and beyond.",
-  },
-};
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}): Promise<Metadata> {
+  const page = parsePublicPage((await searchParams).page);
+  return {
+    title: page === 1 ? TITLE : `${TITLE} — Page ${page}`,
+    description: DESCRIPTION,
+    alternates: { canonical: page === 1 ? PATH : `${PATH}?page=${page}` },
+    robots: page === 1 ? { index: true, follow: true } : { index: false, follow: true },
+    openGraph: {
+      title: page === 1 ? TITLE : `${TITLE} — Page ${page}`,
+      description: DESCRIPTION,
+      url: page === 1 ? PATH : `${PATH}?page=${page}`,
+      type: "website",
+    },
+    twitter: {
+      card: "summary",
+      title: page === 1 ? TITLE : `${TITLE} — Page ${page}`,
+      description: DESCRIPTION,
+    },
+  };
+}
 
 type Opportunity = {
   id: string;
@@ -45,16 +56,23 @@ function formatDeadline(value: string | null) {
     : date.toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 }
 
-export default async function OpportunitiesForStudentsPage() {
+export default async function OpportunitiesForStudentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const page = parsePublicPage((await searchParams).page);
   const supabase = createPublicClient();
-  const { data } = await supabase
+  const { data, count } = await supabase
     .from("opportunities")
-    .select("id, slug, type, title, provider_name, compensation, deadline, location")
+    .select("id, slug, type, title, provider_name, compensation, deadline, location", { count: "exact" })
     .eq("verified", true)
     .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
     .order("deadline", { ascending: true, nullsFirst: false })
-    .limit(50);
+    .order("id", { ascending: true })
+    .range(pageStart(page), pageStart(page) + PUBLIC_PAGE_SIZE - 1);
   const opportunities = (data ?? []) as Opportunity[];
+  const totalPages = Math.max(1, Math.ceil((count ?? 0) / PUBLIC_PAGE_SIZE));
   const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
 
   return (
@@ -71,10 +89,10 @@ export default async function OpportunitiesForStudentsPage() {
         <section className="mt-10" aria-labelledby="opportunity-list-heading">
           <div className="flex items-end justify-between gap-4 mb-4">
             <h2 id="opportunity-list-heading" className="font-display text-2xl font-semibold text-navy">Current verified opportunities</h2>
-            <span className="text-sm text-navy-light">{opportunities.length} listing{opportunities.length === 1 ? "" : "s"}</span>
+            <span className="text-sm text-navy-light">Page {page} of {totalPages}</span>
           </div>
           {opportunities.length === 0 ? (
-            <div className="rounded-2xl border border-hairline bg-white p-6 text-sm text-navy-light">New verified opportunities are being researched. Please check back soon.</div>
+            <div className="rounded-2xl border border-hairline bg-white p-6 text-sm text-navy-light">No more current verified opportunities are available on this page.</div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {opportunities.map((opportunity) => (
@@ -96,8 +114,14 @@ export default async function OpportunitiesForStudentsPage() {
               ))}
             </div>
           )}
+          {totalPages > 1 && (
+            <nav aria-label="Opportunity pages" className="mt-8 flex items-center justify-between gap-4 text-sm">
+              {page > 1 ? <Link href={pageHref(PATH, page - 1)} className="font-medium text-navy underline">Previous</Link> : <span />}
+              {page < totalPages ? <Link href={pageHref(PATH, page + 1)} className="font-medium text-navy underline">Next</Link> : <span />}
+            </nav>
+          )}
         </section>
-        <SeoJsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: "Student fellowships, internships and opportunities", url: `${base}/opportunities-for-students`, mainEntity: { "@type": "ItemList", numberOfItems: opportunities.length, itemListElement: opportunities.map((item, index) => ({ "@type": "ListItem", position: index + 1, name: item.title, url: `${base}/opportunity/${item.slug}` })) } }} />
+        <SeoJsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: TITLE, url: `${base}${page === 1 ? PATH : `${PATH}?page=${page}`}`, mainEntity: { "@type": "ItemList", numberOfItems: opportunities.length, itemListElement: opportunities.map((item, index) => ({ "@type": "ListItem", position: pageStart(page) + index + 1, name: item.title, url: `${base}/opportunity/${item.slug}` })) } }} />
       </div>
     </main>
   );
