@@ -25,6 +25,7 @@ const NAV_GROUPS: AdminNavGroup[] = [
       { href: "/admin/scholarships", label: "Scholarships", description: "Manage verified listings", Icon: ScholarshipIcon },
       { href: "/admin/opportunities", label: "Opportunities", description: "Manage other pathways", Icon: OpportunitiesIcon },
       { href: "/admin/discovery", label: "Discovery", description: "Research and intake queue", Icon: DiscoverIcon },
+      { href: "/admin/resources", label: "Resource Center", description: "Reviewed student guidance", Icon: DiscoverIcon },
       { href: "/admin/broadcast", label: "Broadcast", description: "Share updates with students", Icon: FeedbackIcon },
     ],
   },

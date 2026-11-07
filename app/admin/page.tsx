@@ -17,7 +17,6 @@ async function getStats() {
     { count: recentProfiles },
     { count: totalSaved },
     { count: incompleteProfiles },
-    lastLog,
     lastNudge,
     { data: metricsSummary },
     { data: recentMonitoringErrors },
@@ -32,11 +31,6 @@ async function getStats() {
       .gte("created_at", sinceIso),
     supabase.from("saved_scholarships").select("*", { count: "exact", head: true }),
     supabase.from("profiles").select("*", { count: "exact", head: true }).lt("profile_completeness", 100),
-    supabase
-      .from("announcement_log")
-      .select("created_at")
-      .order("created_at", { ascending: false })
-      .limit(1),
     supabase
       .from("profiles")
       .select("profile_reminder_last_sent_at")
@@ -113,7 +107,6 @@ async function getStats() {
     totalProfiles: totalProfiles ?? 0,
     totalSaved: totalSaved ?? 0,
     incompleteProfiles: incompleteProfiles ?? 0,
-    lastDigestAt: (lastLog?.data?.[0]?.created_at as string | undefined) ?? null,
     lastNudgeAt:
       (lastNudge?.data?.[0]?.profile_reminder_last_sent_at as string | undefined) ?? null,
     activation,
@@ -303,7 +296,7 @@ export default async function AdminOverviewPage() {
           listing reaches each student at most once, so pressing twice the same day only sends what
           was verified since the first press.
         </p>
-        <SendDigestButton lastDigestAt={stats.lastDigestAt} />
+        <SendDigestButton />
       </div>
       <div className="bg-white rounded-xl border border-hairline p-5 mb-10">
         <h2 className="font-display text-lg font-semibold text-navy mb-1">Profile completion reminders</h2>

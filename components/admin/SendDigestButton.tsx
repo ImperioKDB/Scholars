@@ -6,7 +6,7 @@ import { EmailBatchButtons } from "@/components/admin/EmailBatchButtons";
 import { fetchWithTimeout } from "@/lib/fetch";
 import type { EmailBatch } from "@/lib/email/batches";
 
-export function SendDigestButton({ lastDigestAt }: { lastDigestAt: string | null }) {
+export function SendDigestButton({ lastDigestAt = null }: { lastDigestAt?: string | null }) {
   const [confirmBatch, setConfirmBatch] = useState<EmailBatch | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);

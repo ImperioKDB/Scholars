@@ -7,6 +7,11 @@ export type SitemapRow = {
   updated_at: string;
 };
 
+export type ResourceSitemapRow = {
+  slug: string | null;
+  published_at: string | null;
+};
+
 export async function readAllPublicRows<T extends SitemapRow>(
   table: "scholarships" | "opportunities",
   select: string,
@@ -30,6 +35,25 @@ export async function readAllPublicRows<T extends SitemapRow>(
     }
 
     const batch = (data ?? []) as unknown as T[];
+    rows.push(...batch);
+    if (batch.length < SITEMAP_BATCH_SIZE) return rows;
+  }
+}
+
+export async function readAllResourceRows(): Promise<ResourceSitemapRow[]> {
+  const supabase = createPublicClient();
+  const rows: ResourceSitemapRow[] = [];
+  for (let from = 0; ; from += SITEMAP_BATCH_SIZE) {
+    const { data, error } = await supabase
+      .from("resource_public_articles")
+      .select("slug,published_at")
+      .order("published_at", { ascending: false })
+      .range(from, from + SITEMAP_BATCH_SIZE - 1);
+    if (error) {
+      console.error("[sitemap] failed to read public resources", error);
+      throw new Error("Unable to build sitemap from public resources");
+    }
+    const batch = (data ?? []) as ResourceSitemapRow[];
     rows.push(...batch);
     if (batch.length < SITEMAP_BATCH_SIZE) return rows;
   }

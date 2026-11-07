@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { readAllPublicRows, type SitemapRow } from "@/lib/sitemap-data";
+import { readAllPublicRows, readAllResourceRows, type SitemapRow } from "@/lib/sitemap-data";
 
 // Query Supabase at request time so CI/build prerendering does not require live
 // public data. Fail-closed behavior remains active when the route is requested.
@@ -29,6 +29,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     readAllPublicRows<SitemapRow>("scholarships", "id, slug, updated_at"),
     readAllPublicRows<SitemapRow>("opportunities", "id, slug, updated_at"),
   ]);
+  const resources = await readAllResourceRows();
 
   const scholarshipRoutes: MetadataRoute.Sitemap = scholarships.flatMap((row) =>
     row.slug
@@ -50,6 +51,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         }]
       : [],
   );
+  const resourceRoutes: MetadataRoute.Sitemap = resources.flatMap((row) =>
+    row.slug
+      ? [{
+          url: `${base}/resources/${row.slug}`,
+          lastModified: row.published_at ? new Date(row.published_at) : undefined,
+          changeFrequency: "monthly" as const,
+          priority: 0.7,
+        }]
+      : [],
+  );
 
-  return [...staticRoutes, ...scholarshipRoutes, ...opportunityRoutes];
+  return [...staticRoutes, ...scholarshipRoutes, ...opportunityRoutes, ...resourceRoutes];
 }
