@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getApplicationLinkLabel, getSafeApplicationUrl } from "./public-application";
+import { getApplicationLinkLabel, getPublicApplicationDetails, getSafeApplicationUrl } from "./public-application";
 
 describe("public scholarship application links", () => {
   it.each(["https://provider.example/apply", "http://provider.example/apply"])(
@@ -38,16 +38,26 @@ describe("public scholarship application links", () => {
     );
   });
 
-  it("supports instructions-only, URL-only, both, and neither records", () => {
-    const records = [
-      { howToApply: "Submit the form.", applicationUrl: null },
-      { howToApply: null, applicationUrl: "https://provider.example/apply" },
-      { howToApply: "Submit the form.", applicationUrl: "https://provider.example/apply" },
-      { howToApply: null, applicationUrl: null },
-    ];
+  it("preserves meaningful instructions", () => {
+    expect(getPublicApplicationDetails({ instructions: "  Submit the form.  ", url: null }).instructions).toBe(
+      "Submit the form.",
+    );
+  });
 
-    expect(
-      records.map((record) => Boolean(record.howToApply || getSafeApplicationUrl(record.applicationUrl))),
-    ).toEqual([true, true, true, false]);
+  it("treats whitespace-only instructions as missing", () => {
+    expect(getPublicApplicationDetails({ instructions: " \n\t ", url: null })).toEqual({
+      instructions: null,
+      url: null,
+    });
+  });
+
+  it.each([
+    ["instructions-only", { instructions: "Submit the form.", url: null }, true],
+    ["URL-only", { instructions: null, url: "https://provider.example/apply" }, true],
+    ["both fields", { instructions: "Submit the form.", url: "https://provider.example/apply" }, true],
+    ["neither usable field", { instructions: "  ", url: "javascript:alert(1)" }, false],
+  ])("determines application-details availability for %s records", (_name, record, expected) => {
+    const details = getPublicApplicationDetails(record);
+    expect(Boolean(details.instructions || details.url)).toBe(expected);
   });
 });

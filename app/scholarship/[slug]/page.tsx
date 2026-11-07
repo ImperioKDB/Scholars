@@ -7,7 +7,7 @@ import { formatVerifiedOn, isClosedListing } from "@/lib/dates";
 import { Breadcrumbs, SeoJsonLd } from "@/components/SeoJsonLd";
 import { PublicScholarshipCommunity } from "@/components/PublicScholarshipCommunity";
 import { isUuid } from "@/lib/validate";
-import { getApplicationLinkLabel, getSafeApplicationUrl } from "@/lib/public-application";
+import { getApplicationLinkLabel, getPublicApplicationDetails } from "@/lib/public-application";
 // app/scholarship/[slug]/page.tsx
 // GET /s/[id] -- public, unauthenticated share landing page for a single
 // verified scholarship. Deliberately outside app/scholarships/** (which
@@ -124,7 +124,10 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
   const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
   const publicUrl = `${base}/scholarship/${scholarship.slug || slug}`;
   const closed = isClosedListing(scholarship);
-  const applicationUrl = getSafeApplicationUrl(scholarship.application_url);
+  const applicationDetails = getPublicApplicationDetails({
+    instructions: scholarship.how_to_apply,
+    url: scholarship.application_url,
+  });
   const returnTo = `/scholarship/${scholarship.slug || slug}`;
   const onboardingPath = `/onboarding?next=${encodeURIComponent(returnTo)}`;
   const signupPath = `/signup?next=${encodeURIComponent(onboardingPath)}`;
@@ -177,19 +180,19 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
               <p className="text-sm text-ink leading-relaxed">{scholarship.description}</p>
             </div>
           )}
-          {(scholarship.how_to_apply || applicationUrl) && (
+          {(applicationDetails.instructions || applicationDetails.url) && (
             <div className="rounded-xl border border-hairline p-4 mb-5 space-y-2">
               <h2 className="font-display text-lg font-semibold text-navy">Application details</h2>
-              {scholarship.how_to_apply && (
-                <p className="text-sm text-navy-light leading-relaxed">{scholarship.how_to_apply}</p>
+              {applicationDetails.instructions && (
+                <p className="text-sm text-navy-light leading-relaxed">{applicationDetails.instructions}</p>
               )}
-              {applicationUrl && (
+              {applicationDetails.url && (
                 <a
-                  href={applicationUrl.toString()}
+                  href={applicationDetails.url.toString()}
                   rel="nofollow"
                   className="inline-block text-sm font-medium text-navy underline"
                 >
-                  {getApplicationLinkLabel({ closed, protocol: applicationUrl.protocol })}
+                  {getApplicationLinkLabel({ closed, protocol: applicationDetails.url.protocol })}
                 </a>
               )}
             </div>

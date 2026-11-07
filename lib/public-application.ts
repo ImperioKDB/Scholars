@@ -5,6 +5,24 @@ export type PublicApplicationLink = {
   label: string;
 };
 
+export type PublicApplicationDetails = {
+  instructions: string | null;
+  url: URL | null;
+};
+
+export function getPublicApplicationDetails({
+  instructions,
+  url,
+}: {
+  instructions: string | null | undefined;
+  url: string | null | undefined;
+}): PublicApplicationDetails {
+  return {
+    instructions: instructions?.trim() || null,
+    url: getSafeApplicationUrl(url),
+  };
+}
+
 export function getSafeApplicationUrl(value: string | null | undefined): URL | null {
   if (!value?.trim()) return null;
 
