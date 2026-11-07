@@ -7,6 +7,7 @@ import { formatVerifiedOn, isClosedListing } from "@/lib/dates";
 import { Breadcrumbs, SeoJsonLd } from "@/components/SeoJsonLd";
 import { PublicScholarshipCommunity } from "@/components/PublicScholarshipCommunity";
 import { isUuid } from "@/lib/validate";
+import { getApplicationLinkLabel, getSafeApplicationUrl } from "@/lib/public-application";
 // app/scholarship/[slug]/page.tsx
 // GET /s/[id] -- public, unauthenticated share landing page for a single
 // verified scholarship. Deliberately outside app/scholarships/** (which
@@ -30,7 +31,7 @@ export const revalidate = 300;
 // captured into a cookie by middleware.ts before this component ever
 // renders -- this file doesn't need to read or forward it.
 const PUBLIC_COLUMNS =
-  "id, slug, title, provider_name, description, amount, deadline, last_cycle_closed_at, level, discipline, verified, last_verified_at";
+  "id, slug, title, provider_name, description, amount, deadline, last_cycle_closed_at, level, discipline, verified, last_verified_at, application_url, how_to_apply";
 type PublicScholarship = {
   id: string;
   slug: string;
@@ -44,6 +45,8 @@ type PublicScholarship = {
   discipline: string | null;
   verified: boolean;
   last_verified_at: string | null;
+  application_url: string | null;
+  how_to_apply: string | null;
 };
 const loadScholarship = cache(async (slug: string): Promise<PublicScholarship | null> => {
   const supabase = createPublicClient();
@@ -121,6 +124,7 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
   const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
   const publicUrl = `${base}/scholarship/${scholarship.slug || slug}`;
   const closed = isClosedListing(scholarship);
+  const applicationUrl = getSafeApplicationUrl(scholarship.application_url);
   const returnTo = `/scholarship/${scholarship.slug || slug}`;
   const onboardingPath = `/onboarding?next=${encodeURIComponent(returnTo)}`;
   const signupPath = `/signup?next=${encodeURIComponent(onboardingPath)}`;
@@ -171,6 +175,23 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
             <div className="mb-5">
               <h2 className="font-display text-lg font-semibold text-navy mb-2">About this scholarship</h2>
               <p className="text-sm text-ink leading-relaxed">{scholarship.description}</p>
+            </div>
+          )}
+          {(scholarship.how_to_apply || applicationUrl) && (
+            <div className="rounded-xl border border-hairline p-4 mb-5 space-y-2">
+              <h2 className="font-display text-lg font-semibold text-navy">Application details</h2>
+              {scholarship.how_to_apply && (
+                <p className="text-sm text-navy-light leading-relaxed">{scholarship.how_to_apply}</p>
+              )}
+              {applicationUrl && (
+                <a
+                  href={applicationUrl.toString()}
+                  rel="nofollow"
+                  className="inline-block text-sm font-medium text-navy underline"
+                >
+                  {getApplicationLinkLabel({ closed, protocol: applicationUrl.protocol })}
+                </a>
+              )}
             </div>
           )}
           <div className="rounded-xl border border-hairline p-4 mb-5">
