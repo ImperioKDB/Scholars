@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { readAllPublicRows, readAllResourceRows, type SitemapRow } from "@/lib/sitemap-data";
+import { readAllPublicRows, readAllResourceCategoryRows, readAllResourceRows, type SitemapRow } from "@/lib/sitemap-data";
 
 // Query Supabase at request time so CI/build prerendering does not require live
 // public data. Fail-closed behavior remains active when the route is requested.
@@ -10,6 +10,7 @@ const STATIC_PATHS = [
   "/reviews",
   "/scholarships-in-nigeria",
   "/opportunities-for-students",
+  "/resources",
   "/legal/privacy",
   "/legal/terms",
 ];
@@ -29,7 +30,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     readAllPublicRows<SitemapRow>("scholarships", "id, slug, updated_at"),
     readAllPublicRows<SitemapRow>("opportunities", "id, slug, updated_at"),
   ]);
-  const resources = await readAllResourceRows();
+  const [resources, resourceCategoryRows] = await Promise.all([
+    readAllResourceRows(),
+    readAllResourceCategoryRows(),
+  ]);
 
   const scholarshipRoutes: MetadataRoute.Sitemap = scholarships.flatMap((row) =>
     row.slug
@@ -61,6 +65,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         }]
       : [],
   );
+  const resourceCategoryRoutes: MetadataRoute.Sitemap = [...new Set(resourceCategoryRows.map((row) => row.slug).filter(Boolean))].map((slug) => ({
+    url: `${base}/resources/category/${slug}`,
+    changeFrequency: "monthly" as const,
+    priority: 0.6,
+  }));
 
-  return [...staticRoutes, ...scholarshipRoutes, ...opportunityRoutes, ...resourceRoutes];
+  return [...staticRoutes, ...scholarshipRoutes, ...opportunityRoutes, ...resourceCategoryRoutes, ...resourceRoutes];
 }
