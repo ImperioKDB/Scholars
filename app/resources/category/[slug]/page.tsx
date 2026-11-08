@@ -27,7 +27,7 @@ export default async function ResourceCategoryPage({ params }: Props) {
     throw error;
   }
   if (!result) notFound();
-  const { category, articles } = result;
+  const { category, articles, totalCount } = result;
   const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
   const jsonLd = { "@context": "https://schema.org", "@type": "CollectionPage", name: `${category.name} resources`, description: category.description ?? undefined, url: `${base}/resources/category/${category.slug}` };
   const featured = articles[0];
@@ -40,7 +40,7 @@ export default async function ResourceCategoryPage({ params }: Props) {
         <section className="border-b border-hairline bg-white">
           <div className="mx-auto max-w-6xl px-6 pb-12 pt-8 md:pt-12">
             <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Resources", href: "/resources" }, { name: category.name }]} />
-            <div className="mt-10 max-w-3xl"><p className="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-emerald">Resource category</p><h1 className="mt-4 font-display text-4xl font-semibold text-navy sm:text-5xl">{category.name}</h1>{category.description && <p className="mt-4 text-base leading-7 text-navy-light">{category.description}</p>}<p className="mt-5 text-sm text-navy-light">{articles.length} eligible {articles.length === 1 ? "guide" : "guides"}</p></div>
+            <div className="mt-10 max-w-3xl"><p className="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-emerald">Resource category</p><h1 className="mt-4 font-display text-4xl font-semibold text-navy sm:text-5xl">{category.name}</h1>{category.description && <p className="mt-4 text-base leading-7 text-navy-light">{category.description}</p>}<p className="mt-5 text-sm text-navy-light">{totalCount} eligible {totalCount === 1 ? "guide" : "guides"}</p></div>
           </div>
         </section>
         <section className="mx-auto max-w-6xl px-6 py-10 md:py-14">

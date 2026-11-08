@@ -68,7 +68,7 @@ export default async function ResourcesPage() {
         <section className="mx-auto max-w-6xl px-6 pb-12 md:pb-16">
           {articles.length === 0 ? <ResourceEmptyState /> : <>
             {featured && <div><div className="mb-4 flex items-center justify-between gap-4"><p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald">Start here</p><span className="text-xs text-navy-light">Newest published guide</span></div><ResourceCard article={featured} featured /></div>}
-            {latest.length > 0 && <div className="mt-14"><div className="mb-5 flex items-end justify-between gap-4"><div><p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald">From the desk</p><h2 className="mt-2 font-display text-3xl font-semibold text-navy">Latest guidance</h2></div><Link href="/resources" className="text-sm font-semibold text-navy hover:underline">View all <span aria-hidden="true">→</span></Link></div><div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">{latest.map((article) => <ResourceCard key={article.id} article={article} />)}</div></div>}
+            {latest.length > 0 && <div className="mt-14"><div className="mb-5"><p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald">From the desk</p><h2 className="mt-2 font-display text-3xl font-semibold text-navy">Latest guidance</h2></div><div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">{latest.map((article) => <ResourceCard key={article.id} article={article} />)}</div></div>}
             <div className="mt-14"><OpportunityBridge /></div>
           </>}
         </section>

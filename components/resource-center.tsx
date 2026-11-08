@@ -26,16 +26,16 @@ export function ResourcePageFrame({ children }: { children: React.ReactNode }) {
   return <div className="min-h-screen bg-parchment"><ResourceMasthead />{children}</div>;
 }
 
-export function ResourceImage({ path, alt, className = "" }: { path: string | null | undefined; alt: string; className?: string }) {
+export function ResourceImage({ path, alt, className = "", priority = false }: { path: string | null | undefined; alt: string; className?: string; priority?: boolean }) {
   const src = getResourceImageUrl(path);
   if (!src) return <div aria-hidden="true" className={`bg-grain flex items-center justify-center bg-navy-50 ${className}`}><span className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald">Scholars resource desk</span></div>;
-  return <img src={src} alt={alt} loading="lazy" className={`object-cover ${className}`} />;
+  return <img src={src} alt={alt} loading={priority ? "eager" : "lazy"} fetchPriority={priority ? "high" : "auto"} className={`object-cover ${className}`} />;
 }
 
 export function ResourceCard({ article, featured = false }: { article: ResourceArticleCard; featured?: boolean }) {
   return (
     <article className={`group flex h-full flex-col overflow-hidden rounded-2xl border border-hairline bg-white shadow-card transition-transform duration-300 hover:-translate-y-0.5 ${featured ? "md:grid md:grid-cols-[1.05fr_0.95fr]" : ""}`}>
-      {featured && <ResourceImage path={article.featured_image_path} alt="" className="min-h-56 w-full md:h-full" />}
+      {featured && <ResourceImage path={article.featured_image_path} alt={`${article.title} featured image`} priority className="min-h-56 w-full md:h-full" />}
       <div className="flex min-w-0 flex-1 flex-col p-6 md:p-7">
         <div className="flex flex-wrap items-center justify-between gap-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald">
           <span>{article.article_type}</span>

@@ -1,7 +1,8 @@
 import { createClient } from "./supabase/server";
 
 export const RESOURCE_IMAGE_PREFIX = "resource-center/featured/";
-export const RESOURCE_PAGE_SIZE = 12;
+export const RESOURCE_PAGE_SIZE = 100;
+const APPROVED_CANONICAL_HOST = "www.scholars.com.ng";
 
 export type ResourceArticle = {
   id: string;
@@ -20,35 +21,10 @@ export type ResourceArticle = {
   author_avatar_path: string | null;
 };
 
-export type ResourceArticleCard = Pick<
-  ResourceArticle,
-  | "id"
-  | "slug"
-  | "title"
-  | "excerpt"
-  | "article_type"
-  | "published_at"
-  | "reading_time_minutes"
-  | "author_name"
-  | "featured_image_path"
->;
+export type ResourceArticleCard = Pick<ResourceArticle, "id" | "slug" | "title" | "excerpt" | "article_type" | "published_at" | "reading_time_minutes" | "author_name" | "featured_image_path">;
 
-export type ResourceCategory = {
-  id: string;
-  slug: string;
-  name: string;
-  description: string | null;
-  display_order: number;
-};
-
-export type ResourceCategoryLink = {
-  article_id: string;
-  category_id: string;
-  slug: string;
-  name: string;
-  description: string | null;
-  display_order: number;
-};
+export type ResourceCategory = { id: string; slug: string; name: string; description: string | null; display_order: number };
+export type ResourceCategoryLink = { article_id: string; category_id: string; slug: string; name: string; description: string | null; display_order: number };
 
 export class ResourceDataError extends Error {
   constructor(message: string, cause?: unknown) {
@@ -58,10 +34,8 @@ export class ResourceDataError extends Error {
   }
 }
 
-const CARD_SELECT =
-  "id,slug,title,excerpt,article_type,published_at,reading_time_minutes,author_name,featured_image_path";
-const ARTICLE_SELECT =
-  "id,slug,title,excerpt,content_markdown,article_type,canonical_url,featured_image_path,reading_time_minutes,published_at,last_reviewed_at,author_name,author_bio,author_avatar_path";
+const CARD_SELECT = "id,slug,title,excerpt,article_type,published_at,reading_time_minutes,author_name,featured_image_path";
+const ARTICLE_SELECT = "id,slug,title,excerpt,content_markdown,article_type,canonical_url,featured_image_path,reading_time_minutes,published_at,last_reviewed_at,author_name,author_bio,author_avatar_path";
 
 function assertNoError<T>(data: T | null, error: unknown, message: string): T {
   if (error) {
@@ -73,22 +47,10 @@ function assertNoError<T>(data: T | null, error: unknown, message: string): T {
 
 export async function getResourceHome() {
   const supabase = createClient();
-  const [{ data: articles, error: articlesError }, { data: categories, error: categoriesError }] =
-    await Promise.all([
-      supabase
-        .from("resource_public_articles")
-        .select(CARD_SELECT)
-        .order("published_at", { ascending: false })
-        .order("id", { ascending: true })
-        .limit(50),
-      supabase
-        .from("resource_public_categories")
-        .select("id,slug,name,description,display_order")
-        .order("display_order", { ascending: true })
-        .order("slug", { ascending: true })
-        .limit(30),
-    ]);
-
+  const [{ data: articles, error: articlesError }, { data: categories, error: categoriesError }] = await Promise.all([
+    supabase.from("resource_public_articles").select(CARD_SELECT).order("published_at", { ascending: false }).order("id", { ascending: true }).limit(50),
+    supabase.from("resource_public_categories").select("id,slug,name,description,display_order").order("display_order", { ascending: true }).order("slug", { ascending: true }).limit(30),
+  ]);
   return {
     articles: assertNoError((articles ?? []) as ResourceArticleCard[], articlesError, "Unable to load public resources"),
     categories: assertNoError((categories ?? []) as ResourceCategory[], categoriesError, "Unable to load resource categories"),
@@ -97,99 +59,64 @@ export async function getResourceHome() {
 
 export async function getResourceCategory(slug: string) {
   const supabase = createClient();
-  const { data: category, error: categoryError } = await supabase
-    .from("resource_public_categories")
-    .select("id,slug,name,description,display_order")
-    .eq("slug", slug)
-    .maybeSingle();
-
-  if (categoryError) {
-    console.error("[resources] Unable to load resource category", categoryError);
-    throw new ResourceDataError("Unable to load this resource category", categoryError);
-  }
+  const { data: category, error: categoryError } = await supabase.from("resource_public_categories").select("id,slug,name,description,display_order").eq("slug", slug).maybeSingle();
+  if (categoryError) throw new ResourceDataError("Unable to load this resource category", categoryError);
   if (!category) return null;
 
-  const { data: links, error: linksError } = await supabase
-    .from("resource_public_article_categories")
-    .select("article_id")
-    .eq("slug", slug)
-    .limit(100);
-  const safeLinks = assertNoError(links ?? [], linksError, "Unable to load category articles");
-  const ids = [...new Set(safeLinks.map((row) => row.article_id as string))];
-
-  if (ids.length === 0) {
-    return { category: category as ResourceCategory, articles: [] as ResourceArticleCard[] };
-  }
-
-  const { data: articles, error: articlesError } = await supabase
-    .from("resource_public_articles")
-    .select(CARD_SELECT)
-    .in("id", ids)
-    .order("published_at", { ascending: false })
-    .order("id", { ascending: true })
-    .limit(100);
-
+  const { count, error: countError } = await supabase.from("resource_public_article_categories").select("article_id", { count: "exact", head: true }).eq("slug", slug);
+  if (countError) throw new ResourceDataError("Unable to count category articles", countError);
+  const articleIds = await readAllCategoryArticleIds(supabase, slug);
+  const articles = await readArticlesByIds(supabase, articleIds);
   return {
     category: category as ResourceCategory,
-    articles: assertNoError((articles ?? []) as ResourceArticleCard[], articlesError, "Unable to load category articles"),
+    articles,
+    totalCount: count ?? articleIds.length,
   };
+}
+
+async function readAllCategoryArticleIds(supabase: ReturnType<typeof createClient>, slug: string): Promise<string[]> {
+  const ids: string[] = [];
+  for (let from = 0; ; from += RESOURCE_PAGE_SIZE) {
+    const { data, error } = await supabase.from("resource_public_article_categories").select("article_id").eq("slug", slug).order("article_id", { ascending: true }).range(from, from + RESOURCE_PAGE_SIZE - 1);
+    const batch = assertNoError(data ?? [], error, "Unable to load category articles") as Array<{ article_id: string }>;
+    ids.push(...batch.map((row) => row.article_id));
+    if (batch.length < RESOURCE_PAGE_SIZE) return [...new Set(ids)];
+  }
+}
+
+async function readArticlesByIds(supabase: ReturnType<typeof createClient>, ids: string[]): Promise<ResourceArticleCard[]> {
+  const articles: ResourceArticleCard[] = [];
+  for (let from = 0; from < ids.length; from += RESOURCE_PAGE_SIZE) {
+    const chunk = ids.slice(from, from + RESOURCE_PAGE_SIZE);
+    const { data, error } = await supabase.from("resource_public_articles").select(CARD_SELECT).in("id", chunk).limit(RESOURCE_PAGE_SIZE);
+    articles.push(...(assertNoError((data ?? []) as ResourceArticleCard[], error, "Unable to load category articles")));
+  }
+  return articles.sort((a, b) => Date.parse(b.published_at) - Date.parse(a.published_at) || a.id.localeCompare(b.id));
 }
 
 export async function getResourceArticle(slug: string) {
   const supabase = createClient();
-  const { data: article, error: articleError } = await supabase
-    .from("resource_public_articles")
-    .select(ARTICLE_SELECT)
-    .eq("slug", slug)
-    .maybeSingle();
-
-  if (articleError) {
-    console.error("[resources] Unable to load resource article", articleError);
-    throw new ResourceDataError("Unable to load this resource", articleError);
-  }
+  const { data: article, error: articleError } = await supabase.from("resource_public_articles").select(ARTICLE_SELECT).eq("slug", slug).maybeSingle();
+  if (articleError) throw new ResourceDataError("Unable to load this resource", articleError);
   if (!article) return null;
 
-  const { data: categories, error: categoriesError } = await supabase
-    .from("resource_public_article_categories")
-    .select("article_id,category_id,slug,name,description,display_order")
-    .eq("article_id", article.id)
-    .order("display_order", { ascending: true })
-    .order("slug", { ascending: true })
-    .limit(20);
-  const categoryLinks = assertNoError(
-    (categories ?? []) as ResourceCategoryLink[],
-    categoriesError,
-    "Unable to load article categories",
-  );
-
+  const { data: categories, error: categoriesError } = await supabase.from("resource_public_article_categories").select("article_id,category_id,slug,name,description,display_order").eq("article_id", article.id).order("display_order", { ascending: true }).order("slug", { ascending: true }).limit(20);
+  const categoryLinks = assertNoError((categories ?? []) as ResourceCategoryLink[], categoriesError, "Unable to load article categories");
   const categorySlugs = [...new Set(categoryLinks.map((category) => category.slug))];
-  let related: ResourceArticleCard[] = [];
-  if (categorySlugs.length > 0) {
-    const { data: relatedLinks, error: relatedLinksError } = await supabase
-      .from("resource_public_article_categories")
-      .select("article_id")
-      .in("slug", categorySlugs)
-      .neq("article_id", article.id)
-      .limit(30);
-    const safeRelatedLinks = assertNoError(relatedLinks ?? [], relatedLinksError, "Unable to load related resources");
-    const relatedIds = [...new Set(safeRelatedLinks.map((row) => row.article_id as string))].slice(0, 6);
-    if (relatedIds.length > 0) {
-      const { data: relatedArticles, error: relatedArticlesError } = await supabase
-        .from("resource_public_articles")
-        .select(CARD_SELECT)
-        .in("id", relatedIds)
-        .order("published_at", { ascending: false })
-        .order("id", { ascending: true })
-        .limit(3);
-      related = assertNoError(
-        (relatedArticles ?? []) as ResourceArticleCard[],
-        relatedArticlesError,
-        "Unable to load related resources",
-      );
-    }
-  }
-
+  const related = categorySlugs.length > 0 ? await getRelatedArticles(supabase, categorySlugs, article.id) : [];
   return { article: article as ResourceArticle, categories: categoryLinks, related };
+}
+
+async function getRelatedArticles(supabase: ReturnType<typeof createClient>, categorySlugs: string[], currentArticleId: string) {
+  const relatedCounts = new Map<string, number>();
+  for (let from = 0; ; from += RESOURCE_PAGE_SIZE) {
+    const { data, error } = await supabase.from("resource_public_article_categories").select("article_id").in("slug", categorySlugs).neq("article_id", currentArticleId).order("article_id", { ascending: true }).range(from, from + RESOURCE_PAGE_SIZE - 1);
+    const batch = assertNoError(data ?? [], error, "Unable to load related resources") as Array<{ article_id: string }>;
+    batch.forEach((row) => relatedCounts.set(row.article_id, (relatedCounts.get(row.article_id) ?? 0) + 1));
+    if (batch.length < RESOURCE_PAGE_SIZE) break;
+  }
+  const candidates = await readArticlesByIds(supabase, [...relatedCounts.keys()]);
+  return candidates.sort((a, b) => (relatedCounts.get(b.id) ?? 0) - (relatedCounts.get(a.id) ?? 0) || Date.parse(b.published_at) - Date.parse(a.published_at) || a.id.localeCompare(b.id)).slice(0, 3);
 }
 
 export function getResourceImageUrl(path: string | null | undefined): string | null {
@@ -202,16 +129,18 @@ export function isApprovedResourceImagePath(path: string | null | undefined): pa
   return Boolean(path && path.startsWith(RESOURCE_IMAGE_PREFIX) && !path.includes("..") && !path.includes("\\") && !path.includes("//"));
 }
 
-export function getResourceCanonicalUrl(path: string, storedCanonical: string | null): string {
-  const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
-  const siteUrl = new URL(base);
-  if (storedCanonical) {
-    try {
-      const candidate = new URL(storedCanonical);
-      if (candidate.protocol === "https:" && candidate.hostname === siteUrl.hostname) return candidate.toString();
-    } catch {
-      // Fall through to the Scholars-owned route when stored data is malformed.
+export function getResourceCanonicalUrl(slug: string, storedCanonical: string | null): string {
+  const expectedPath = `/resources/${slug}`;
+  const fallback = `https://${APPROVED_CANONICAL_HOST}${expectedPath}`;
+  if (!storedCanonical) return fallback;
+  try {
+    const candidate = new URL(storedCanonical);
+    const normalizedPath = candidate.pathname.replace(/\/+$/, "") || "/";
+    if (candidate.protocol === "https:" && candidate.hostname === APPROVED_CANONICAL_HOST && !candidate.port && !candidate.username && !candidate.password && !candidate.search && !candidate.hash && normalizedPath === expectedPath) {
+      return fallback;
     }
+  } catch {
+    // Use the exact route fallback below.
   }
-  return `${base.replace(/\/$/, "")}/resources/${path}`;
+  return fallback;
 }

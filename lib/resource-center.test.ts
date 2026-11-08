@@ -1,22 +1,42 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockFrom } = vi.hoisted(() => ({ mockFrom: vi.fn() }));
+vi.mock("./supabase/server", () => ({ createClient: () => ({ from: mockFrom }) }));
 
-vi.mock("./supabase/server", () => ({
-  createClient: () => ({ from: mockFrom }),
-}));
+import { getResourceCanonicalUrl, getResourceCategory, isApprovedResourceImagePath, ResourceDataError, RESOURCE_PAGE_SIZE } from "./resource-center";
 
-import {
-  getResourceCanonicalUrl,
-  getResourceCategory,
-  isApprovedResourceImagePath,
-  ResourceDataError,
-} from "./resource-center";
+const category = { id: "cat-1", slug: "guides", name: "Guides", description: null, display_order: 1 };
+const card = (id: string) => ({ id, slug: `guide-${id}`, title: `Guide ${id}`, excerpt: null, article_type: "Guide", published_at: `2026-01-${String((Number(id.replace(/\D/g, "")) % 28) + 1).padStart(2, "0")}T00:00:00.000Z`, reading_time_minutes: 5, author_name: "Scholars", featured_image_path: null });
+
+function configureCategoryData(articleCount: number, failingTable?: string) {
+  const ids = Array.from({ length: articleCount }, (_, index) => `article-${index + 1}`);
+  mockFrom.mockImplementation((table: string) => {
+    if (!table) return { getPublicUrl: vi.fn(() => ({ data: { publicUrl: "" } })) };
+    if (failingTable && table === failingTable) throw new Error("network unavailable");
+    if (table === "resource_public_categories") {
+      const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), maybeSingle: vi.fn(async () => ({ data: category, error: null })) };
+      return chain;
+    }
+    if (table === "resource_public_article_categories") {
+      return {
+        select: vi.fn((_fields: string, options?: { head?: boolean }) => {
+          if (options?.head) return { eq: vi.fn(async () => ({ count: articleCount, error: null })) };
+          const chain = { eq: vi.fn(() => chain), order: vi.fn(() => chain), range: vi.fn(async (from: number, to: number) => ({ data: ids.slice(from, to + 1).map((article_id) => ({ article_id })), error: null })) };
+          return chain;
+        }),
+      };
+    }
+    if (table === "resource_public_articles") {
+      return { select: vi.fn(() => ({ in: vi.fn((field: string, requestedIds: string[]) => ({ limit: vi.fn(async () => ({ data: requestedIds.map(card), error: null })) })) })) };
+    }
+    throw new Error(`Unexpected table ${table}`);
+  });
+}
 
 describe("Resource Center public data contract", () => {
   beforeEach(() => mockFrom.mockReset());
 
-  it("accepts only the approved featured-image prefix and rejects traversal or remote URLs", () => {
+  it("accepts only approved featured-image paths", () => {
     expect(isApprovedResourceImagePath("resource-center/featured/guide.webp")).toBe(true);
     expect(isApprovedResourceImagePath("resource-center/featured/../guide.webp")).toBe(false);
     expect(isApprovedResourceImagePath("resource-center/featured\\guide.webp")).toBe(false);
@@ -24,47 +44,48 @@ describe("Resource Center public data contract", () => {
     expect(isApprovedResourceImagePath(null)).toBe(false);
   });
 
-  it("keeps malformed or external stored canonicals on the Scholars-owned route", () => {
-    expect(getResourceCanonicalUrl("study-guide", "https://www.scholars.com.ng/resources/study-guide")).toBe("https://www.scholars.com.ng/resources/study-guide");
-    expect(getResourceCanonicalUrl("study-guide", "https://example.com/elsewhere")).toBe("https://www.scholars.com.ng/resources/study-guide");
-    expect(getResourceCanonicalUrl("study-guide", "not a URL")).toBe("https://www.scholars.com.ng/resources/study-guide");
+  it("normalizes only the exact approved article canonical route", () => {
+    const expected = "https://www.scholars.com.ng/resources/study-guide";
+    const cases: Array<[string | null, string]> = [
+      [expected, expected],
+      ["https://www.scholars.com.ng/resources/study-guide/", expected],
+      ["https://example.com/resources/study-guide", expected],
+      ["http://www.scholars.com.ng/resources/study-guide", expected],
+      ["https://www.scholars.com.ng/about", expected],
+      ["https://www.scholars.com.ng/resources/another-guide", expected],
+      ["https://www.scholars.com.ng/resources/study-guide?x=1", expected],
+      ["https://www.scholars.com.ng/resources/study-guide#part", expected],
+      ["//www.scholars.com.ng/resources/study-guide", expected],
+      ["not a URL", expected],
+      [null, expected],
+    ];
+    for (const [stored, result] of cases) expect(getResourceCanonicalUrl("study-guide", stored)).toBe(result);
   });
 
-  it("reads category and eligible article IDs only through public projection names", async () => {
-    const categoryChain = {
-      select: vi.fn(() => categoryChain),
-      eq: vi.fn(() => categoryChain),
-      maybeSingle: vi.fn(async () => ({ data: { id: "cat-1", slug: "guides", name: "Guides", description: null, display_order: 1 }, error: null })),
-    };
-    const linksChain = {
-      select: vi.fn(() => linksChain),
-      eq: vi.fn(() => linksChain),
-      limit: vi.fn(async () => ({ data: [{ article_id: "article-1" }], error: null })),
-    };
-    const articleChain = {
-      select: vi.fn(() => articleChain),
-      in: vi.fn(() => articleChain),
-      order: vi.fn(() => articleChain),
-      limit: vi.fn(async () => ({ data: [], error: null })),
-    };
-    mockFrom.mockImplementation((table: string) => table === "resource_public_categories" ? categoryChain : table === "resource_public_article_categories" ? linksChain : articleChain);
-
+  it.each([0, 1, RESOURCE_PAGE_SIZE, RESOURCE_PAGE_SIZE + 1])("returns an accurate category count for %i eligible articles", async (articleCount) => {
+    configureCategoryData(articleCount);
     const result = await getResourceCategory("guides");
-
-    expect(result?.category.slug).toBe("guides");
-    expect(mockFrom).toHaveBeenCalledWith("resource_public_categories");
-    expect(mockFrom).toHaveBeenCalledWith("resource_public_article_categories");
-    expect(mockFrom).toHaveBeenCalledWith("resource_public_articles");
+    expect(result?.totalCount).toBe(articleCount);
+    expect(result?.articles).toHaveLength(articleCount);
   });
 
-  it("surfaces a public read failure instead of turning it into an empty category", async () => {
-    const chain = {
-      select: vi.fn(() => chain),
-      eq: vi.fn(() => chain),
-      maybeSingle: vi.fn(async () => ({ data: null, error: new Error("network unavailable") })),
-    };
+  it("paginates category links beyond one bounded page without duplicates", async () => {
+    configureCategoryData(RESOURCE_PAGE_SIZE + 1);
+    const result = await getResourceCategory("guides");
+    expect(result?.articles.map((article) => article.id)).toHaveLength(RESOURCE_PAGE_SIZE + 1);
+    expect(new Set(result?.articles.map((article) => article.id)).size).toBe(RESOURCE_PAGE_SIZE + 1);
+  });
+
+  it("fails closed when a category projection query fails", async () => {
+    const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), maybeSingle: vi.fn(async () => ({ data: null, error: new Error("network unavailable") })) };
     mockFrom.mockReturnValue(chain);
     await expect(getResourceCategory("guides")).rejects.toBeInstanceOf(ResourceDataError);
-    await expect(getResourceCategory("guides")).rejects.toThrow("Unable to load this resource category");
+  });
+
+  it("keeps public projection reads separate from private base tables", async () => {
+    configureCategoryData(1);
+    await getResourceCategory("guides");
+    expect(mockFrom.mock.calls.map(([table]) => table)).not.toContain("resource_articles");
+    expect(mockFrom.mock.calls.map(([table]) => table)).toEqual(expect.arrayContaining(["resource_public_categories", "resource_public_article_categories", "resource_public_articles"]));
   });
 });

@@ -1,11 +1,16 @@
+import React from "react";
 import Link from "next/link";
 
 export type ArticleHeading = { id: string; text: string; level: 2 | 3 };
+type ArticleBlock =
+  | { kind: "heading"; level: 2 | 3; value: string }
+  | { kind: "paragraph"; lines: string[] }
+  | { kind: "unordered" | "ordered" | "quote"; lines: string[] };
 
 export function extractArticleHeadings(content: string): ArticleHeading[] {
   const seen = new Map<string, number>();
   return content.split(/\n+/).flatMap((line) => {
-    const match = line.match(/^#{2,3}\s+(.+)$/);
+    const match = line.match(/^#{2,3}\s*(.*)$/);
     if (!match) return [];
     const text = stripInline(match[1]).trim();
     const base = slugify(text);
@@ -17,38 +22,71 @@ export function extractArticleHeadings(content: string): ArticleHeading[] {
 
 export function ResourceArticleBody({ content }: { content: string }) {
   const headings = extractArticleHeadings(content);
-  const headingIds = new Map<string, string>();
-  headings.forEach((heading) => headingIds.set(`${heading.level}:${heading.text}`, heading.id));
-  const blocks = content.trim().split(/\n{2,}/).map((block) => block.trim()).filter(Boolean);
+  let headingIndex = 0;
+  const blocks = parseBlocks(content);
   if (blocks.length === 0) return <p className="text-navy-light">This article is being prepared.</p>;
 
   return (
     <div className="resource-article-body space-y-6 text-[1.05rem] leading-8 text-ink">
       {blocks.map((block, index) => {
-        const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
-        const first = lines[0] ?? "";
-        const headingMatch = first.match(/^(#{2,3})\s+(.+)$/);
-        if (headingMatch) {
-          const level = headingMatch[1].length as 2 | 3;
-          const text = stripInline(headingMatch[2]);
-          const id = headingIds.get(`${level}:${text}`) ?? slugify(text);
-          return level === 2
-            ? <h2 id={id} key={index} className="scroll-mt-24 pt-5 font-display text-2xl font-semibold leading-tight text-navy">{renderInline(headingMatch[2])}</h2>
-            : <h3 id={id} key={index} className="scroll-mt-24 pt-3 font-display text-xl font-semibold leading-tight text-navy">{renderInline(headingMatch[2])}</h3>;
+        if (block.kind === "heading") {
+          const heading = headings[headingIndex++];
+          const id = heading?.id ?? slugify(stripInline(block.value));
+          return block.level === 2
+            ? <h2 id={id} key={index} className="scroll-mt-24 pt-5 font-display text-2xl font-semibold leading-tight text-navy">{renderInline(block.value)}</h2>
+            : <h3 id={id} key={index} className="scroll-mt-24 pt-3 font-display text-xl font-semibold leading-tight text-navy">{renderInline(block.value)}</h3>;
         }
-        if (lines.every((line) => /^[-*]\s+/.test(line))) {
-          return <ul key={index} className="list-disc space-y-2 pl-6">{lines.map((line, itemIndex) => <li key={itemIndex}>{renderInline(line.replace(/^[-*]\s+/, ""))}</li>)}</ul>;
-        }
-        if (lines.every((line) => /^\d+[.)]\s+/.test(line))) {
-          return <ol key={index} className="list-decimal space-y-2 pl-6">{lines.map((line, itemIndex) => <li key={itemIndex}>{renderInline(line.replace(/^\d+[.)]\s+/, ""))}</li>)}</ol>;
-        }
-        if (lines.every((line) => /^>\s?/.test(line))) {
-          return <blockquote key={index} className="border-l-2 border-emerald pl-5 font-display text-xl italic leading-8 text-navy">{lines.map((line) => renderInline(line.replace(/^>\s?/, "")))}</blockquote>;
-        }
-        return <p key={index}>{lines.map((line, lineIndex) => <span key={lineIndex}>{lineIndex > 0 && <br />}{renderInline(line)}</span>)}</p>;
+        if (block.kind === "unordered") return <ul key={index} className="list-disc space-y-2 pl-6">{block.lines.map((line, itemIndex) => <li key={itemIndex}>{renderInline(line.replace(/^[-*]\s+/, ""))}</li>)}</ul>;
+        if (block.kind === "ordered") return <ol key={index} className="list-decimal space-y-2 pl-6">{block.lines.map((line, itemIndex) => <li key={itemIndex}>{renderInline(line.replace(/^\d+[.)]\s+/, ""))}</li>)}</ol>;
+        if (block.kind === "quote") return <blockquote key={index} className="border-l-2 border-emerald pl-5 font-display text-xl italic leading-8 text-navy">{block.lines.map((line, lineIndex) => <span key={lineIndex}>{lineIndex > 0 && <br />}{renderInline(line.replace(/^>\s?/, ""))}</span>)}</blockquote>;
+        return <p key={index}>{block.lines.map((line, lineIndex) => <span key={lineIndex}>{lineIndex > 0 && <br />}{renderInline(line)}</span>)}</p>;
       })}
     </div>
   );
+}
+
+function parseBlocks(content: string): ArticleBlock[] {
+  const lines = content.split("\n");
+  const blocks: ArticleBlock[] = [];
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index].trim();
+    if (!line) { index += 1; continue; }
+    const heading = line.match(/^(#{2,3})\s*(.*)$/);
+    if (heading) {
+      blocks.push({ kind: "heading", level: heading[1].length as 2 | 3, value: heading[2] });
+      index += 1;
+      continue;
+    }
+    if (/^[-*]\s+/.test(line)) {
+      const list: string[] = [];
+      while (index < lines.length && /^[-*]\s+/.test(lines[index].trim())) list.push(lines[index++].trim());
+      blocks.push({ kind: "unordered", lines: list });
+      continue;
+    }
+    if (/^\d+[.)]\s+/.test(line)) {
+      const list: string[] = [];
+      while (index < lines.length && /^\d+[.)]\s+/.test(lines[index].trim())) list.push(lines[index++].trim());
+      blocks.push({ kind: "ordered", lines: list });
+      continue;
+    }
+    if (/^>\s?/.test(line)) {
+      const quote: string[] = [];
+      while (index < lines.length && /^>\s?/.test(lines[index].trim())) quote.push(lines[index++].trim());
+      blocks.push({ kind: "quote", lines: quote });
+      continue;
+    }
+    const paragraph: string[] = [];
+    while (index < lines.length) {
+      const next = lines[index].trim();
+      if (!next || /^(#{2,3})\s*/.test(next) || /^[-*]\s+/.test(next) || /^\d+[.)]\s+/.test(next) || /^>\s?/.test(next)) break;
+      paragraph.push(next);
+      index += 1;
+    }
+    if (paragraph.length > 0) blocks.push({ kind: "paragraph", lines: paragraph });
+    else index += 1;
+  }
+  return blocks;
 }
 
 function renderInline(value: string): React.ReactNode[] {
@@ -65,7 +103,7 @@ function renderInline(value: string): React.ReactNode[] {
   });
 }
 
-function safeHref(value: string) {
+export function safeHref(value: string) {
   if (value.startsWith("/") && !value.startsWith("//") && !value.includes("\\")) return value;
   try {
     const url = new URL(value);
