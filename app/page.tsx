@@ -50,7 +50,7 @@ async function loadLiveScholarships(): Promise<LiveScholarship[]> {
     .in("level", ["undergrad", "both"])
     .or(`deadline.is.null,deadline.gte.${today}`)
     .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${today}`)
-    .order("deadline", { ascending: true })
+    .order("deadline", { ascending: true, nullsFirst: false })
     .limit(20);
   if (error) {
     console.error("[homepage] failed to read live scholarships", { code: error.code, message: error.message });
@@ -60,7 +60,7 @@ async function loadLiveScholarships(): Promise<LiveScholarship[]> {
       .eq("verified", true)
       .in("level", ["undergrad", "both"])
       .or(`deadline.is.null,deadline.gte.${today}`)
-      .order("deadline", { ascending: true })
+      .order("deadline", { ascending: true, nullsFirst: false })
       .limit(20);
     if (fallback.error) {
       console.error("[homepage] fallback scholarship read failed", { code: fallback.error.code, message: fallback.error.message });
@@ -141,15 +141,17 @@ export default async function LandingPage() {
               </p>
             </div>
             </div>
-            <div className="bg-white rounded-2xl shadow-card border border-hairline p-5 sm:p-6 lg:mt-2">
-              <div className="flex items-start justify-between gap-4 mb-5">
+            <div className="rounded-[28px] border border-hairline bg-white p-7 shadow-card sm:p-9 lg:mt-2">
+              <div className="mb-8 flex items-start justify-between gap-5">
                 <div>
-                  <p className="font-mono text-xs uppercase tracking-widest text-navy-light">
+                  <p className="font-mono text-xs uppercase tracking-[0.16em] text-navy-light">
                     Open now
                   </p>
-                  <p className="text-sm text-navy-light mt-1">Verified opportunities accepting applications.</p>
+                  <p className="mt-2 max-w-[15rem] text-xl leading-[1.45] text-navy">
+                    Verified opportunities accepting applications.
+                  </p>
                 </div>
-                <span className="shrink-0 rounded-full bg-emerald-light px-2.5 py-1 text-xs font-medium text-emerald">
+                <span className="shrink-0 rounded-full bg-emerald-light px-3.5 py-2 text-xs font-medium text-emerald">
                   Updated regularly
                 </span>
               </div>
@@ -158,29 +160,29 @@ export default async function LandingPage() {
                   New scholarships are being researched and verified right now. Check back soon.
                 </p>
               ) : (
-                <ul className="space-y-4">
+                <ul>
                   {live.map((s) => (
-                    <li key={s.id} className="flex items-start gap-4 border-b border-hairline pb-4 last:border-0 last:pb-0">
-                      <ProviderMonogram name={s.provider_name} size={48} />
-                      <div className="min-w-0 flex-1">
-                        <Link href={`/scholarship/${s.slug || s.id}`} className="font-medium text-ink text-sm leading-snug hover:text-navy hover:underline focus-visible:underline">
+                    <li key={s.id} className="flex items-start gap-5 border-b border-hairline py-7 first:pt-0 last:border-0 last:pb-0 sm:gap-7">
+                      <ProviderMonogram name={s.provider_name} size={72} />
+                      <div className="min-w-0 flex-1 pt-0.5">
+                        <Link href={`/scholarship/${s.slug || s.id}`} className="font-medium text-lg leading-[1.25] text-ink hover:text-navy hover:underline focus-visible:underline">
                           {s.title}
                         </Link>
-                        <p className="text-xs text-navy-light mt-0.5">{s.provider_name}</p>
+                        <p className="mt-1 text-base text-navy-light">{s.provider_name}</p>
                         {s.description && (
-                          <p className="mt-1 text-xs leading-relaxed text-navy-light line-clamp-2">{s.description}</p>
+                          <p className="mt-2 text-base leading-[1.35] text-emerald line-clamp-2">{s.description}</p>
                         )}
-                        <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                          {s.amount && <span className="text-xs font-mono text-emerald">{s.amount}</span>}
+                        <div className="mt-4 flex flex-wrap items-center gap-3">
+                          {s.amount && <span className="text-sm font-mono text-emerald">{s.amount}</span>}
                           <DeadlineBadge deadline={s.deadline} />
-                          <span className="text-xs text-navy-light">{levelLabel(s.level)}</span>
+                          <span className="text-base text-navy-light">{levelLabel(s.level)}</span>
                         </div>
                       </div>
                     </li>
                   ))}
                 </ul>
               )}
-              <Link href="/scholarships-in-nigeria" className="mt-5 inline-flex min-h-[44px] items-center text-sm font-medium text-navy hover:underline">
+              <Link href="/scholarships-in-nigeria" className="mt-9 inline-flex min-h-[44px] items-center text-base font-medium text-navy hover:underline">
                 Browse all active scholarships <span aria-hidden="true" className="ml-1">&rarr;</span>
               </Link>
             </div>
