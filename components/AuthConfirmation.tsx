@@ -47,16 +47,16 @@ export function AuthConfirmation({
       return;
     }
     setSecondsLeft(RESEND_COOLDOWN_SECONDS);
-    setStatus("A new confirmation link is on its way.");
+    setStatus("A new six-digit verification code is on its way.");
   }
 
   return (
     <AuthShell heading={heading} sub={sub}>
       <div className="rounded-xl border border-hairline bg-navy-50 p-5 mb-6" aria-live="polite">
         <p className="text-sm text-ink">
-          Check <span className="font-medium break-all">{email}</span> for a confirmation link.
-          Open it to activate your account, then return here to log in. If it is missing, request
-          another link below.
+          Check <span className="font-medium break-all">{email}</span> for a six-digit verification
+          code. Enter it in Scholars to activate your account. If it is missing, request another
+          code below.
         </p>
       </div>
       {status && (
@@ -74,7 +74,7 @@ export function AuthConfirmation({
           ? "Sending…"
           : secondsLeft > 0
             ? `Resend available in ${secondsLeft}s`
-            : "Resend confirmation email"}
+          : "Resend verification code"}
       </button>
       <p className="text-sm text-navy-light mt-8 text-center">
         Already confirmed?{" "}

@@ -1,12 +1,9 @@
 // app/auth/callback/route.ts
 // GET /auth/callback?code=...&next=/dashboard
 //
-// Handles both the Google OAuth redirect and the email-confirmation link.
-// Both flows land the browser here with a `code` query param that has to
-// be exchanged for a session via the server client -- without this route,
-// signInWithOAuth's redirectTo (and the confirmation email's
-// emailRedirectTo) send the browser straight to a protected page with no
-// session yet, and middleware.ts bounces it back to /login.
+// Handles the Google OAuth redirect and legacy email-auth callbacks.
+// New signup and recovery requests use OTP verification in the auth screens;
+// this route remains for Google OAuth and already-issued legacy links.
 //
 // INPUT HARDENING: `next` is user-controlled input that decides a
 // redirect target. safeNextPath (lib/validate.ts) whitelists same-origin
@@ -94,6 +91,6 @@ export async function GET(request: Request) {
   return NextResponse.redirect(
     origin +
       "/login?error=" +
-      encodeURIComponent("Could not sign you in. The link may have expired -- please try again.")
+      encodeURIComponent("Could not sign you in. The authentication request may have expired -- please try again.")
   );
 }
