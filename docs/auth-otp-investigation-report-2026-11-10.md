@@ -52,7 +52,7 @@ The repository was updated to:
 - Return a distinct invalid-code message for other verification failures.
 - Preserve the existing signup, login-rescue, recovery, resend, Google OAuth, and legacy-link compatibility flows.
 
-The changes are in commit `12c0d4ed8f5f6dd3d8e3dc1f2e00cf980dd60181` and will be deployed through the connected GitHub-to-Vercel pipeline after validation.
+The changes are included in the production commit that accompanies this report and are deployed through the connected GitHub-to-Vercel pipeline after validation.
 
 ## Required decision for the final product behavior
 
