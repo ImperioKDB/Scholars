@@ -11,6 +11,7 @@ import { StatusMessage } from "@/components/StatusMessage";
 import { normalizeEmail } from "@/lib/auth/email";
 import { validatePasswordStrength } from "@/lib/auth/password";
 import { SpinnerIcon } from "@/components/icons";
+import { otpVerificationMessage } from "@/lib/auth/otp-error";
 
 const THROTTLE_KEY = "scholars_reset_throttle";
 const THROTTLE_WINDOW_MS = 10 * 60_000;
@@ -75,7 +76,7 @@ export default function ResetPasswordPage() {
       token,
       type: "recovery",
     });
-    if (verifyError) return "That code is invalid or has expired. Request a new code and try again.";
+    if (verifyError) return otpVerificationMessage(verifyError);
     setStage("update");
     return null;
   }
