@@ -31,6 +31,7 @@ type LiveScholarship = {
   slug: string | null;
   title: string;
   provider_name: string;
+  description: string | null;
   amount: string | null;
   deadline: string | null;
   opens_at: string | null;
@@ -41,15 +42,35 @@ type LiveScholarship = {
 
 async function loadLiveScholarships(): Promise<LiveScholarship[]> {
   const supabase = createPublicClient();
-  const { data } = await supabase
+  const today = todayUtcIso();
+  const { data, error } = await supabase
     .from("scholarships")
-    .select("id, slug, title, provider_name, amount, deadline, opens_at, last_cycle_closed_at, discipline, level")
+    .select("id, slug, title, provider_name, description, amount, deadline, opens_at, last_cycle_closed_at, discipline, level")
     .eq("verified", true)
     .in("level", ["undergrad", "both"])
-    .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
-    .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`)
+    .or(`deadline.is.null,deadline.gte.${today}`)
+    .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${today}`)
     .order("deadline", { ascending: true })
     .limit(20);
+  if (error) {
+    console.error("[homepage] failed to read live scholarships", { code: error.code, message: error.message });
+    const fallback = await supabase
+      .from("scholarships")
+      .select("id, slug, title, provider_name, description, amount, deadline, discipline, level")
+      .eq("verified", true)
+      .in("level", ["undergrad", "both"])
+      .or(`deadline.is.null,deadline.gte.${today}`)
+      .order("deadline", { ascending: true })
+      .limit(20);
+    if (fallback.error) {
+      console.error("[homepage] fallback scholarship read failed", { code: fallback.error.code, message: fallback.error.message });
+      return [];
+    }
+    return (fallback.data ?? [])
+      .map((scholarship) => ({ ...scholarship, opens_at: null, last_cycle_closed_at: null }))
+      .filter((scholarship) => isCurrentlyOpen(scholarship))
+      .slice(0, 4) as LiveScholarship[];
+  }
   return (data ?? [])
     .filter((scholarship) => isCurrentlyOpen(scholarship))
     .slice(0, 4) as LiveScholarship[];
@@ -146,6 +167,9 @@ export default async function LandingPage() {
                           {s.title}
                         </Link>
                         <p className="text-xs text-navy-light mt-0.5">{s.provider_name}</p>
+                        {s.description && (
+                          <p className="mt-1 text-xs leading-relaxed text-navy-light line-clamp-2">{s.description}</p>
+                        )}
                         <div className="flex flex-wrap items-center gap-2 mt-1.5">
                           {s.amount && <span className="text-xs font-mono text-emerald">{s.amount}</span>}
                           <DeadlineBadge deadline={s.deadline} />

@@ -6,10 +6,9 @@ import { AuthShell } from "@/components/AuthShell";
 import { StatusMessage } from "@/components/StatusMessage";
 import { SpinnerIcon } from "@/components/icons";
 
-// Supabase production is currently configured to generate eight-digit email
-// OTPs. Keep this aligned with Authentication > Sign In / Providers > Email
-// > Email OTP length; a six-box UI cannot verify the live eight-digit token.
-const OTP_LENGTH = 8;
+// Supabase Email OTP length is configured to six digits. Keep this aligned
+// with Authentication > Sign In / Providers > Email > Email OTP length.
+const OTP_LENGTH = 6;
 const RESEND_COOLDOWN_SECONDS = 60;
 
 function maskEmail(email: string): string {
@@ -128,7 +127,7 @@ export function AuthOtp({ email, purpose, onVerify, onResend, onGoogle, onBack }
     submittedRef.current = false;
     setDigits(Array(OTP_LENGTH).fill(""));
     setSecondsLeft(RESEND_COOLDOWN_SECONDS);
-    setNotice("A new eight-digit code is on its way.");
+    setNotice("A new six-digit code is on its way.");
     inputRefs.current[0]?.focus();
   }
 
@@ -158,15 +157,15 @@ export function AuthOtp({ email, purpose, onVerify, onResend, onGoogle, onBack }
     <AuthShell heading={heading} sub={sub}>
       <div className="rounded-xl border border-hairline bg-navy-50 p-5 mb-6" aria-live="polite">
         <p className="text-sm leading-relaxed text-ink">
-          We sent an eight-digit code to <span className="font-medium break-all">{maskEmail(email)}</span>.
+          We sent a six-digit code to <span className="font-medium break-all">{maskEmail(email)}</span>.
           It expires soon. Don&apos;t share it with anyone.
         </p>
       </div>
       {error && <StatusMessage tone="error" className="mb-4">{error}</StatusMessage>}
       {notice && <StatusMessage tone="success" className="mb-4">{notice}</StatusMessage>}
       <fieldset disabled={verifying}>
-        <legend className="sr-only">Eight-digit verification code</legend>
-        <div className="flex justify-between gap-1.5 sm:gap-2" role="group" aria-label="Eight-digit verification code">
+        <legend className="sr-only">Six-digit verification code</legend>
+        <div className="flex justify-between gap-1.5 sm:gap-2" role="group" aria-label="Six-digit verification code">
           {digits.map((digit, index) => (
             <input
               key={index}
