@@ -16,5 +16,5 @@ export function otpVerificationMessage(error: OtpErrorLike): string {
     return "That code has expired. Request a new code and try again.";
   }
 
-  return "That code is invalid. Check the six digits and try again.";
+  return "That code is invalid. Check the eight digits and try again.";
 }
