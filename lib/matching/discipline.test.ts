@@ -48,6 +48,21 @@ describe("discipline matching", () => {
     expect(disciplineRequirementMatches("Software Engineering", scholarship.discipline)).toBe(true);
   });
 
+  it("matches Software Engineering in a comma-separated technology-course list", () => {
+    expect(
+      disciplineRequirementMatches(
+        "Software Engineering",
+        "Computer Science, Information Technology, Cybersecurity, Systems Engineering, Software Engineering, and related technology fields"
+      )
+    ).toBe(true);
+    expect(
+      disciplineRequirementMatches(
+        "English Language",
+        "Computer Science, Information Technology, Cybersecurity, Systems Engineering, Software Engineering, and related technology fields"
+      )
+    ).toBe(false);
+  });
+
   it("keeps unrelated disciplines out of broad STEM requirements", () => {
     expect(isStemDiscipline("English Language")).toBe(false);
     expect(disciplineRequirementMatches("English Language", scholarship.discipline)).toBe(false);
