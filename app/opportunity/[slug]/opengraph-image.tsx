@@ -13,7 +13,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
   const { slug } = await params;
   const supabase = createPublicClient();
   const { data: opportunity } = await supabase
-    .from("opportunities")
+    .from("opportunities_public_preview_v1")
     .select(OG_COLUMNS)
     .eq("slug", slug)
     .eq("verified", true)

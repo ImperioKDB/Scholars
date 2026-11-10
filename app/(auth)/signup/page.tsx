@@ -74,6 +74,7 @@ function SignupForm() {
       password,
       options: {
         data: { full_name: fullName },
+        emailRedirectTo: `${appBase()}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
     setLoading(false);
@@ -149,7 +150,12 @@ function SignupForm() {
   }
 
   async function handleResend(): Promise<string | null> {
-    const { error: resendError } = await supabase.auth.resend({ type: "signup", email: cleanEmail });
+    rememberAuthNext(next);
+    const { error: resendError } = await supabase.auth.resend({
+      type: "signup",
+      email: cleanEmail,
+      options: { emailRedirectTo: `${appBase()}/auth/callback?next=${encodeURIComponent(next)}` },
+    });
     void recordConfirmationEmailEvent({
       email: cleanEmail,
       kind: "resend",

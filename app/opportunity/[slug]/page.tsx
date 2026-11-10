@@ -1,10 +1,12 @@
 import { cache } from "react";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { createPublicClient } from "@/lib/supabase/public";
+import { createClient } from "@/lib/supabase/server";
 import { isClosedListing } from "@/lib/dates";
 import { Breadcrumbs, SeoJsonLd } from "@/components/SeoJsonLd";
+import { buildInternalReturnPath, buildOpportunityAuthPaths } from "@/lib/auth/return-destination";
 
 // app/opportunity/[slug]/page.tsx
 // GET /o/[id] -- public, unauthenticated share landing page for a single
@@ -14,24 +16,18 @@ import { Breadcrumbs, SeoJsonLd } from "@/components/SeoJsonLd";
 // score -- so the panel below talks about tracking and applying, never
 // eligibility scoring.
 //
-// PERF (batch 1 pattern): ISR. Share pages are the growth channel and
-// change rarely (verification flips). A 5-minute revalidation window keeps
-// WhatsApp previews fast and off the database. This route is eligible for
-// ISR because it reads through the cookie-free public client only
-// (opportunities_select_verified RLS grants the public role read access to
-// verified rows). Admin edits revalidate this path explicitly -- see
-// app/api/admin/opportunities/** (revalidatePath).
+// This route is request-dynamic because authenticated visitors are routed to
+// the existing protected full-detail page; public data is read only through
+// the narrow view. Avoid caching a user-dependent redirect or stale content.
 //
-// Shows only facts every visitor can honestly see: type, title, provider,
-// compensation, deadline, description. NEVER a match score -- opportunities
-// aren't scored (see app/api/opportunities/route.ts), and showing one here
-// for an anonymous visitor would mean fabricating a number.
+// Anonymous previews intentionally omit free-text descriptions, eligibility,
+// application URLs, and instructions; those fields are not safe to infer.
 //
 // The ?ref=<sharer_profile_id> query param (added by ShareButton.tsx) is
 // captured into a cookie by middleware.ts before this component ever
 // renders -- this file doesn't need to read or forward it.
 const PUBLIC_COLUMNS =
-  "id, slug, type, title, provider_name, description, duration, location, compensation, discipline, deadline, application_url, how_to_apply, verified";
+  "id, slug, type, title, provider_name, duration, location, compensation, deadline, verified";
 
 type PublicOpportunity = {
   id: string;
@@ -39,14 +35,10 @@ type PublicOpportunity = {
   type: "fellowship" | "internship" | "competition" | "mentorship" | "training";
   title: string;
   provider_name: string;
-  description: string | null;
   duration: string | null;
   location: string | null;
   compensation: string | null;
-  discipline: string | null;
   deadline: string | null;
-  application_url: string | null;
-  how_to_apply: string | null;
   verified: boolean;
 };
 
@@ -69,7 +61,7 @@ const TYPE_TONES: Record<PublicOpportunity["type"], string> = {
 const loadOpportunity = cache(async (slug: string): Promise<PublicOpportunity | null> => {
   const supabase = createPublicClient();
   const { data } = await supabase
-    .from("opportunities")
+    .from("opportunities_public_preview_v1")
     .select(PUBLIC_COLUMNS)
     .eq("slug", slug)
     .eq("verified", true)
@@ -85,11 +77,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   }
   const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
   const closed = isClosedListing(opportunity);
-  const description =
-    opportunity.provider_name +
-    (opportunity.compensation ? " · " + opportunity.compensation : "") +
-    (opportunity.deadline ? " · Deadline " + opportunity.deadline : " · Rolling") +
-    (closed ? ". This application is closed." : ". Find it on Scholars.");
+  const description = `A ${TYPE_LABELS[opportunity.type].toLowerCase()} opportunity on Scholars. Sign in to view eligibility and application information.`;
   return {
     title: opportunity.title,
     description,
@@ -118,7 +106,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   };
 }
 
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
 
 function formatDeadline(deadline: string): string {
   const date = new Date(deadline + "T00:00:00Z");
@@ -126,8 +114,27 @@ function formatDeadline(deadline: string): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
 
-export default async function PublicOpportunityPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
+export default async function PublicOpportunityPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const [{ slug }, query] = await Promise.all([params, searchParams]);
+  const sessionClient = createClient();
+  const { data: { user } } = await sessionClient.auth.getUser();
+  if (user) {
+    const { data: authenticatedOpportunity } = await sessionClient
+      .from("opportunities")
+      .select("id")
+      .eq("slug", slug)
+      .eq("verified", true)
+      .maybeSingle();
+    if (authenticatedOpportunity?.id) {
+      redirect(buildInternalReturnPath(`/opportunities/${authenticatedOpportunity.id}`, query));
+    }
+  }
   const opportunity = await loadOpportunity(slug);
   if (!opportunity) {
     notFound();
@@ -135,6 +142,8 @@ export default async function PublicOpportunityPage({ params }: { params: Promis
   const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
   const publicUrl = `${base}/opportunity/${slug}`;
   const closed = isClosedListing(opportunity);
+  const returnTo = buildInternalReturnPath(`/opportunity/${opportunity.slug || slug}`, query);
+  const { signupPath, loginPath } = buildOpportunityAuthPaths(returnTo);
   return (
     <div className="min-h-screen bg-parchment flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
@@ -174,22 +183,15 @@ export default async function PublicOpportunityPage({ params }: { params: Promis
               </span>
             )}
             {opportunity.location && <span className="text-xs text-navy-light">{opportunity.location}</span>}
-            {opportunity.discipline && <span className="text-xs text-navy-light">&middot; {opportunity.discipline}</span>}
           </div>
-          {opportunity.description && (
-            <div className="mb-5">
-              <h2 className="font-display text-lg font-semibold text-navy mb-2">About this opportunity</h2>
-              <p className="text-sm text-ink leading-relaxed">{opportunity.description}</p>
-            </div>
-          )}
-          {(opportunity.duration || opportunity.how_to_apply || opportunity.application_url) && (
-            <div className="rounded-xl border border-hairline p-4 mb-5 space-y-2">
-              <h2 className="font-display text-lg font-semibold text-navy">Application details</h2>
-              {opportunity.duration && <p className="text-sm text-navy-light"><span className="font-medium text-navy">Duration:</span> {opportunity.duration}</p>}
-              {opportunity.how_to_apply && <p className="text-sm text-navy-light leading-relaxed">{opportunity.how_to_apply}</p>}
-              {opportunity.application_url && <a href={opportunity.application_url} rel="nofollow" className="inline-block text-sm font-medium text-navy underline">{closed ? "View the official page for historical details" : "Visit the official application page"}</a>}
-            </div>
-          )}
+          <div className="mb-5">
+            <h2 className="font-display text-lg font-semibold text-navy mb-2">About this opportunity</h2>
+            <p className="text-sm text-ink leading-relaxed">
+              This {TYPE_LABELS[opportunity.type].toLowerCase()} is listed on Scholars. Create an account to review its eligibility requirements and application information.
+            </p>
+            {opportunity.duration && <p className="mt-2 text-sm text-navy-light"><span className="font-medium text-navy">Duration:</span> {opportunity.duration}</p>}
+            {opportunity.location && <p className="mt-1 text-sm text-navy-light"><span className="font-medium text-navy">Location:</span> {opportunity.location}</p>}
+          </div>
           <div className="flex items-start gap-3 bg-navy-50 rounded-xl p-4 mb-5">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-navy-light shrink-0 mt-0.5" aria-hidden="true">
               <rect x="4" y="10" width="16" height="10" rx="2" />
@@ -201,14 +203,14 @@ export default async function PublicOpportunityPage({ params }: { params: Promis
             </p>
           </div>
           <Link
-            href="/signup?next=/onboarding"
+            href={signupPath}
             className="block text-center rounded-seal bg-navy text-white text-sm font-medium px-6 py-3.5 hover:bg-navy-light transition-colors"
           >
             {closed ? "Save this opportunity -- join free" : "Track this opportunity -- join free"}
           </Link>
           <p className="text-sm text-navy-light mt-4 text-center">
             Already have an account?{" "}
-            <Link href="/login" className="text-navy font-medium hover:underline">
+            <Link href={loginPath} className="text-navy font-medium hover:underline">
               Log in
             </Link>
           </p>
@@ -218,7 +220,7 @@ export default async function PublicOpportunityPage({ params }: { params: Promis
             "@context": "https://schema.org",
             "@type": "WebPage",
             name: opportunity.title,
-            description: opportunity.description ?? `${opportunity.title} from ${opportunity.provider_name}.`,
+            description: `A ${TYPE_LABELS[opportunity.type].toLowerCase()} opportunity on Scholars. Sign in to view eligibility and application information.`,
             url: publicUrl,
             breadcrumb: {
               "@type": "BreadcrumbList",

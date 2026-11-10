@@ -8,6 +8,8 @@ import {
   getSupabaseSessionCookieNames,
   mergeSupabaseSessionCookies,
 } from "@/lib/auth/pwa-session";
+import { safeNextPath } from "@/lib/validate";
+import { resolveAuthenticatedReturnPath } from "@/lib/auth/return-destination";
 
 const PROTECTED_PREFIXES = [
   "/dashboard",
@@ -249,7 +251,41 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
   if (isAuthPage && user) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    const requestedPath = safeNextPath(
+      request.nextUrl.searchParams.get("next"),
+      "/dashboard"
+    );
+    const requestedUrl = new URL(requestedPath, request.url);
+    let profileCompleteness: number | undefined;
+    if (requestedUrl.pathname === "/onboarding" && requestedUrl.searchParams.has("next")) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("profile_completeness")
+        .eq("id", user.id)
+        .maybeSingle();
+      profileCompleteness = profile?.profile_completeness ?? undefined;
+    }
+    const destination = resolveAuthenticatedReturnPath(requestedPath, profileCompleteness);
+    return NextResponse.redirect(new URL(destination, request.url));
+  }
+  // Auth methods often navigate directly to their validated `next` URL, so a
+  // completed existing account can arrive here without passing through the
+  // /login or /signup middleware branch above. Resolve the same nested return
+  // target on every onboarding request, including refreshes and auth callbacks.
+  if (path === "/onboarding" && user && request.nextUrl.searchParams.has("next")) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("profile_completeness")
+      .eq("id", user.id)
+      .maybeSingle();
+    const requestedPath = `${path}${request.nextUrl.search}`;
+    const destination = resolveAuthenticatedReturnPath(
+      requestedPath,
+      profile?.profile_completeness ?? undefined
+    );
+    if (destination !== requestedPath) {
+      return NextResponse.redirect(new URL(destination, request.url));
+    }
   }
   if (authCookieDomain && isProtected && user) {
     const requestSessionCookieNames = getSupabaseSessionCookieNames(

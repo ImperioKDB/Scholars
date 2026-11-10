@@ -163,7 +163,12 @@ function LoginForm() {
   }
 
   async function handleResendConfirmation(): Promise<string | null> {
-    const { error: resendError } = await supabase.auth.resend({ type: "signup", email: confirmationEmail ?? "" });
+    rememberAuthNext(next);
+    const { error: resendError } = await supabase.auth.resend({
+      type: "signup",
+      email: confirmationEmail ?? "",
+      options: { emailRedirectTo: `${appBase()}/auth/callback?next=${encodeURIComponent(next)}` },
+    });
     void recordConfirmationEmailEvent({
       email: confirmationEmail ?? "",
       kind: "resend",
@@ -224,7 +229,7 @@ function LoginForm() {
           />
         </FormField>
         <div className="text-right mb-2">
-          <Link href="/reset-password" className="text-xs text-navy-light hover:text-navy">
+          <Link href={`/reset-password?next=${encodeURIComponent(next)}`} className="text-xs text-navy-light hover:text-navy">
             Forgot password?
           </Link>
         </div>

@@ -13,7 +13,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
   const { slug } = await params;
   const supabase = createPublicClient();
   const isLegacyId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
-  const query = supabase.from("scholarships").select(OG_COLUMNS).eq("verified", true);
+  const query = supabase.from("scholarships_public_preview_v1").select(OG_COLUMNS).eq("verified", true);
   const { data: scholarship } = await (isLegacyId ? query.eq("id", slug) : query.eq("slug", slug)).maybeSingle();
 
   return new ImageResponse(

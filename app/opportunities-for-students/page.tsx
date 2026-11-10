@@ -64,7 +64,7 @@ export default async function OpportunitiesForStudentsPage({
   const page = parsePublicPage((await searchParams).page);
   const supabase = createPublicClient();
   const { data, count } = await supabase
-    .from("opportunities")
+    .from("opportunities_public_preview_v1")
     .select("id, slug, type, title, provider_name, compensation, deadline, location", { count: "exact" })
     .eq("verified", true)
     .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)

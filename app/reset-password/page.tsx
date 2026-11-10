@@ -12,6 +12,7 @@ import { normalizeEmail } from "@/lib/auth/email";
 import { validatePasswordStrength } from "@/lib/auth/password";
 import { SpinnerIcon } from "@/components/icons";
 import { otpVerificationMessage } from "@/lib/auth/otp-error";
+import { safeNextPath } from "@/lib/validate";
 
 const THROTTLE_KEY = "scholars_reset_throttle";
 const THROTTLE_WINDOW_MS = 10 * 60_000;
@@ -35,6 +36,9 @@ function throttleError(): string | null {
 
 export default function ResetPasswordPage() {
   const supabase = createClient();
+  const [next] = useState(() => typeof window === "undefined"
+    ? "/dashboard"
+    : safeNextPath(new URLSearchParams(window.location.search).get("next"), "/dashboard"));
   const [stage, setStage] = useState<Stage>("request");
   const [email, setEmail] = useState("");
   const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
@@ -126,7 +130,7 @@ export default function ResetPasswordPage() {
     return (
       <AuthShell heading="Password updated" sub="You&apos;re all set.">
         <div className="rounded-xl border border-hairline bg-emerald-light p-5 mb-6"><p className="text-sm text-ink">Your password has been changed. You can log in with it now.</p></div>
-        <Link href="/login" className="block w-full rounded-lg bg-navy text-white font-medium py-3 text-center hover:bg-navy-light transition-colors">Return to log in</Link>
+        <Link href={`/login?next=${encodeURIComponent(next)}`} className="block w-full rounded-lg bg-navy text-white font-medium py-3 text-center hover:bg-navy-light transition-colors">Return to log in</Link>
       </AuthShell>
     );
   }
@@ -144,7 +148,7 @@ export default function ResetPasswordPage() {
           {loading && <SpinnerIcon className="h-4 w-4" />}<span>{loading ? "Sending reset code…" : "Send reset code"}</span>
         </button>
       </form>
-      <p className="text-sm text-navy-light mt-8 text-center">Remembered it?{" "}<Link href="/login" className="text-navy font-medium hover:underline">Log in</Link></p>
+      <p className="text-sm text-navy-light mt-8 text-center">Remembered it?{" "}<Link href={`/login?next=${encodeURIComponent(next)}`} className="text-navy font-medium hover:underline">Log in</Link></p>
     </AuthShell>
   );
 }

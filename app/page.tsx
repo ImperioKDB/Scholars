@@ -28,7 +28,7 @@ type LiveScholarship = {
   slug: string | null;
   title: string;
   provider_name: string;
-  description: string | null;
+  description: string;
   amount: string | null;
   deadline: string | null;
   opens_at: string | null;
@@ -45,7 +45,7 @@ const EXAMPLE_SCHOLARSHIPS: LiveScholarship[] = [
     slug: null,
     title: "Taiwo Bankole Prize 2026",
     provider_name: "Taiwo Bankole Prize",
-    description: "Scholarship support; individual award amount not stated on the checked official pages",
+    description: "A verified scholarship listing on Scholars. Sign in to review eligibility and application information.",
     amount: null,
     deadline: null,
     opens_at: null,
@@ -60,7 +60,7 @@ const EXAMPLE_SCHOLARSHIPS: LiveScholarship[] = [
     slug: null,
     title: "Carewave ASPIRE Scholarship Programme (CASP) 2026",
     provider_name: "Carewave Foundation",
-    description: "₦500,000 per year; tuition coverage and living stipend",
+    description: "A verified scholarship listing on Scholars. Sign in to review eligibility and application information.",
     amount: null,
     deadline: null,
     opens_at: null,
@@ -75,7 +75,7 @@ const EXAMPLE_SCHOLARSHIPS: LiveScholarship[] = [
     slug: null,
     title: "AfriSEED Foundation Root Initiative 2026",
     provider_name: "AfriSEED Foundation",
-    description: "WAEC/WASSCE, JAMB/UTME and applicable Post-UTME examination fees; no cash award",
+    description: "A verified scholarship listing on Scholars. Sign in to review eligibility and application information.",
     amount: null,
     deadline: null,
     opens_at: null,
@@ -90,7 +90,7 @@ const EXAMPLE_SCHOLARSHIPS: LiveScholarship[] = [
     slug: null,
     title: "White Avenue Group ICON Scholarship for Undergraduates 2026",
     provider_name: "White Avenue Group",
-    description: null,
+    description: "A verified scholarship listing on Scholars. Sign in to review eligibility and application information.",
     amount: null,
     deadline: null,
     opens_at: null,
@@ -106,8 +106,8 @@ async function loadLiveScholarships(): Promise<LiveScholarship[]> {
   const supabase = createPublicClient();
   const today = todayUtcIso();
   const { data, error } = await supabase
-    .from("scholarships")
-    .select("id, slug, title, provider_name, description, amount, deadline, opens_at, last_cycle_closed_at, discipline, level")
+    .from("scholarships_public_preview_v1")
+    .select("id, slug, title, provider_name, amount, deadline, opens_at, last_cycle_closed_at, discipline, level")
     .eq("verified", true)
     .in("level", ["undergrad", "both"])
     .or(`deadline.is.null,deadline.gte.${today}`)
@@ -117,8 +117,8 @@ async function loadLiveScholarships(): Promise<LiveScholarship[]> {
   if (error) {
     console.error("[homepage] failed to read live scholarships", { code: error.code, message: error.message });
     const fallback = await supabase
-      .from("scholarships")
-      .select("id, slug, title, provider_name, description, amount, deadline, discipline, level")
+      .from("scholarships_public_preview_v1")
+      .select("id, slug, title, provider_name, amount, deadline, discipline, level")
       .eq("verified", true)
       .in("level", ["undergrad", "both"])
       .or(`deadline.is.null,deadline.gte.${today}`)
@@ -129,11 +129,19 @@ async function loadLiveScholarships(): Promise<LiveScholarship[]> {
       return [];
     }
     return (fallback.data ?? [])
-      .map((scholarship) => ({ ...scholarship, opens_at: null, last_cycle_closed_at: null }))
+      .map((scholarship) => ({
+        ...scholarship,
+        description: "A verified scholarship listing on Scholars. Sign in to review eligibility and application information.",
+        opens_at: null,
+        last_cycle_closed_at: null,
+      }))
       .filter((scholarship) => isCurrentlyOpen(scholarship))
       .slice(0, 4) as LiveScholarship[];
   }
-  return (data ?? [])
+  return (data ?? []).map((scholarship) => ({
+    ...scholarship,
+    description: "A verified scholarship listing on Scholars. Sign in to review eligibility and application information.",
+  }))
     .filter((scholarship) => isCurrentlyOpen(scholarship))
     .slice(0, 4) as LiveScholarship[];
 }

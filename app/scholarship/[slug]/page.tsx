@@ -1,13 +1,13 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { createPublicClient } from "@/lib/supabase/public";
+import { createClient } from "@/lib/supabase/server";
 import { formatVerifiedOn, isClosedListing } from "@/lib/dates";
 import { Breadcrumbs, SeoJsonLd } from "@/components/SeoJsonLd";
-import { PublicScholarshipCommunity } from "@/components/PublicScholarshipCommunity";
 import { isUuid } from "@/lib/validate";
-import { getApplicationLinkLabel, getPublicApplicationDetails } from "@/lib/public-application";
+import { buildInternalReturnPath, buildOpportunityAuthPaths } from "@/lib/auth/return-destination";
 // app/scholarship/[slug]/page.tsx
 // GET /s/[id] -- public, unauthenticated share landing page for a single
 // verified scholarship. Deliberately outside app/scholarships/** (which
@@ -15,43 +15,32 @@ import { getApplicationLinkLabel, getPublicApplicationDetails } from "@/lib/publ
 // route's layout -- there is no Sidebar/AdeProvider shell here, this page
 // stands alone.
 //
-// PERF (batch 1): ISR. Share pages are the growth channel and change
-// rarely (verification flips). A 5-minute revalidation window keeps
-// WhatsApp previews fast and off the database. This route is eligible for
-// ISR because it reads through the cookie-free public client only.
-export const revalidate = 300;
-// Shows only facts every visitor can honestly see: title, provider,
-// amount, deadline, description, and (Push C) when a human last checked
-// the listing. NEVER a match score or eligibility status -- those are
-// computed against a signed-in student's profile (lib/matching/engine.ts),
-// and showing one here for an anonymous visitor would mean fabricating a
-// number.
+// Authenticated visitors are routed to the existing protected detail page;
+// keep the page request-dynamic so that redirect is never cached for others.
+export const dynamic = "force-dynamic";
+// Public preview selects only basic summary information. Free-text descriptions,
+// eligibility details, application instructions and URLs are not safe fields.
 //
 // The ?ref=<sharer_profile_id> query param (added by ShareButton.tsx) is
 // captured into a cookie by middleware.ts before this component ever
 // renders -- this file doesn't need to read or forward it.
 const PUBLIC_COLUMNS =
-  "id, slug, title, provider_name, description, amount, deadline, last_cycle_closed_at, level, discipline, verified, last_verified_at, application_url, how_to_apply";
+  "id, slug, title, provider_name, amount, deadline, last_cycle_closed_at, verified, last_verified_at";
 type PublicScholarship = {
   id: string;
   slug: string;
   title: string;
   provider_name: string;
-  description: string | null;
   amount: string | null;
   deadline: string | null;
   last_cycle_closed_at: string | null;
-  level: "undergrad" | "postgrad" | "both";
-  discipline: string | null;
   verified: boolean;
   last_verified_at: string | null;
-  application_url: string | null;
-  how_to_apply: string | null;
 };
 const loadScholarship = cache(async (slug: string): Promise<PublicScholarship | null> => {
   const supabase = createPublicClient();
   const { data: slugData } = await supabase
-    .from("scholarships")
+    .from("scholarships_public_preview_v1")
     .select(PUBLIC_COLUMNS)
     .eq("slug", slug)
     .eq("verified", true)
@@ -59,7 +48,7 @@ const loadScholarship = cache(async (slug: string): Promise<PublicScholarship | 
   if (slugData) return slugData as PublicScholarship;
   if (!isUuid(slug)) return null;
   const { data: idData } = await supabase
-    .from("scholarships")
+    .from("scholarships_public_preview_v1")
     .select(PUBLIC_COLUMNS)
     .eq("id", slug)
     .eq("verified", true)
@@ -75,11 +64,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
   const title = scholarship.title;
   const closed = isClosedListing(scholarship);
-  const description =
-    scholarship.provider_name +
-    (scholarship.amount ? " · " + scholarship.amount : "") +
-    (scholarship.deadline ? " · Deadline " + formatDeadline(scholarship.deadline) : "") +
-    (closed ? ". This application cycle is closed." : ". See if you qualify on Scholars.");
+  const description = `A scholarship listing on Scholars. Sign in to review eligibility and application information.`;
   const canonicalSlug = scholarship.slug || slug;
   const image = `${base}/scholarship/${canonicalSlug}/opengraph-image`;
   return {
@@ -115,8 +100,28 @@ function formatDeadline(deadline: string): string {
   if (Number.isNaN(date.getTime())) return deadline;
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
-export default async function PublicScholarshipPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
+export default async function PublicScholarshipPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const [{ slug }, query] = await Promise.all([params, searchParams]);
+  const sessionClient = createClient();
+  const { data: { user } } = await sessionClient.auth.getUser();
+  if (user) {
+    const baseQuery = sessionClient
+      .from("scholarships")
+      .select("id")
+      .eq("verified", true);
+    const { data: authenticatedScholarship } = isUuid(slug)
+      ? await baseQuery.eq("id", slug).maybeSingle()
+      : await baseQuery.eq("slug", slug).maybeSingle();
+    if (authenticatedScholarship?.id) {
+      redirect(buildInternalReturnPath(`/scholarships/${authenticatedScholarship.id}`, query));
+    }
+  }
   const scholarship = await loadScholarship(slug);
   if (!scholarship) {
     notFound();
@@ -124,14 +129,8 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
   const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
   const publicUrl = `${base}/scholarship/${scholarship.slug || slug}`;
   const closed = isClosedListing(scholarship);
-  const applicationDetails = getPublicApplicationDetails({
-    instructions: scholarship.how_to_apply,
-    url: scholarship.application_url,
-  });
-  const returnTo = `/scholarship/${scholarship.slug || slug}`;
-  const onboardingPath = `/onboarding?next=${encodeURIComponent(returnTo)}`;
-  const signupPath = `/signup?next=${encodeURIComponent(onboardingPath)}`;
-  const loginPath = `/login?next=${encodeURIComponent(onboardingPath)}`;
+  const returnTo = buildInternalReturnPath(`/scholarship/${scholarship.slug || slug}`, query);
+  const { signupPath, loginPath } = buildOpportunityAuthPaths(returnTo);
   return (
     <div className="min-h-screen bg-parchment flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
@@ -161,10 +160,6 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
                 Deadline {formatDeadline(scholarship.deadline)}
               </span>
             )}
-            <span className="text-xs text-navy-light px-1">
-              {scholarship.level === "both" ? "Undergrad & postgrad" : scholarship.level}
-              {scholarship.discipline ? " \u00b7 " + scholarship.discipline : ""}
-            </span>
           </div>
           {/* Push C trust line: a dated claim beats a timeless badge. For
               rows verified before migration 0021 we say who verified, not
@@ -174,34 +169,10 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
               ? `Last checked by the Scholars team on ${formatVerifiedOn(scholarship.last_verified_at)}.`
               : "Verified by the Scholars team."}
           </p>
-          {scholarship.description && (
-            <div className="mb-5">
-              <h2 className="font-display text-lg font-semibold text-navy mb-2">About this scholarship</h2>
-              <p className="text-sm text-ink leading-relaxed">{scholarship.description}</p>
-            </div>
-          )}
-          {(applicationDetails.instructions || applicationDetails.url) && (
-            <div className="rounded-xl border border-hairline p-4 mb-5 space-y-2">
-              <h2 className="font-display text-lg font-semibold text-navy">Application details</h2>
-              {applicationDetails.instructions && (
-                <p className="text-sm text-navy-light leading-relaxed">{applicationDetails.instructions}</p>
-              )}
-              {applicationDetails.url && (
-                <a
-                  href={applicationDetails.url.toString()}
-                  rel="nofollow"
-                  className="inline-block text-sm font-medium text-navy underline"
-                >
-                  {getApplicationLinkLabel({ closed, protocol: applicationDetails.url.protocol })}
-                </a>
-              )}
-            </div>
-          )}
           <div className="rounded-xl border border-hairline p-4 mb-5">
-            <h2 className="font-display text-lg font-semibold text-navy mb-2">Who it is for</h2>
+            <h2 className="font-display text-lg font-semibold text-navy mb-2">About this scholarship</h2>
             <p className="text-sm text-navy-light leading-relaxed">
-              This listing is for {scholarship.level === "both" ? "undergraduate and postgraduate" : scholarship.level} students
-              {scholarship.discipline ? ` studying ${scholarship.discipline}` : ""}. Build a free profile to check your full eligibility against the verified requirements.
+              This scholarship is listed on Scholars. Create a free account to review the full eligibility requirements and application information.
             </p>
           </div>
           <div className="flex items-start gap-3 bg-navy-50 rounded-xl p-4 mb-5">
@@ -210,9 +181,8 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
               <path d="M8 10V7a4 4 0 0 1 8 0v3" />
             </svg>
             <p className="text-sm text-navy-light leading-relaxed">
-              <span className="font-medium text-navy">Your eligibility isn&apos;t shown yet.</span>{" "}
-              Build a free profile and Scholars checks this scholarship&apos;s requirements against your
-              GPA, state, discipline, and more -- automatically.
+              <span className="font-medium text-navy">Full details are available to signed-in users.</span>{" "}
+              Sign in or register to continue to this scholarship after onboarding.
             </p>
           </div>
           <Link
@@ -227,14 +197,13 @@ export default async function PublicScholarshipPage({ params }: { params: Promis
               Log in
             </Link>
           </p>
-          <PublicScholarshipCommunity scholarshipId={scholarship.id} />
         </div>
         <SeoJsonLd
           data={{
             "@context": "https://schema.org",
             "@type": "WebPage",
             name: scholarship.title,
-            description: scholarship.description ?? `${scholarship.title} from ${scholarship.provider_name}.`,
+            description: "A scholarship listing on Scholars. Sign in to review eligibility and application information.",
             url: publicUrl,
             dateModified: scholarship.last_verified_at ?? undefined,
             breadcrumb: {
