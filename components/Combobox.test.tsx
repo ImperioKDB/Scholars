@@ -118,4 +118,51 @@ describe("Combobox", () => {
     expect(onChange).toHaveBeenCalledWith("cs");
     expect(input.value).toBe("Computer Science");
   });
+
+  it("blur with an exact catalogue match commits the option value", () => {
+    const { input, onChange } = renderCombobox({ value: "" });
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "Computer Science" } });
+
+    fireEvent.blur(input);
+
+    expect(onChange).toHaveBeenCalledWith("cs");
+    expect(input.value).toBe("Computer Science");
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("clearing a committed value then blurring restores the displayed value without calling onChange", () => {
+    const { input, onChange } = renderCombobox({ value: "cs" });
+    expect(input.value).toBe("Computer Science");
+
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "" } });
+
+    fireEvent.blur(input);
+
+    expect(onChange).not.toHaveBeenCalled();
+    // The input stays in sync with the controlled value prop: no empty value
+    // is committed, and the displayed value reverts to the committed label.
+    expect(input.value).toBe("Computer Science");
+  });
+
+  it("ArrowDown on a zero-match query does not trap keyboard focus", () => {
+    const { input, onChange } = renderCombobox({ value: "" });
+    fireEvent.focus(input);
+
+    // Type something that matches no option.
+    fireEvent.change(input, { target: { value: "zzz no match" } });
+
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+
+    // No crash, no value committed, listbox stays open with no active row.
+    expect(onChange).not.toHaveBeenCalled();
+    expect(input.value).toBe("zzz no match");
+    expect(screen.getByRole("listbox")).toBeDefined();
+
+    // Escape restores the empty committed value and closes the listbox.
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(input.value).toBe("");
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
 });

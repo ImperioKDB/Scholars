@@ -59,7 +59,14 @@ export function Combobox({
   // that explicitly allow it. Returns true when something was committed.
   function commitExactMatch(): boolean {
     const typed = query.trim().toLowerCase();
-    if (!typed) return false;
+    if (!typed) {
+      // An empty blur must not leave the input desynced from the controlled
+      // `value` prop, and it must not commit empty or invalid data. Restore
+      // the displayed value to the last committed label without calling
+      // onChange (an empty value is never committed).
+      setQuery(selectedLabel);
+      return false;
+    }
     const exact = options.filter((o) => o.label.toLowerCase() === typed);
     if (exact.length === 1) {
       onChange(exact[0].value);
@@ -109,7 +116,7 @@ export function Combobox({
     }
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setHighlighted((h) => Math.min(h + 1, filtered.length - 1));
+      setHighlighted((h) => Math.min(h + 1, Math.max(0, filtered.length - 1)));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setHighlighted((h) => Math.max(h - 1, 0));
@@ -157,6 +164,7 @@ export function Combobox({
           // clicks never reach this handler -- their onMouseDown calls
           // preventDefault(), which keeps focus on this input.
           commitExactMatch();
+          setOpen(false);
         }}
         role="combobox"
         aria-expanded={open}
