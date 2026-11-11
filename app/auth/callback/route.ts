@@ -1,12 +1,9 @@
 // app/auth/callback/route.ts
 // GET /auth/callback?code=...&next=/dashboard
 //
-// Handles both the Google OAuth redirect and the email-confirmation link.
-// Both flows land the browser here with a `code` query param that has to
-// be exchanged for a session via the server client -- without this route,
-// signInWithOAuth's redirectTo (and the confirmation email's
-// emailRedirectTo) send the browser straight to a protected page with no
-// session yet, and middleware.ts bounces it back to /login.
+// Handles the Google OAuth redirect and legacy email-auth callbacks.
+// New signup and recovery requests use OTP verification in the auth screens;
+// this route remains for Google OAuth and already-issued legacy links.
 //
 // INPUT HARDENING: `next` is user-controlled input that decides a
 // redirect target. safeNextPath (lib/validate.ts) whitelists same-origin
@@ -35,15 +32,23 @@ import { logError } from "@/lib/logging";
 import { safeNextPath, isUuid } from "@/lib/validate";
 import { COOKIE_NAMES } from "@/lib/config";
 import { getAuthCookieDomain } from "@/lib/auth/cookie-domain";
+import { getAuthRedirectOrigin } from "@/lib/auth/redirect-origin";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = safeNextPath(searchParams.get("next"), "/dashboard");
+  const cookieStore = cookies();
+  let cookieNext = "";
+  try {
+    cookieNext = decodeURIComponent(cookieStore.get("scholars_auth_next")?.value ?? "");
+  } catch {
+    // A malformed short-lived fallback must never block or redirect auth.
+  }
+  const next = safeNextPath(searchParams.get("next") || cookieNext, "/dashboard");
+  const redirectOrigin = getAuthRedirectOrigin(origin, process.env.NEXT_PUBLIC_APP_URL);
   if (code) {
     const supabase = createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error && data.user) {
-      const cookieStore = cookies();
       const refId = cookieStore.get(COOKIE_NAMES.REF)?.value;
       const attributionCookie = cookieStore.get(COOKIE_NAMES.ATTRIBUTION)?.value;
       let attribution: Record<string, string> = {};
@@ -88,12 +93,12 @@ export async function GET(request: Request) {
         path: "/",
         ...(authCookieDomain ? { domain: authCookieDomain } : {}),
       });
-      return NextResponse.redirect(origin + next);
+      return NextResponse.redirect(`${redirectOrigin}${next}`);
     }
   }
   return NextResponse.redirect(
-    origin +
+    redirectOrigin +
       "/login?error=" +
-      encodeURIComponent("Could not sign you in. The link may have expired -- please try again.")
+      encodeURIComponent("Could not sign you in. The authentication request may have expired -- please try again.")
   );
 }

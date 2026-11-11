@@ -15,8 +15,10 @@ import { Redis } from "@upstash/redis";
 
 const MATCH_CACHE_TTL_SECONDS = 600; // 10 minutes
 const CATALOG_CACHE_TTL_SECONDS = 60; // keep admin edits visible quickly
-const KEY_PREFIX = "scholars:matches:";
-const CATALOG_KEY = "scholars:catalog:v1";
+// Bump both cache namespaces when eligibility semantics or catalog rules
+// change so stale pre-deployment results cannot mask the updated matcher.
+const KEY_PREFIX = "scholars:matches:v2:";
+const CATALOG_KEY = "scholars:catalog:v2";
 
 let redis: Redis | null = null;
 

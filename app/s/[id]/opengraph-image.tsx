@@ -13,7 +13,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
   const { id } = await params;
   const supabase = createPublicClient();
   const { data: scholarship } = await supabase
-    .from("scholarships")
+    .from("scholarships_public_preview_v1")
     .select(OG_COLUMNS)
     .eq("id", id)
     .eq("verified", true)

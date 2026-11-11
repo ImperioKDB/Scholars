@@ -20,37 +20,128 @@ import { todayUtcIso } from "@/lib/dates";
 // for ISR because it reads through the cookie-free public client only.
 export const revalidate = 300;
 
-// AUDIT FIX (batch 5): the hero card used to show three hardcoded sample
-// matches, complete with invented match scores. A visitor has no profile
-// yet, so any score on this page would be fabricated. The card now shows
-// up to three REAL verified scholarships straight from the database (same
-// public-client pattern as app/s/[id]/page.tsx), and says so honestly if
-// nothing is live yet.
+// The live catalog is preferred. If the public read policy is unavailable,
+// keep the homepage useful with clearly labelled examples rather than an
+// empty card. These are never presented as live availability claims.
 type LiveScholarship = {
   id: string;
   slug: string | null;
   title: string;
   provider_name: string;
+  description: string;
   amount: string | null;
   deadline: string | null;
   opens_at: string | null;
   last_cycle_closed_at: string | null;
   discipline: string | null;
   level: "undergrad" | "postgrad" | "both";
+  sampleDeadlineLabel?: string;
+  sampleDeadlineClass?: string;
 };
+
+const EXAMPLE_SCHOLARSHIPS: LiveScholarship[] = [
+  {
+    id: "example-taiwo-bankole",
+    slug: null,
+    title: "Taiwo Bankole Prize 2026",
+    provider_name: "Taiwo Bankole Prize",
+    description: "A verified scholarship listing on Scholars. Sign in to review eligibility and application information.",
+    amount: null,
+    deadline: null,
+    opens_at: null,
+    last_cycle_closed_at: null,
+    discipline: null,
+    level: "undergrad",
+    sampleDeadlineLabel: "Today",
+    sampleDeadlineClass: "bg-rose-light text-rose",
+  },
+  {
+    id: "example-carewave-aspire",
+    slug: null,
+    title: "Carewave ASPIRE Scholarship Programme (CASP) 2026",
+    provider_name: "Carewave Foundation",
+    description: "A verified scholarship listing on Scholars. Sign in to review eligibility and application information.",
+    amount: null,
+    deadline: null,
+    opens_at: null,
+    last_cycle_closed_at: null,
+    discipline: null,
+    level: "undergrad",
+    sampleDeadlineLabel: "3 days left",
+    sampleDeadlineClass: "bg-rose-light text-rose",
+  },
+  {
+    id: "example-afriseed-root",
+    slug: null,
+    title: "AfriSEED Foundation Root Initiative 2026",
+    provider_name: "AfriSEED Foundation",
+    description: "A verified scholarship listing on Scholars. Sign in to review eligibility and application information.",
+    amount: null,
+    deadline: null,
+    opens_at: null,
+    last_cycle_closed_at: null,
+    discipline: null,
+    level: "undergrad",
+    sampleDeadlineLabel: "9 days left",
+    sampleDeadlineClass: "bg-amber-light text-amber",
+  },
+  {
+    id: "example-white-avenue-icon",
+    slug: null,
+    title: "White Avenue Group ICON Scholarship for Undergraduates 2026",
+    provider_name: "White Avenue Group",
+    description: "A verified scholarship listing on Scholars. Sign in to review eligibility and application information.",
+    amount: null,
+    deadline: null,
+    opens_at: null,
+    last_cycle_closed_at: null,
+    discipline: null,
+    level: "undergrad",
+    sampleDeadlineLabel: "9 days left",
+    sampleDeadlineClass: "bg-amber-light text-amber",
+  },
+];
 
 async function loadLiveScholarships(): Promise<LiveScholarship[]> {
   const supabase = createPublicClient();
-  const { data } = await supabase
-    .from("scholarships")
+  const today = todayUtcIso();
+  const { data, error } = await supabase
+    .from("scholarships_public_preview_v1")
     .select("id, slug, title, provider_name, amount, deadline, opens_at, last_cycle_closed_at, discipline, level")
     .eq("verified", true)
     .in("level", ["undergrad", "both"])
-    .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
-    .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${todayUtcIso()}`)
-    .order("deadline", { ascending: true })
+    .or(`deadline.is.null,deadline.gte.${today}`)
+    .or(`last_cycle_closed_at.is.null,last_cycle_closed_at.gt.${today}`)
+    .order("deadline", { ascending: true, nullsFirst: false })
     .limit(20);
-  return (data ?? [])
+  if (error) {
+    console.error("[homepage] failed to read live scholarships", { code: error.code, message: error.message });
+    const fallback = await supabase
+      .from("scholarships_public_preview_v1")
+      .select("id, slug, title, provider_name, amount, deadline, discipline, level")
+      .eq("verified", true)
+      .in("level", ["undergrad", "both"])
+      .or(`deadline.is.null,deadline.gte.${today}`)
+      .order("deadline", { ascending: true, nullsFirst: false })
+      .limit(20);
+    if (fallback.error) {
+      console.error("[homepage] fallback scholarship read failed", { code: fallback.error.code, message: fallback.error.message });
+      return [];
+    }
+    return (fallback.data ?? [])
+      .map((scholarship) => ({
+        ...scholarship,
+        description: "A verified scholarship listing on Scholars. Sign in to review eligibility and application information.",
+        opens_at: null,
+        last_cycle_closed_at: null,
+      }))
+      .filter((scholarship) => isCurrentlyOpen(scholarship))
+      .slice(0, 4) as LiveScholarship[];
+  }
+  return (data ?? []).map((scholarship) => ({
+    ...scholarship,
+    description: "A verified scholarship listing on Scholars. Sign in to review eligibility and application information.",
+  }))
     .filter((scholarship) => isCurrentlyOpen(scholarship))
     .slice(0, 4) as LiveScholarship[];
 }
@@ -62,7 +153,9 @@ function levelLabel(level: LiveScholarship["level"]): string {
 }
 
 export default async function LandingPage() {
-  const live = await loadLiveScholarships();
+  const liveScholarships = await loadLiveScholarships();
+  const showingExamples = liveScholarships.length === 0;
+  const live = showingExamples ? EXAMPLE_SCHOLARSHIPS : liveScholarships;
   return (
     <div className="min-h-screen overflow-y-auto">
       <HomepageInstallPrompt />
@@ -120,43 +213,48 @@ export default async function LandingPage() {
               </p>
             </div>
             </div>
-            <div className="bg-white rounded-2xl shadow-card border border-hairline p-5 sm:p-6 lg:mt-2">
-              <div className="flex items-start justify-between gap-4 mb-5">
+            <div className="rounded-[28px] border border-hairline bg-white p-7 shadow-card sm:p-9 lg:mt-2">
+              <div className="mb-8 flex items-start justify-between gap-5">
                 <div>
-                  <p className="font-mono text-xs uppercase tracking-widest text-navy-light">
-                    Open now
+                  <p className="font-mono text-xs uppercase tracking-[0.16em] text-navy-light">
+                    {showingExamples ? "Example opportunities" : "Open now"}
                   </p>
-                  <p className="text-sm text-navy-light mt-1">Verified opportunities accepting applications.</p>
+                  <p className="mt-2 max-w-[15rem] text-xl leading-[1.45] text-navy">
+                    {showingExamples
+                      ? "A preview of the scholarship opportunities contained in Scholars."
+                      : "Verified opportunities accepting applications."}
+                  </p>
                 </div>
-                <span className="shrink-0 rounded-full bg-emerald-light px-2.5 py-1 text-xs font-medium text-emerald">
-                  Updated regularly
+                <span className={`shrink-0 rounded-full px-3.5 py-2 text-xs font-medium ${showingExamples ? "bg-amber-light text-amber" : "bg-emerald-light text-emerald"}`}>
+                  {showingExamples ? "Sample preview" : "Updated regularly"}
                 </span>
               </div>
-              {live.length === 0 ? (
-                <p className="text-sm text-navy-light">
-                  New scholarships are being researched and verified right now. Check back soon.
-                </p>
-              ) : (
-                <ul className="space-y-4">
-                  {live.map((s) => (
-                    <li key={s.id} className="flex items-start gap-4 border-b border-hairline pb-4 last:border-0 last:pb-0">
-                      <ProviderMonogram name={s.provider_name} size={48} />
-                      <div className="min-w-0 flex-1">
-                        <Link href={`/scholarship/${s.slug || s.id}`} className="font-medium text-ink text-sm leading-snug hover:text-navy hover:underline focus-visible:underline">
+              <ul>
+                {live.map((s) => (
+                    <li key={s.id} className="flex items-start gap-5 border-b border-hairline py-7 first:pt-0 last:border-0 last:pb-0 sm:gap-7">
+                      <ProviderMonogram name={s.provider_name} size={72} />
+                      <div className="min-w-0 flex-1 pt-0.5">
+                        <Link href={s.slug ? `/scholarship/${s.slug}` : "/scholarships-in-nigeria"} className="font-medium text-lg leading-[1.25] text-ink hover:text-navy hover:underline focus-visible:underline">
                           {s.title}
                         </Link>
-                        <p className="text-xs text-navy-light mt-0.5">{s.provider_name}</p>
-                        <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                          {s.amount && <span className="text-xs font-mono text-emerald">{s.amount}</span>}
-                          <DeadlineBadge deadline={s.deadline} />
-                          <span className="text-xs text-navy-light">{levelLabel(s.level)}</span>
+                        <p className="mt-1 text-base text-navy-light">{s.provider_name}</p>
+                        {s.description && (
+                          <p className="mt-2 text-base leading-[1.35] text-emerald line-clamp-2">{s.description}</p>
+                        )}
+                        <div className="mt-4 flex flex-wrap items-center gap-3">
+                          {s.amount && <span className="text-sm font-mono text-emerald">{s.amount}</span>}
+                          {s.sampleDeadlineLabel ? (
+                            <span className={`rounded-full px-3 py-1.5 text-sm font-mono font-medium ${s.sampleDeadlineClass}`}>
+                              {s.sampleDeadlineLabel}
+                            </span>
+                          ) : <DeadlineBadge deadline={s.deadline} />}
+                          <span className="text-base text-navy-light">{levelLabel(s.level)}</span>
                         </div>
                       </div>
                     </li>
-                  ))}
-                </ul>
-              )}
-              <Link href="/scholarships-in-nigeria" className="mt-5 inline-flex min-h-[44px] items-center text-sm font-medium text-navy hover:underline">
+                ))}
+              </ul>
+              <Link href="/scholarships-in-nigeria" className="mt-9 inline-flex min-h-[44px] items-center text-base font-medium text-navy hover:underline">
                 Browse all active scholarships <span aria-hidden="true" className="ml-1">&rarr;</span>
               </Link>
             </div>

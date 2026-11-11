@@ -15,6 +15,7 @@ import { AUTH_NEXT_COOKIE } from "@/components/AuthRescue";
 import { getAuthCookieDomain } from "@/lib/auth/cookie-domain";
 import { getAuthRedirectOrigin } from "@/lib/auth/redirect-origin";
 import { recordConfirmationEmailEvent } from "@/lib/auth/confirmation-email-analytics";
+import { otpVerificationMessage } from "@/lib/auth/otp-error";
 
 // AUTH SECURITY AUDIT (brute-force brake, client side): progressive
 // lockout stored in localStorage. UX-level only -- the real brakes are
@@ -162,7 +163,12 @@ function LoginForm() {
   }
 
   async function handleResendConfirmation(): Promise<string | null> {
-    const { error: resendError } = await supabase.auth.resend({ type: "signup", email: confirmationEmail ?? "" });
+    rememberAuthNext(next);
+    const { error: resendError } = await supabase.auth.resend({
+      type: "signup",
+      email: confirmationEmail ?? "",
+      options: { emailRedirectTo: `${appBase()}/auth/callback?next=${encodeURIComponent(next)}` },
+    });
     void recordConfirmationEmailEvent({
       email: confirmationEmail ?? "",
       kind: "resend",
@@ -178,7 +184,7 @@ function LoginForm() {
       token,
       type: "signup",
     });
-    if (verifyError) return "That code is invalid or has expired. Request a new code and try again.";
+    if (verifyError) return otpVerificationMessage(verifyError);
     if (!data.session) return "Your email was verified, but we couldn't start your session. Please log in.";
     router.push(next);
     router.refresh();
@@ -223,7 +229,7 @@ function LoginForm() {
           />
         </FormField>
         <div className="text-right mb-2">
-          <Link href="/reset-password" className="text-xs text-navy-light hover:text-navy">
+          <Link href={`/reset-password?next=${encodeURIComponent(next)}`} className="text-xs text-navy-light hover:text-navy">
             Forgot password?
           </Link>
         </div>

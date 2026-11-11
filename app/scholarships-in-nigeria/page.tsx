@@ -63,7 +63,7 @@ export default async function ScholarshipsInNigeriaPage({
   const page = parsePublicPage((await searchParams).page);
   const supabase = createPublicClient();
   const { data, count } = await supabase
-    .from("scholarships")
+    .from("scholarships_public_preview_v1")
     .select("id, slug, title, provider_name, amount, deadline, last_cycle_closed_at, discipline", { count: "exact" })
     .eq("verified", true)
     .in("level", ["undergrad", "both"])

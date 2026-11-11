@@ -7,6 +7,7 @@ import { AuthShell } from "@/components/AuthShell";
 import { FormField, inputClass } from "@/components/FormField";
 import { StatusMessage } from "@/components/StatusMessage";
 import { PasswordField } from "@/components/PasswordField";
+import { PasswordRequirements } from "@/components/PasswordRequirements";
 import { AuthOtp } from "@/components/AuthOtp";
 import { validatePasswordStrength } from "@/lib/auth/password";
 import { normalizeEmail } from "@/lib/auth/email";
@@ -15,6 +16,7 @@ import { AUTH_NEXT_COOKIE } from "@/components/AuthRescue";
 import { getAuthCookieDomain } from "@/lib/auth/cookie-domain";
 import { getAuthRedirectOrigin } from "@/lib/auth/redirect-origin";
 import { recordConfirmationEmailEvent } from "@/lib/auth/confirmation-email-analytics";
+import { otpVerificationMessage } from "@/lib/auth/otp-error";
 
 function appBase(): string {
   if (typeof window === "undefined") return process.env.NEXT_PUBLIC_APP_URL || "";
@@ -73,6 +75,7 @@ function SignupForm() {
       password,
       options: {
         data: { full_name: fullName },
+        emailRedirectTo: `${appBase()}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
     setLoading(false);
@@ -140,7 +143,7 @@ function SignupForm() {
       token,
       type: "signup",
     });
-    if (verifyError) return "That code is invalid or has expired. Request a new code and try again.";
+    if (verifyError) return otpVerificationMessage(verifyError);
     if (!data.session) return "Your email was verified, but we couldn't start your session. Please log in.";
     router.push(next);
     router.refresh();
@@ -148,7 +151,12 @@ function SignupForm() {
   }
 
   async function handleResend(): Promise<string | null> {
-    const { error: resendError } = await supabase.auth.resend({ type: "signup", email: cleanEmail });
+    rememberAuthNext(next);
+    const { error: resendError } = await supabase.auth.resend({
+      type: "signup",
+      email: cleanEmail,
+      options: { emailRedirectTo: `${appBase()}/auth/callback?next=${encodeURIComponent(next)}` },
+    });
     void recordConfirmationEmailEvent({
       email: cleanEmail,
       kind: "resend",
@@ -213,6 +221,7 @@ function SignupForm() {
             placeholder="At least 8 characters"
             autoComplete="new-password"
           />
+          <PasswordRequirements password={password} />
         </FormField>
         <button
           type="submit"

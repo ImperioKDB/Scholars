@@ -5,8 +5,10 @@ import Link from "next/link";
 import { AuthShell } from "@/components/AuthShell";
 import { StatusMessage } from "@/components/StatusMessage";
 import { SpinnerIcon } from "@/components/icons";
+import { distributeOtpInput, OTP_LENGTH } from "@/lib/auth/otp-input";
 
-const OTP_LENGTH = 6;
+// Supabase Email OTP length is configured to six digits. Keep this aligned
+// with Authentication > Sign In / Providers > Email > Email OTP length.
 const RESEND_COOLDOWN_SECONDS = 60;
 
 function maskEmail(email: string): string {
@@ -70,12 +72,14 @@ export function AuthOtp({ email, purpose, onVerify, onResend, onGoogle, onBack }
   }
 
   function updateDigit(index: number, rawValue: string) {
-    const value = rawValue.replace(/\D/g, "").slice(-1);
-    const next = [...digits];
-    next[index] = value;
+    // Mobile OTP autofill and keyboard paste can arrive as a normal input
+    // event rather than a ClipboardEvent. Distribute the complete code here
+    // instead of allowing maxLength to reduce it to the first digit.
+    const next = distributeOtpInput(digits, index, rawValue);
     setDigits(next);
     setError(null);
-    if (value && index < OTP_LENGTH - 1) inputRefs.current[index + 1]?.focus();
+    const entered = rawValue.replace(/\D/g, "");
+    if (entered && entered.length === 1 && index < OTP_LENGTH - 1) inputRefs.current[index + 1]?.focus();
     const code = next.join("");
     if (code.length === OTP_LENGTH) void verify(code);
   }
@@ -84,11 +88,9 @@ export function AuthOtp({ email, purpose, onVerify, onResend, onGoogle, onBack }
     event.preventDefault();
     const pasted = event.clipboardData.getData("text").replace(/\D/g, "").slice(0, OTP_LENGTH);
     if (!pasted) return;
-    const next = [...digits];
-    pasted.split("").forEach((digit, offset) => {
-      if (index + offset < OTP_LENGTH) next[index + offset] = digit;
-    });
+    const next = distributeOtpInput(digits, index, pasted);
     setDigits(next);
+    setError(null);
     const code = next.join("");
     if (code.length === OTP_LENGTH) void verify(code);
     else inputRefs.current[Math.min(index + pasted.length, OTP_LENGTH - 1)]?.focus();
@@ -163,7 +165,7 @@ export function AuthOtp({ email, purpose, onVerify, onResend, onGoogle, onBack }
       {notice && <StatusMessage tone="success" className="mb-4">{notice}</StatusMessage>}
       <fieldset disabled={verifying}>
         <legend className="sr-only">Six-digit verification code</legend>
-        <div className="flex justify-between gap-2" role="group" aria-label="Six-digit verification code">
+        <div className="flex justify-between gap-1.5 sm:gap-2" role="group" aria-label="Six-digit verification code">
           {digits.map((digit, index) => (
             <input
               key={index}
@@ -171,12 +173,12 @@ export function AuthOtp({ email, purpose, onVerify, onResend, onGoogle, onBack }
               aria-label={`Digit ${index + 1}`}
               inputMode="numeric"
               autoComplete={index === 0 ? "one-time-code" : "off"}
-              maxLength={1}
+              maxLength={OTP_LENGTH}
               value={digit}
               onChange={(event) => updateDigit(index, event.target.value)}
               onPaste={(event) => handlePaste(index, event)}
               onKeyDown={(event) => handleKeyDown(index, event)}
-              className="h-12 w-10 rounded-lg border border-hairline bg-white text-center text-xl font-semibold text-navy outline-none transition-colors focus:border-emerald focus:ring-2 focus:ring-emerald/20 sm:h-14 sm:w-12"
+              className="h-12 w-9 rounded-lg border border-hairline bg-white text-center text-xl font-semibold text-navy outline-none transition-colors focus:border-emerald focus:ring-2 focus:ring-emerald/20 sm:h-14 sm:w-12"
             />
           ))}
         </div>

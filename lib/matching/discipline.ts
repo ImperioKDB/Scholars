@@ -64,9 +64,38 @@ export function isBroadStemRequirement(value: unknown): boolean {
   );
 }
 
+function isRelatedTechnologyRequirement(value: string): boolean {
+  return /\brelated\s+(?:technology|tech)(?:[\s-]+(?:fields?|courses?|disciplines?))?\b/.test(
+    normalize(value)
+  );
+}
+
+function isTechnologyDiscipline(value: string): boolean {
+  return /\b(computer|computing|information technology|information systems|software|cyber(?:security|\s+security)|data science|systems engineering|artificial intelligence|machine learning|network engineering|telecommunications|robotics|mechatronics)\b/.test(
+    normalize(value)
+  );
+}
+
 export function disciplineRequirementMatches(profileValue: unknown, ruleValue: unknown): boolean {
   if (typeof profileValue !== "string" || typeof ruleValue !== "string") return false;
-  if (normalize(profileValue) === normalize(ruleValue)) return true;
+  const normalizedRule = normalize(ruleValue);
+  if (normalize(profileValue) === normalizedRule) return true;
+  if (isRelatedTechnologyRequirement(ruleValue) && isTechnologyDiscipline(profileValue)) return true;
+
+  // Some scholarship records store eligible courses as a readable,
+  // comma-separated sentence rather than separate rules. Evaluate each
+  // listed course independently so a valid course such as Software
+  // Engineering is not rejected by the full display string.
+  const listedRequirements = normalizedRule
+    .split(",")
+    .map((item) => item.trim().replace(/^and\s+/, ""))
+    .filter(Boolean);
+  if (listedRequirements.length > 1) {
+    return listedRequirements.some((requirement) =>
+      disciplineRequirementMatches(profileValue, requirement)
+    );
+  }
+
   if (isBroadStemRequirement(ruleValue) && isStemDiscipline(profileValue)) return true;
   return /\blaw\b/.test(normalize(ruleValue)) && normalize(profileValue) === "law";
 }

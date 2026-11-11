@@ -87,26 +87,26 @@ export default function UpdatePasswordPage() {
 
   if (stage === "verifying") {
     return (
-      <AuthShell heading="Verifying your link" sub="One moment while we check your reset link.">
-        <p className="text-sm text-navy-light text-center">If this takes more than a few seconds, the link may have expired.</p>
+      <AuthShell heading="Verifying your recovery" sub="One moment while we check your legacy recovery request.">
+        <p className="text-sm text-navy-light text-center">This screen is only for recovery emails issued before OTP recovery was enabled.</p>
       </AuthShell>
     );
   }
 
   if (stage === "invalid") {
     return (
-      <AuthShell heading="Link not valid" sub="That reset link could not be verified.">
+      <AuthShell heading="Recovery not valid" sub="That legacy recovery request could not be verified.">
         <div className="rounded-xl border border-hairline bg-navy-50 p-5 mb-6">
           <p className="text-sm text-ink">
-            Reset links expire and can only be used once. Request a fresh one and try again from the
-            new email.
+            Legacy recovery links expire and can only be used once. New reset requests use a
+            six-digit code instead.
           </p>
         </div>
         <Link
           href="/reset-password"
           className="block w-full rounded-lg bg-navy text-white font-medium py-3 text-center hover:bg-navy-light transition-colors"
         >
-          Request a new link
+          Request a new code
         </Link>
       </AuthShell>
     );

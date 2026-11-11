@@ -179,7 +179,7 @@ export function DashboardClient({
   // Keep the first render identical on the server and browser. Reading the
   // current hour during render caused intermittent React #425 hydration
   // mismatches around the hour boundary (and on users in another timezone).
-  const [greeting, setGreeting] = useState("Welcome back");
+  const [greeting, setGreeting] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(initialError);
   const [matches] = useState<MatchApiItem[]>(initialMatches);
   const [profileCompleteness] = useState(initialProfileCompleteness);
@@ -319,7 +319,15 @@ export function DashboardClient({
   return (
     <div>
       <div className="mb-8">
-        <h1 className="font-display text-3xl leading-tight font-semibold text-navy">{greeting}{firstName ? `, ${firstName}` : ""}</h1>
+        <h1 aria-busy={greeting === null} className="font-display text-3xl leading-tight font-semibold text-navy">
+          {greeting ? (
+            `${greeting}${firstName ? `, ${firstName}` : ""}`
+          ) : (
+            <span aria-hidden="true" className="invisible">
+              {`Good afternoon${firstName ? `, ${firstName}` : ""}`}
+            </span>
+          )}
+        </h1>
         <p className="text-sm text-navy-light mt-1 mb-6">{openMatches.length} open scholarship{openMatches.length === 1 ? "" : "s"} you can apply to now.</p>
         {profileCompleteness < 100 && (
           <div data-tour="profile" className="bg-white rounded-2xl border border-hairline p-5 mb-6 shadow-[0_1px_2px_rgba(11,30,61,0.03)]">
@@ -410,9 +418,10 @@ export function DashboardClient({
             const met = m.requirements.filter((r) => r.status === "met").length;
             const total = m.requirements.filter((r) => r.status !== "unverifiable").length;
             const missingLabels = m.requirements.filter((r) => r.status === "missing_data").map((r) => r.label);
+            const ineligibleLabels = m.requirements.filter((r) => r.status === "not_met").map((r) => r.label);
             return (
               <div key={m.id} data-tour={i === 0 ? "save" : undefined}>
-                <ScholarshipCard scholarship={m} score={m.score} metCount={met} totalCount={total} missingLabels={missingLabels}
+                <ScholarshipCard scholarship={m} score={m.score} metCount={met} totalCount={total} missingLabels={missingLabels} ineligibleLabels={ineligibleLabels}
                   saved={savedIds.has(m.id)} pending={pendingIds.has(m.id)} onToggleSave={() => toggleSave(m.id)} sharerId={userId} firstSaveCelebration={celebrationId === m.id} />
               </div>
             );
@@ -428,8 +437,9 @@ export function DashboardClient({
               const met = m.requirements.filter((r) => r.status === "met").length;
               const total = m.requirements.filter((r) => r.status !== "unverifiable").length;
               const missingLabels = m.requirements.filter((r) => r.status === "missing_data").map((r) => r.label);
+              const ineligibleLabels = m.requirements.filter((r) => r.status === "not_met").map((r) => r.label);
               return (
-                <ScholarshipCard key={m.id} scholarship={m} score={m.score} metCount={met} totalCount={total} missingLabels={missingLabels}
+                <ScholarshipCard key={m.id} scholarship={m} score={m.score} metCount={met} totalCount={total} missingLabels={missingLabels} ineligibleLabels={ineligibleLabels}
                   saved={savedIds.has(m.id)} pending={pendingIds.has(m.id)} onToggleSave={() => toggleSave(m.id)} sharerId={userId} firstSaveCelebration={celebrationId === m.id} />
               );
             })}

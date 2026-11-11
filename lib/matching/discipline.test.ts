@@ -48,6 +48,28 @@ describe("discipline matching", () => {
     expect(disciplineRequirementMatches("Software Engineering", scholarship.discipline)).toBe(true);
   });
 
+  it("matches Software Engineering in a comma-separated technology-course list", () => {
+    expect(
+      disciplineRequirementMatches(
+        "Software Engineering",
+        "Computer Science, Information Technology, Cybersecurity, Systems Engineering, Software Engineering, and related technology fields"
+      )
+    ).toBe(true);
+    expect(
+      disciplineRequirementMatches(
+        "English Language",
+        "Computer Science, Information Technology, Cybersecurity, Systems Engineering, Software Engineering, and related technology fields"
+      )
+    ).toBe(false);
+  });
+
+  it("matches Computer Engineering as a related technology field without accepting unrelated engineering", () => {
+    const requirement =
+      "Computer Science, Information Technology, Cybersecurity, Systems Engineering, Software Engineering, and related technology fields";
+    expect(disciplineRequirementMatches("Computer Engineering", requirement)).toBe(true);
+    expect(disciplineRequirementMatches("Civil Engineering", requirement)).toBe(false);
+  });
+
   it("keeps unrelated disciplines out of broad STEM requirements", () => {
     expect(isStemDiscipline("English Language")).toBe(false);
     expect(disciplineRequirementMatches("English Language", scholarship.discipline)).toBe(false);
@@ -58,6 +80,34 @@ describe("discipline matching", () => {
     const result = evaluateScholarship(profile("Software Engineering"), scholarship, []);
     expect(result.requirements[0]?.status).toBe("met");
     expect(result.tier).not.toBe("unlikely");
+  });
+
+  it("meets both related-tech and explicit Airtel discipline rules for Computer Engineering", () => {
+    const airtelScholarship = {
+      ...scholarship,
+      id: "airtel-tech",
+      title: "Airtel Africa Foundation Tech Scholarship",
+      discipline:
+        "Computer Science, Information Technology, Cybersecurity, Systems Engineering, Software Engineering, and related technology fields",
+    } satisfies ScholarshipRow;
+    const result = evaluateScholarship(profile("Computer Engineering"), airtelScholarship, [
+      {
+        id: "airtel-discipline",
+        scholarship_id: airtelScholarship.id,
+        field: "discipline",
+        operator: "in",
+        value: [
+          "Information Technology",
+          "Computer Science",
+          "Software Engineering",
+          "Data Science",
+          "Cyber Security",
+          "Computer Engineering",
+        ],
+      },
+    ]);
+    expect(result.requirements.filter((r) => r.field === "discipline")).toHaveLength(2);
+    expect(result.requirements.filter((r) => r.field === "discipline").every((r) => r.status === "met")).toBe(true);
   });
 
   it("treats Nigeria and Nigerian as equivalent nationality values", () => {
