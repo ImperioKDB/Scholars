@@ -4,3 +4,12 @@ node_modules
 .env.local
 .vercel
 *.log
+.env*
+
+# Local CLI and editor artifacts
+supabase/.temp/
+*.swp
+
+# Keep the environment example template trackable
+!.env.example
+next-env.d.ts
