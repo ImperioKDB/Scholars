@@ -1,4 +1,5 @@
 import { createPublicClient } from "./supabase/public";
+import { LOCAL_RESOURCE_ARTICLES, LOCAL_RESOURCE_CATEGORIES } from "./resource-content";
 
 export const SITEMAP_BATCH_SIZE = 500;
 
@@ -45,6 +46,8 @@ export async function readAllPublicRows<T extends SitemapRow>(
 }
 
 export async function readAllResourceRows(): Promise<ResourceSitemapRow[]> {
+  const repositoryRows = LOCAL_RESOURCE_ARTICLES.map((article) => ({ slug: article.slug, published_at: article.published_at }));
+  if (!hasPublicSupabaseConfig()) return repositoryRows;
   const supabase = createPublicClient();
   const rows: ResourceSitemapRow[] = [];
   for (let from = 0; ; from += SITEMAP_BATCH_SIZE) {
@@ -55,7 +58,7 @@ export async function readAllResourceRows(): Promise<ResourceSitemapRow[]> {
       .range(from, from + SITEMAP_BATCH_SIZE - 1);
     if (error) {
       console.error("[sitemap] failed to read public resources", error);
-      throw new Error("Unable to build sitemap from public resources");
+      return repositoryRows;
     }
     const batch = (data ?? []) as ResourceSitemapRow[];
     rows.push(...batch);
@@ -64,6 +67,8 @@ export async function readAllResourceRows(): Promise<ResourceSitemapRow[]> {
 }
 
 export async function readAllResourceCategoryRows(): Promise<ResourceCategorySitemapRow[]> {
+  const repositoryRows = LOCAL_RESOURCE_CATEGORIES.map((category) => ({ slug: category.slug }));
+  if (!hasPublicSupabaseConfig()) return repositoryRows;
   const supabase = createPublicClient();
   const rows: ResourceCategorySitemapRow[] = [];
   for (let from = 0; ; from += SITEMAP_BATCH_SIZE) {
@@ -74,10 +79,14 @@ export async function readAllResourceCategoryRows(): Promise<ResourceCategorySit
       .range(from, from + SITEMAP_BATCH_SIZE - 1);
     if (error) {
       console.error("[sitemap] failed to read public resource categories", error);
-      throw new Error("Unable to build sitemap from public resource categories");
+      return repositoryRows;
     }
     const batch = (data ?? []) as ResourceCategorySitemapRow[];
     rows.push(...batch);
     if (batch.length < SITEMAP_BATCH_SIZE) return rows;
   }
+}
+
+function hasPublicSupabaseConfig() {
+  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 }

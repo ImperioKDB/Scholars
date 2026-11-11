@@ -29,7 +29,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [scholarships, opportunities] = await Promise.all([
     readAllPublicRows<SitemapRow>("scholarships", "id, slug, updated_at"),
     readAllPublicRows<SitemapRow>("opportunities", "id, slug, updated_at"),
-  ]);
+  ]).catch((error) => {
+    console.error("[sitemap] public opportunity sources unavailable; serving static/resource entries", error);
+    return [[], []] as [SitemapRow[], SitemapRow[]];
+  });
   const [resources, resourceCategoryRows] = await Promise.all([
     readAllResourceRows(),
     readAllResourceCategoryRows(),

@@ -1,4 +1,12 @@
 import { createClient } from "./supabase/server";
+import {
+  getLocalResourceArticle,
+  getLocalResourceArticlesForCategory,
+  getLocalResourceCategoriesForArticle,
+  getLocalResourceCategory,
+  LOCAL_RESOURCE_ARTICLE_CARDS,
+  LOCAL_RESOURCE_CATEGORIES,
+} from "./resource-content";
 
 export const RESOURCE_IMAGE_PREFIX = "resource-center/featured/";
 export const RESOURCE_PAGE_SIZE = 100;
@@ -143,4 +151,68 @@ export function getResourceCanonicalUrl(slug: string, storedCanonical: string | 
     // Use the exact route fallback below.
   }
   return fallback;
+}
+
+/**
+ * Repository content is the launch source of truth. The public projection is
+ * still read when available so reviewed database-backed articles can be added
+ * later without changing the public route contract. No private/base table is
+ * queried here and no editorial write path is introduced.
+ */
+export async function getResourceHomeWithRepositoryContent() {
+  let published: Awaited<ReturnType<typeof getResourceHome>> = { articles: [], categories: [] };
+  if (hasPublicSupabaseConfig()) {
+    try {
+      published = await getResourceHome();
+    } catch {
+      // The repository-backed launch experience remains available when the
+      // optional public projection is unavailable during build or preview.
+    }
+  }
+  return {
+    articles: mergeBySlug(LOCAL_RESOURCE_ARTICLE_CARDS, published.articles),
+    categories: mergeBySlug(LOCAL_RESOURCE_CATEGORIES, published.categories),
+  };
+}
+
+export async function getResourceArticleWithRepositoryContent(slug: string) {
+  const localArticle = getLocalResourceArticle(slug);
+  if (localArticle) {
+    const localCategories = getLocalResourceCategoriesForArticle(localArticle.id);
+    const related = LOCAL_RESOURCE_ARTICLE_CARDS
+      .filter((article) => article.id !== localArticle.id && localCategories.some((category) => getLocalResourceCategoriesForArticle(article.id).some((candidate) => candidate.slug === category.slug)))
+      .slice(0, 3);
+    return { article: localArticle, categories: localCategories, related };
+  }
+  return hasPublicSupabaseConfig() ? getResourceArticle(slug) : null;
+}
+
+export async function getResourceCategoryWithRepositoryContent(slug: string) {
+  const localCategory = getLocalResourceCategory(slug);
+  let published: Awaited<ReturnType<typeof getResourceCategory>> = null;
+  if (hasPublicSupabaseConfig()) {
+    try {
+      published = await getResourceCategory(slug);
+    } catch {
+      // Local content is intentionally sufficient for the public MVP.
+    }
+  }
+  if (!localCategory) return published;
+  const localArticles = getLocalResourceArticlesForCategory(slug);
+  const publishedArticles = published?.articles ?? [];
+  return {
+    category: localCategory,
+    articles: mergeBySlug(localArticles, publishedArticles),
+    totalCount: localArticles.length + publishedArticles.filter((article) => !localArticles.some((local) => local.slug === article.slug)).length,
+  };
+}
+
+function mergeBySlug<T extends { slug: string }>(primary: T[], secondary: T[]): T[] {
+  const merged = new Map<string, T>();
+  [...primary, ...secondary].forEach((item) => merged.set(item.slug, item));
+  return [...merged.values()];
+}
+
+function hasPublicSupabaseConfig() {
+  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 }

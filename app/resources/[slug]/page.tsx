@@ -4,19 +4,19 @@ import { Breadcrumbs, SeoJsonLd } from "@/components/SeoJsonLd";
 import { Footer } from "@/components/Footer";
 import { ResourceArticleBody, extractArticleHeadings } from "@/components/ResourceArticleBody";
 import { ArticleTableOfContents, ReadingProgress, ShareArticle } from "@/components/resource-center-interactions";
-import { ResourceCard, ResourceImage, ResourcePageFrame } from "@/components/resource-center";
-import { getResourceArticle, getResourceCanonicalUrl, getResourceImageUrl, ResourceDataError } from "@/lib/resource-center";
+import { ResourceAdSlot, ResourceCard, ResourceImage, ResourcePageFrame } from "@/components/resource-center";
+import { getResourceArticleWithRepositoryContent, getResourceCanonicalUrl, getResourceImageUrl, ResourceDataError } from "@/lib/resource-center";
 import Link from "next/link";
 
 type Props = { params: { slug: string } };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   try {
-    const result = await getResourceArticle(params.slug);
+    const result = await getResourceArticleWithRepositoryContent(params.slug);
     if (!result) return { title: "Resource not found" };
     const { article } = result;
     const canonical = getResourceCanonicalUrl(article.slug, article.canonical_url);
-    return { title: article.title, description: article.excerpt ?? undefined, alternates: { canonical }, openGraph: { type: "article", title: article.title, description: article.excerpt ?? undefined, url: canonical, publishedTime: article.published_at, modifiedTime: article.last_reviewed_at ?? article.published_at }, twitter: { card: "summary_large_image", title: article.title, description: article.excerpt ?? undefined } };
+    return { title: `${article.title} | Scholars`, description: article.excerpt ?? undefined, alternates: { canonical }, openGraph: { type: "article", title: article.title, description: article.excerpt ?? undefined, url: canonical, publishedTime: article.published_at, modifiedTime: article.last_reviewed_at ?? article.published_at }, twitter: { card: "summary_large_image", title: article.title, description: article.excerpt ?? undefined } };
   } catch {
     return { title: "Resource not found" };
   }
@@ -25,7 +25,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ResourceArticlePage({ params }: Props) {
   let result;
   try {
-    result = await getResourceArticle(params.slug);
+    result = await getResourceArticleWithRepositoryContent(params.slug);
   } catch (error) {
     if (error instanceof ResourceDataError) return <ResourcePageFrame><main className="mx-auto max-w-6xl px-6 py-16"><div role="alert" className="rounded-2xl border border-rose/30 bg-white p-8 md:p-12"><p className="font-mono text-xs uppercase tracking-[0.16em] text-rose">A quiet moment</p><h1 className="mt-3 font-display text-3xl font-semibold text-navy">We could not load this guide.</h1><p className="mt-3 max-w-xl text-sm leading-6 text-navy-light">Please try again shortly, or return to the Resource Center.</p><Link href="/resources" className="mt-6 inline-flex rounded-seal bg-navy px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy-light">Back to resources</Link></div></main><Footer /></ResourcePageFrame>;
     throw error;
@@ -45,6 +45,7 @@ export default async function ResourceArticlePage({ params }: Props) {
       { "@type": "BreadcrumbList", itemListElement: breadcrumbItems.map((item, index) => ({ "@type": "ListItem", position: index + 1, name: item.name, ...(item.href ? { item: `${base}${item.href}` } : {}) })) },
     ],
   };
+  const formatDate = (value: string) => new Date(value).toLocaleDateString("en-NG", { year: "numeric", month: "long", day: "numeric" });
 
   return (
     <ResourcePageFrame>
@@ -59,8 +60,9 @@ export default async function ResourceArticlePage({ params }: Props) {
             </div>
           </header>
           <div className="mx-auto max-w-5xl px-6 pt-8 md:pt-12">{article.featured_image_path && <ResourceImage path={article.featured_image_path} alt={`${article.title} featured image`} priority className="aspect-[16/9] w-full rounded-2xl" />}</div>
+          <ResourceAdSlot placement="in-article" />
           <div className="mx-auto grid max-w-5xl gap-10 px-6 py-10 md:py-16 lg:grid-cols-[minmax(0,680px)_220px] lg:items-start">
-            <div className="min-w-0"><ResourceArticleBody content={article.content_markdown} /></div>
+            <div className="min-w-0"><ResourceArticleBody content={article.content_markdown} /><div className="mt-8 border-t border-hairline pt-5 text-sm text-navy-light"><p>Published {formatDate(article.published_at)}.</p>{article.last_reviewed_at && <p>Last reviewed {formatDate(article.last_reviewed_at)}.</p>}</div></div>
             <aside className="space-y-5 lg:sticky lg:top-6"><ArticleTableOfContents headings={headings} /><div className="rounded-2xl border border-hairline bg-white p-5"><p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-navy-light">About the writer</p><p className="mt-3 font-display text-xl font-semibold text-navy">{article.author_name || "Scholars"}</p>{article.author_bio && <p className="mt-2 text-sm leading-6 text-navy-light">{article.author_bio}</p>}{categories.length > 0 && <div className="mt-6 border-t border-hairline pt-5"><p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-navy-light">Topics</p><div className="mt-3 flex flex-wrap gap-2">{categories.slice(0, 6).map((category) => <Link key={category.slug} href={`/resources/category/${category.slug}`} className="rounded-seal bg-navy-50 px-3 py-1.5 text-xs font-medium text-navy hover:bg-emerald-light">{category.name}</Link>)}</div></div>}</div></aside>
           </div>
         </article>

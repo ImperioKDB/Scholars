@@ -26,6 +26,15 @@ export function ResourcePageFrame({ children }: { children: React.ReactNode }) {
   return <div className="min-h-screen bg-parchment"><ResourceMasthead />{children}</div>;
 }
 
+export function ResourceAdSlot({ placement = "in-article" }: { placement?: "home" | "category" | "in-article" }) {
+  const enabled = process.env.NEXT_PUBLIC_RESOURCE_ADS_ENABLED === "true" && Boolean(process.env.NEXT_PUBLIC_ADSENSE_PUBLISHER_ID && process.env.NEXT_PUBLIC_ADSENSE_RESOURCE_UNIT_ID);
+  return (
+    <aside aria-label="Advertisement" data-ad-placement={placement} className="mx-auto my-8 flex min-h-[90px] max-w-5xl items-center justify-center border-y border-hairline bg-white/40 px-4 py-4">
+      {enabled ? <div className="text-center text-xs text-navy-light">Advertisement</div> : <span className="sr-only">Advertisement space reserved</span>}
+    </aside>
+  );
+}
+
 export function ResourceImage({ path, alt, className = "", priority = false }: { path: string | null | undefined; alt: string; className?: string; priority?: boolean }) {
   const src = getResourceImageUrl(path);
   if (!src) return <div aria-hidden="true" className={`bg-grain flex items-center justify-center bg-navy-50 ${className}`}><span className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald">Scholars resource desk</span></div>;

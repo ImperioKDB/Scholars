@@ -2,25 +2,28 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Breadcrumbs, SeoJsonLd } from "@/components/SeoJsonLd";
 import { Footer } from "@/components/Footer";
-import { OpportunityBridge, ResourceCard, ResourceEmptyState, ResourceErrorState, ResourcePageFrame } from "@/components/resource-center";
-import { getResourceHome } from "@/lib/resource-center";
+import { OpportunityBridge, ResourceAdSlot, ResourceCard, ResourceEmptyState, ResourceErrorState, ResourcePageFrame } from "@/components/resource-center";
+import { ResourceSearch } from "@/components/resource-center-search";
+import { getResourceHomeWithRepositoryContent } from "@/lib/resource-center";
+import { LOCAL_RESOURCE_CATEGORIES } from "@/lib/resource-content";
 
 export const metadata: Metadata = {
-  title: "Resources for students",
+  title: "Resource Center for students | Scholars",
   description: "Practical guides and trustworthy updates to help students in Nigeria find and pursue better opportunities.",
-  alternates: { canonical: "/resources" },
-  openGraph: { title: "Resources for students", description: "Practical guides and trustworthy updates for students in Nigeria.", url: "/resources", type: "website" },
+  alternates: { canonical: "https://www.scholars.com.ng/resources" },
+  openGraph: { title: "Resource Center for students | Scholars", description: "Practical guides and trustworthy updates for students in Nigeria.", url: "https://www.scholars.com.ng/resources", type: "website" },
 };
 
 export default async function ResourcesPage() {
   let content;
   try {
-    content = await getResourceHome();
+    content = await getResourceHomeWithRepositoryContent();
   } catch {
     return <ResourcePageFrame><main className="mx-auto max-w-6xl px-6 py-16"><ResourceErrorState /></main><Footer /></ResourcePageFrame>;
   }
 
   const { articles, categories } = content;
+  const visibleCategories = categories.length > 0 ? categories : LOCAL_RESOURCE_CATEGORIES;
   const featured = articles[0];
   const latest = featured ? articles.slice(1) : articles;
   const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
@@ -51,6 +54,10 @@ export default async function ResourcesPage() {
                 <p className="mt-2">No noise, no borrowed advice — just useful context for making your next move.</p>
               </div>
             </div>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-navy-light">Search the desk for a practical starting point.</p>
+              <ResourceSearch articles={articles} />
+            </div>
           </div>
         </section>
 
@@ -60,9 +67,9 @@ export default async function ResourcesPage() {
               <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald">Browse by subject</p>
               <h2 className="mt-2 font-display text-2xl font-semibold text-navy">Find the thread you need.</h2>
             </div>
-            {categories.length > 0 && <span className="text-sm text-navy-light">{categories.length} active {categories.length === 1 ? "subject" : "subjects"}</span>}
+            {visibleCategories.length > 0 && <span className="text-sm text-navy-light">{visibleCategories.length} active {visibleCategories.length === 1 ? "subject" : "subjects"}</span>}
           </div>
-          {categories.length > 0 && <div className="mt-5 flex flex-wrap gap-2" aria-label="Resource categories">{categories.map((category) => <Link key={category.id} href={`/resources/category/${category.slug}`} className="rounded-seal border border-hairline bg-white px-4 py-2.5 text-sm font-medium text-navy-light transition-colors hover:border-navy hover:text-navy">{category.name}</Link>)}</div>}
+          {visibleCategories.length > 0 && <div className="mt-5 flex flex-wrap gap-2" aria-label="Resource categories">{visibleCategories.map((category) => <Link key={category.id} href={`/resources/category/${category.slug}`} className="rounded-seal border border-hairline bg-white px-4 py-2.5 text-sm font-medium text-navy-light transition-colors hover:border-navy hover:text-navy">{category.name}</Link>)}</div>}
         </section>
 
         <section className="mx-auto max-w-6xl px-6 pb-12 md:pb-16">
@@ -70,6 +77,7 @@ export default async function ResourcesPage() {
             {featured && <div><div className="mb-4 flex items-center justify-between gap-4"><p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald">Start here</p><span className="text-xs text-navy-light">Newest published guide</span></div><ResourceCard article={featured} featured /></div>}
             {latest.length > 0 && <div className="mt-14"><div className="mb-5"><p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald">From the desk</p><h2 className="mt-2 font-display text-3xl font-semibold text-navy">Latest guidance</h2></div><div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">{latest.map((article) => <ResourceCard key={article.id} article={article} />)}</div></div>}
             <div className="mt-14"><OpportunityBridge /></div>
+            <ResourceAdSlot placement="home" />
           </>}
         </section>
       </main>
