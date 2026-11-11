@@ -208,9 +208,16 @@ export function ScholarshipDetailClient({
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <DeadlineBadge deadline={scholarship.deadline} />
           {scholarship.amount && (
-            <span className="text-xs font-mono font-medium text-emerald bg-emerald-light px-2 py-1 rounded-full">
-              {scholarship.amount}
-            </span>
+            scholarship.amount.length > 80 ? (
+              <div className="basis-full min-w-0 rounded-xl border border-emerald/20 bg-emerald-light/40 px-4 py-3">
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-emerald">Award support</p>
+                <p className="break-words text-sm font-medium leading-relaxed text-emerald">{scholarship.amount}</p>
+              </div>
+            ) : (
+              <span className="text-xs font-mono font-medium text-emerald bg-emerald-light px-2 py-1 rounded-full">
+                {scholarship.amount}
+              </span>
+            )
           )}
           <span className="text-xs text-navy-light capitalize px-2 py-1">
             {scholarship.level === "both" ? "Undergrad & postgrad" : scholarship.level}
