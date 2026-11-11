@@ -63,6 +63,11 @@ const TIER_LABELS: Record<ScholarshipDetail["tier"], string> = {
   unlikely: "Long shot",
 };
 
+function matchLabel(scholarship: ScholarshipDetail): string {
+  const hasFailedGate = scholarship.requirements.some((requirement) => requirement.gating && requirement.status === "not_met");
+  return hasFailedGate ? "Not eligible" : TIER_LABELS[scholarship.tier];
+}
+
 const STATUS_LABELS: Record<ApplicationStatus, string> = {
   in_progress: "In progress",
   submitted: "Submitted",
@@ -184,6 +189,7 @@ export function ScholarshipDetailClient({
   // student at open awards in the same discipline. Dead end becomes a
   // next step.
   const showRejectionRedirect = application?.status === "rejected";
+  const failedGates = scholarship.requirements.filter((requirement) => requirement.gating && requirement.status === "not_met");
 
   return (
     <div>
@@ -193,7 +199,7 @@ export function ScholarshipDetailClient({
           <MatchSeal score={scholarship.score} size={64} />
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium text-navy-light uppercase tracking-wide mb-1">
-              {TIER_LABELS[scholarship.tier]}
+              {matchLabel(scholarship)}
             </p>
             <h1 className="font-display text-2xl font-semibold text-navy leading-snug">{scholarship.title}</h1>
             <p className="text-sm text-navy-light mt-1">{scholarship.provider_name}</p>
@@ -243,6 +249,15 @@ export function ScholarshipDetailClient({
           competitivenessTier={scholarship.competitiveness_tier}
           historicalAcceptanceRate={scholarship.historical_acceptance_rate}
         />
+
+        {failedGates.length > 0 && (
+          <div className="mb-4 rounded-xl border border-rose/25 bg-rose-light px-4 py-3" role="status">
+            <p className="text-sm font-semibold text-rose">Not eligible for this scholarship</p>
+            <p className="mt-1 text-xs leading-relaxed text-ink">
+              {failedGates.map((requirement) => requirement.requirement).join(". ")}.
+            </p>
+          </div>
+        )}
 
         {scholarship.competitivenessFactor < 1 && (
           <p className="text-xs text-navy-light mt-2">

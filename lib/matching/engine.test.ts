@@ -67,4 +67,31 @@ describe("WAAW eligibility rules", () => {
     expect(result.score).toBe(100);
     expect(result.tier).toBe("excellent");
   });
+
+  it("treats a failed year-of-study requirement as a hard eligibility gate", () => {
+    const result = evaluateScholarship(profile({ year_of_study: 200 }), scholarship, [
+      { id: "year", scholarship_id: scholarship.id, field: "year_of_study", operator: "eq", value: 100 },
+    ]);
+
+    expect(result.requirements.find((requirement) => requirement.field === "year_of_study")).toMatchObject({
+      field: "year_of_study",
+      status: "not_met",
+      gating: true,
+    });
+    expect(result.eligibilityScore).toBe(0);
+    expect(result.score).toBe(0);
+    expect(result.rankScore).toBe(0);
+    expect(result.tier).toBe("unlikely");
+  });
+
+  it("treats a failed CGPA threshold as a hard eligibility gate", () => {
+    const result = evaluateScholarship(profile({ gpa: 3.49 }), scholarship, [
+      { id: "gpa", scholarship_id: scholarship.id, field: "gpa", operator: "gte", value: 3.5 },
+    ]);
+
+    expect(result.requirements.find((requirement) => requirement.field === "gpa")).toMatchObject({ field: "gpa", status: "not_met", gating: true });
+    expect(result.eligibilityScore).toBe(0);
+    expect(result.score).toBe(0);
+    expect(result.tier).toBe("unlikely");
+  });
 });
