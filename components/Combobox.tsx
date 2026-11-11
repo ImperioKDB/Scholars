@@ -148,7 +148,6 @@ export function Combobox({
           setQuery(e.target.value);
           setOpen(true);
           setHighlighted(0);
-          if (value) onChange("");
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={handleKeyDown}
