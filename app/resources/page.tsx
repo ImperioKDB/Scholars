@@ -1,89 +1,87 @@
-import Link from "next/link";
 import type { Metadata } from "next";
-import { createClient } from "@/lib/supabase/server";
-import { Breadcrumbs } from "@/components/SeoJsonLd";
+import Link from "next/link";
+import { Breadcrumbs, SeoJsonLd } from "@/components/SeoJsonLd";
+import { Footer } from "@/components/Footer";
+import { OpportunityBridge, ResourceAdSlot, ResourceCard, ResourceEmptyState, ResourceErrorState, ResourcePageFrame } from "@/components/resource-center";
+import { ResourceSearch } from "@/components/resource-center-search";
+import { getResourceHomeWithRepositoryContent } from "@/lib/resource-center";
+import { LOCAL_RESOURCE_CATEGORIES } from "@/lib/resource-content";
 
 export const metadata: Metadata = {
-  title: "Resources for students",
+  title: "Resource Center for students | Scholars",
   description: "Practical guides and trustworthy updates to help students in Nigeria find and pursue better opportunities.",
-  alternates: { canonical: "/resources" },
+  alternates: { canonical: "https://www.scholars.com.ng/resources" },
+  openGraph: { title: "Resource Center for students | Scholars", description: "Practical guides and trustworthy updates for students in Nigeria.", url: "https://www.scholars.com.ng/resources", type: "website" },
 };
-
-type Article = {
-  id: string;
-  slug: string;
-  title: string;
-  excerpt: string | null;
-  article_type: string;
-  published_at: string;
-  reading_time_minutes: number | null;
-  author_name: string;
-};
-type Category = { id: string; slug: string; name: string; description: string | null };
 
 export default async function ResourcesPage() {
-  const supabase = createClient();
-  const [{ data: articles }, { data: categories }] = await Promise.all([
-    supabase
-      .from("resource_public_articles")
-      .select("id,slug,title,excerpt,article_type,published_at,reading_time_minutes,author_name")
-      .order("published_at", { ascending: false })
-      .limit(50),
-    supabase
-      .from("resource_public_categories")
-      .select("id,slug,name,description")
-      .order("display_order", { ascending: true })
-      .limit(30),
-  ]);
-  const rows = (articles ?? []) as Article[];
-  const categoryRows = (categories ?? []) as Category[];
+  let content;
+  try {
+    content = await getResourceHomeWithRepositoryContent();
+  } catch {
+    return <ResourcePageFrame><main className="mx-auto max-w-6xl px-6 py-16"><ResourceErrorState /></main><Footer /></ResourcePageFrame>;
+  }
+
+  const { articles, categories } = content;
+  const visibleCategories = categories.length > 0 ? categories : LOCAL_RESOURCE_CATEGORIES;
+  const featured = articles[0];
+  const latest = featured ? articles.slice(1) : articles;
+  const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "Scholars Resource Center",
+    description: metadata.description,
+    url: `${base}/resources`,
+    isPartOf: { "@type": "WebSite", name: "Scholars", url: base },
+  };
+
   return (
-    <main className="min-h-screen bg-parchment">
-      <section className="border-b border-hairline bg-white">
-        <div className="mx-auto max-w-6xl px-6 pb-14 pt-8 md:pb-20 md:pt-12">
-          <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Resources" }]} />
-          <div className="max-w-3xl">
-            <p className="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-emerald">The Scholars resource desk</p>
-            <h1 className="mt-4 font-display text-4xl font-semibold leading-[1.02] text-navy sm:text-6xl">Useful guidance for the next opportunity.</h1>
-            <p className="mt-5 max-w-2xl text-base leading-7 text-navy-light sm:text-lg">Clear, practical articles about scholarships, applications, deadlines and the decisions that help students in Nigeria move with confidence.</p>
+    <ResourcePageFrame>
+      <SeoJsonLd data={jsonLd} />
+      <main>
+        <section className="border-b border-hairline bg-white">
+          <div className="mx-auto max-w-6xl px-6 pb-14 pt-8 md:pb-20 md:pt-12">
+            <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Resources" }]} />
+            <div className="mt-10 grid gap-8 md:grid-cols-[1fr_280px] md:items-end">
+              <div className="max-w-3xl">
+                <p className="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-emerald">The Scholars resource desk</p>
+                <h1 className="mt-4 font-display text-4xl font-semibold leading-[1.02] text-navy sm:text-6xl">Useful guidance for the next opportunity.</h1>
+                <p className="mt-5 max-w-2xl text-base leading-7 text-navy-light sm:text-lg">Clear, practical articles about scholarships, applications, deadlines and the decisions that help students in Nigeria move with confidence.</p>
+              </div>
+              <div className="border-l-2 border-emerald pl-5 text-sm leading-6 text-navy-light">
+                <p className="font-display text-xl font-semibold text-navy">Read with purpose.</p>
+                <p className="mt-2">No noise, no borrowed advice — just useful context for making your next move.</p>
+              </div>
+            </div>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-navy-light">Search the desk for a practical starting point.</p>
+              <ResourceSearch articles={articles} />
+            </div>
           </div>
-        </div>
-      </section>
-      <section className="mx-auto max-w-6xl px-6 py-10 md:py-14">
-        {categoryRows.length > 0 && (
-          <div className="mb-8 flex flex-wrap gap-2" aria-label="Resource categories">
-            {categoryRows.map((category) => (
-              <Link key={category.id} href={`/resources/category/${category.slug}`} className="rounded-seal border border-hairline bg-white px-4 py-2 text-sm font-medium text-navy-light transition-colors hover:border-navy hover:text-navy">
-                {category.name}
-              </Link>
-            ))}
+        </section>
+
+        <section className="mx-auto max-w-6xl px-6 py-10 md:py-14">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald">Browse by subject</p>
+              <h2 className="mt-2 font-display text-2xl font-semibold text-navy">Find the thread you need.</h2>
+            </div>
+            {visibleCategories.length > 0 && <span className="text-sm text-navy-light">{visibleCategories.length} active {visibleCategories.length === 1 ? "subject" : "subjects"}</span>}
           </div>
-        )}
-        {rows.length === 0 ? (
-          <div className="rounded-2xl border border-hairline bg-white p-8 md:p-12">
-            <p className="font-mono text-xs uppercase tracking-[0.16em] text-amber">Coming soon</p>
-            <h2 className="mt-3 font-display text-3xl font-semibold text-navy">The first guides are being prepared.</h2>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-navy-light">The Resource Center is ready for reviewed, published content. Check back soon for practical guidance from the Scholars team.</p>
-          </div>
-        ) : (
-          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {rows.map((article) => (
-              <article key={article.id} className="flex h-full flex-col rounded-2xl border border-hairline bg-white p-6 shadow-card transition-transform hover:-translate-y-0.5">
-                <div className="flex items-center justify-between gap-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald">
-                  <span>{article.article_type}</span>
-                  {article.reading_time_minutes ? <span className="text-navy-light">{article.reading_time_minutes} min read</span> : null}
-                </div>
-                <h2 className="mt-5 font-display text-2xl font-semibold leading-tight text-navy"><Link href={`/resources/${article.slug}`} className="hover:underline">{article.title}</Link></h2>
-                {article.excerpt && <p className="mt-3 line-clamp-3 text-sm leading-6 text-navy-light">{article.excerpt}</p>}
-                <div className="mt-auto flex items-center justify-between gap-3 pt-7 text-xs text-navy-light">
-                  <span>By {article.author_name}</span>
-                  <Link href={`/resources/${article.slug}`} className="font-semibold text-navy hover:underline">Read guide →</Link>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
-    </main>
+          {visibleCategories.length > 0 && <div className="mt-5 flex flex-wrap gap-2" aria-label="Resource categories">{visibleCategories.map((category) => <Link key={category.id} href={`/resources/category/${category.slug}`} className="rounded-seal border border-hairline bg-white px-4 py-2.5 text-sm font-medium text-navy-light transition-colors hover:border-navy hover:text-navy">{category.name}</Link>)}</div>}
+        </section>
+
+        <section className="mx-auto max-w-6xl px-6 pb-12 md:pb-16">
+          {articles.length === 0 ? <ResourceEmptyState /> : <>
+            {featured && <div><div className="mb-4 flex items-center justify-between gap-4"><p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald">Start here</p><span className="text-xs text-navy-light">Newest published guide</span></div><ResourceCard article={featured} featured /></div>}
+            {latest.length > 0 && <div className="mt-14"><div className="mb-5"><p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald">From the desk</p><h2 className="mt-2 font-display text-3xl font-semibold text-navy">Latest guidance</h2></div><div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">{latest.map((article) => <ResourceCard key={article.id} article={article} />)}</div></div>}
+            <div className="mt-14"><OpportunityBridge /></div>
+            <ResourceAdSlot placement="home" />
+          </>}
+        </section>
+      </main>
+      <Footer />
+    </ResourcePageFrame>
   );
 }
