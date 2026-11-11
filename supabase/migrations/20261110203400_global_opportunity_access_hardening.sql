@@ -133,28 +133,57 @@ GRANT SELECT ON TABLE public.scholarship_discussions,
 
 DROP POLICY IF EXISTS scholarship_discussions_public_read
   ON public.scholarship_discussions;
-CREATE POLICY scholarship_discussions_authenticated_read
-  ON public.scholarship_discussions FOR SELECT TO authenticated
-  USING (
-    status = 'published'
-    AND EXISTS (
-      SELECT 1 FROM public.scholarships AS s
-      WHERE s.id = scholarship_discussions.scholarship_id
-        AND s.verified IS TRUE
-    )
-  );
+-- Production may already have this authenticated policy from a newer,
+-- separately-applied migration. Preserve it rather than replacing unknown
+-- live policy logic; add the reviewed fallback only when it is absent.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'scholarship_discussions'
+      AND policyname = 'scholarship_discussions_authenticated_read'
+  ) THEN
+    EXECUTE $policy$
+      CREATE POLICY scholarship_discussions_authenticated_read
+        ON public.scholarship_discussions FOR SELECT TO authenticated
+        USING (
+          status = 'published'
+          AND EXISTS (
+            SELECT 1 FROM public.scholarships AS s
+            WHERE s.id = scholarship_discussions.scholarship_id
+              AND s.verified IS TRUE
+          )
+        )
+    $policy$;
+  END IF;
+END;
+$$;
 
 DROP POLICY IF EXISTS scholarship_prompts_public_read
   ON public.scholarship_prompts;
-CREATE POLICY scholarship_prompts_authenticated_read
-  ON public.scholarship_prompts FOR SELECT TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.scholarships AS s
-      WHERE s.id = scholarship_prompts.scholarship_id
-        AND s.verified IS TRUE
-    )
-  );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'scholarship_prompts'
+      AND policyname = 'scholarship_prompts_authenticated_read'
+  ) THEN
+    EXECUTE $policy$
+      CREATE POLICY scholarship_prompts_authenticated_read
+        ON public.scholarship_prompts FOR SELECT TO authenticated
+        USING (
+          EXISTS (
+            SELECT 1 FROM public.scholarships AS s
+            WHERE s.id = scholarship_prompts.scholarship_id
+              AND s.verified IS TRUE
+          )
+        )
+    $policy$;
+  END IF;
+END;
+$$;
 
 -- These are the only public community-data RPCs found in the tracked migration
 -- history; the app calls them only from authenticated community surfaces.
