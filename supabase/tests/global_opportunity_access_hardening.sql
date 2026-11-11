@@ -120,5 +120,12 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'a deliberately public contributor-profile RPC was disabled';
   END IF;
+
+  IF has_table_privilege('anon', 'public.opportunity_public_previews', 'SELECT') THEN
+    RAISE EXCEPTION 'anon can still SELECT the legacy opportunity preview view';
+  END IF;
+  IF has_table_privilege('anon', 'public.scholarship_public_previews', 'SELECT') THEN
+    RAISE EXCEPTION 'anon can still SELECT the legacy scholarship preview view';
+  END IF;
 END;
 $$;
