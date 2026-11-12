@@ -1,7 +1,8 @@
 # Scholars OpenCode Skills Audit and Handoff
 
 **Repository:** `ImperioKDB/Scholars`  
-**Audited revision:** `767287b9aadc6e8f01ffe6bde8497ae956bd0dd7`  
+**Audited base revision:** `767287b9aadc6e8f01ffe6bde8497ae956bd0dd7`  
+**Final pushed revision:** `8196f6477f9e523fa77e8fc07ef4c3e132c0be59`  
 **Audit date:** 2026-11-12
 
 ## Repository inspection
@@ -88,7 +89,7 @@ The `supabase` skill must be used before database, RLS, migration, Auth, Storage
 
 After installing the locked dependencies with `npm ci`, the existing test suite passed: **25 test files and 132 tests passed**. The production build was also attempted. It reached static-page generation but failed because the sandbox has no project Supabase environment variables; the existing application attempts to create Supabase clients during prerendering and reports missing project URL/API configuration on routes including `/`, `/login`, `/signup`, `/resources`, and legal/auth pages. No credentials were printed or created during this validation.
 
-No Vercel deployment was triggered because this task explicitly forbids production deployment changes and only prepares OpenCode skills and policy. No Supabase connection or schema operation was needed. The remaining manual blocker is OpenCode runtime verification.
+The push triggered Vercel’s Git deployment for the `scholars` project. Deployment `dpl_F5td4AVsReA1XD1paQhqhtDrwQnN` reached `READY` for production and was aliased to `scholars.com.ng`, `www.scholars.com.ng`, and the Vercel project domains. No Supabase connection or schema operation was needed. The remaining manual blocker is OpenCode runtime verification.
 
 ## Resource Centre readiness
 
