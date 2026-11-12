@@ -2,32 +2,106 @@
 
 import React from "react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export function ResourceMobileNav() {
   const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Closes the menu and returns focus to the trigger (Escape / link activation).
+  const closeAndFocusTrigger = useCallback(() => {
+    setOpen(false);
+    buttonRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  // Closes the menu without moving focus (outside click). The element the user
+  // actually tapped receives focus naturally; we do not steal it back to the
+  // trigger, which would disrupt touch interaction.
+  const close = useCallback(() => {
+    setOpen(false);
+  }, []);
+
+  const toggle = useCallback(() => {
+    setOpen((value) => !value);
+  }, []);
+
+  // Escape closes the menu and returns focus to the trigger.
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") closeAndFocusTrigger();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open]);
+  }, [open, closeAndFocusTrigger]);
+
+  // Outside-click dismissal: only fires when the pointer lands outside both the
+  // trigger and the menu panel, so keyboard and in-menu touch are undisturbed.
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      if (!open) return;
+      const target = event.target as Node | null;
+      if (
+        target &&
+        !buttonRef.current?.contains(target) &&
+        !menuRef.current?.contains(target)
+      ) {
+        close();
+      }
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [open, close]);
+
   return (
     <div className="md:hidden">
-      <button type="button" aria-expanded={open} aria-controls="resource-mobile-menu" onClick={() => setOpen((value) => !value)} className="rounded-seal border border-hairline px-3 py-2 text-sm font-semibold text-navy">
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-expanded={open}
+        aria-controls="resource-mobile-menu"
+        onClick={toggle}
+        className="rounded-seal border border-hairline px-3 py-2 text-sm font-semibold text-navy"
+        style={{ touchAction: "manipulation" }}
+      >
         {open ? "Close" : "Menu"}
       </button>
-      {open && (
-        <div id="resource-mobile-menu" className="absolute inset-x-0 z-20 border-b border-hairline bg-white px-6 py-4 shadow-card">
-          <nav aria-label="Mobile Resource Center navigation" className="grid gap-1 text-sm font-medium text-navy-light">
-            <Link href="/resources" onClick={() => setOpen(false)} className="rounded-lg px-3 py-3 hover:bg-navy-50">Resource desk</Link>
-            <Link href="/scholarships-in-nigeria" onClick={() => setOpen(false)} className="rounded-lg px-3 py-3 hover:bg-navy-50">Find scholarships</Link>
-            <Link href="/opportunities-for-students" onClick={() => setOpen(false)} className="rounded-lg px-3 py-3 hover:bg-navy-50">Opportunities</Link>
-          </nav>
-        </div>
-      )}
+      {/* Always in the DOM so aria-controls resolves in both states. Hidden
+          visually and from the accessibility tree when closed. */}
+      <div
+        ref={menuRef}
+        id="resource-mobile-menu"
+        hidden={!open}
+        className="absolute inset-x-0 z-20 border-b border-hairline bg-white px-6 py-4 shadow-card"
+      >
+        <nav aria-label="Mobile Resource Center navigation" className="grid gap-1 text-sm font-medium text-navy-light">
+          <Link
+            href="/resources"
+            onClick={closeAndFocusTrigger}
+            className="rounded-lg px-3 py-3 hover:bg-navy-50"
+            style={{ touchAction: "manipulation" }}
+          >
+            Resource desk
+          </Link>
+          <Link
+            href="/scholarships-in-nigeria"
+            onClick={closeAndFocusTrigger}
+            className="rounded-lg px-3 py-3 hover:bg-navy-50"
+            style={{ touchAction: "manipulation" }}
+          >
+            Find scholarships
+          </Link>
+          <Link
+            href="/opportunities-for-students"
+            onClick={closeAndFocusTrigger}
+            className="rounded-lg px-3 py-3 hover:bg-navy-50"
+            style={{ touchAction: "manipulation" }}
+          >
+            Opportunities
+          </Link>
+        </nav>
+      </div>
     </div>
   );
 }
