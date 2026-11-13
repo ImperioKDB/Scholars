@@ -29,6 +29,7 @@ export type Requirement = {
   status: RequirementStatus;
   requirement: string;
   detail: string;
+  gating?: boolean;
 };
 
 const REQ_STATUS_TONE: Record<RequirementStatus, string> = {

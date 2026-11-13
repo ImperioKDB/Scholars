@@ -7,6 +7,7 @@ import { AuthShell } from "@/components/AuthShell";
 import { FormField, inputClass } from "@/components/FormField";
 import { StatusMessage } from "@/components/StatusMessage";
 import { PasswordField } from "@/components/PasswordField";
+import { PasswordRequirements } from "@/components/PasswordRequirements";
 import { AuthOtp } from "@/components/AuthOtp";
 import { validatePasswordStrength } from "@/lib/auth/password";
 import { normalizeEmail } from "@/lib/auth/email";
@@ -220,6 +221,7 @@ function SignupForm() {
             placeholder="At least 8 characters"
             autoComplete="new-password"
           />
+          <PasswordRequirements password={password} />
         </FormField>
         <button
           type="submit"

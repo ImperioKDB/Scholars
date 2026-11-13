@@ -418,9 +418,10 @@ export function DashboardClient({
             const met = m.requirements.filter((r) => r.status === "met").length;
             const total = m.requirements.filter((r) => r.status !== "unverifiable").length;
             const missingLabels = m.requirements.filter((r) => r.status === "missing_data").map((r) => r.label);
+            const ineligibleLabels = m.requirements.filter((r) => r.status === "not_met").map((r) => r.label);
             return (
               <div key={m.id} data-tour={i === 0 ? "save" : undefined}>
-                <ScholarshipCard scholarship={m} score={m.score} metCount={met} totalCount={total} missingLabels={missingLabels}
+                <ScholarshipCard scholarship={m} score={m.score} metCount={met} totalCount={total} missingLabels={missingLabels} ineligibleLabels={ineligibleLabels}
                   saved={savedIds.has(m.id)} pending={pendingIds.has(m.id)} onToggleSave={() => toggleSave(m.id)} sharerId={userId} firstSaveCelebration={celebrationId === m.id} />
               </div>
             );
@@ -436,8 +437,9 @@ export function DashboardClient({
               const met = m.requirements.filter((r) => r.status === "met").length;
               const total = m.requirements.filter((r) => r.status !== "unverifiable").length;
               const missingLabels = m.requirements.filter((r) => r.status === "missing_data").map((r) => r.label);
+              const ineligibleLabels = m.requirements.filter((r) => r.status === "not_met").map((r) => r.label);
               return (
-                <ScholarshipCard key={m.id} scholarship={m} score={m.score} metCount={met} totalCount={total} missingLabels={missingLabels}
+                <ScholarshipCard key={m.id} scholarship={m} score={m.score} metCount={met} totalCount={total} missingLabels={missingLabels} ineligibleLabels={ineligibleLabels}
                   saved={savedIds.has(m.id)} pending={pendingIds.has(m.id)} onToggleSave={() => toggleSave(m.id)} sharerId={userId} firstSaveCelebration={celebrationId === m.id} />
               );
             })}
