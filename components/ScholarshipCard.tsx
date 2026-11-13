@@ -68,6 +68,7 @@ export function ScholarshipCard({
   metCount,
   totalCount,
   missingLabels,
+  ineligibleLabels,
   saved,
   onToggleSave,
   pending,
@@ -79,6 +80,7 @@ export function ScholarshipCard({
   metCount?: number;
   totalCount?: number;
   missingLabels?: string[];
+  ineligibleLabels?: string[];
   saved: boolean;
   onToggleSave: () => void;
   pending?: boolean;
@@ -151,6 +153,11 @@ export function ScholarshipCard({
         )}
         {missingLabels && missingLabels.length > 0 && (
           <p className="text-xs text-amber mt-1.5">Missing: {missingLabels.join(", ")}</p>
+        )}
+        {score === 0 && (
+          <p className="text-xs text-rose mt-1.5">
+            Not eligible{ineligibleLabels && ineligibleLabels.length > 0 ? `: ${ineligibleLabels.join(", ")}` : ""}
+          </p>
         )}
       </div>
       <div className="absolute top-5 right-5 z-10 flex items-center gap-3.5">

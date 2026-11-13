@@ -63,6 +63,11 @@ const TIER_LABELS: Record<ScholarshipDetail["tier"], string> = {
   unlikely: "Long shot",
 };
 
+function matchLabel(scholarship: ScholarshipDetail): string {
+  const hasFailedGate = scholarship.requirements.some((requirement) => requirement.gating && requirement.status === "not_met");
+  return hasFailedGate ? "Not eligible" : TIER_LABELS[scholarship.tier];
+}
+
 const STATUS_LABELS: Record<ApplicationStatus, string> = {
   in_progress: "In progress",
   submitted: "Submitted",
@@ -70,6 +75,17 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
   rejected: "Rejected",
   not_applied: "Didn't apply",
 };
+
+const NMSS_APPLICATION_URL = "https://csr-ngscholarship.totalenergies.com/scholarships/nmss";
+const NMSS_GOVERNMENT_FORM_URL =
+  "https://dragnet-solutions.com/wp-content/uploads/2025/06/NNPC-SNEPCo-NATIONAL-UNIVERSITY-SCHOLARSHIP-GOVERNMENT-OFFICIAL-INFORMATION-FORM-1.pdf";
+
+function hasNmssGovernmentForm(scholarship: ScholarshipDetail): boolean {
+  return (
+    scholarship.application_url === NMSS_APPLICATION_URL &&
+    scholarship.title.toLowerCase().includes("national merit scholarship")
+  );
+}
 
 export function ScholarshipDetailClient({
   scholarship,
@@ -184,6 +200,7 @@ export function ScholarshipDetailClient({
   // student at open awards in the same discipline. Dead end becomes a
   // next step.
   const showRejectionRedirect = application?.status === "rejected";
+  const failedGates = scholarship.requirements.filter((requirement) => requirement.gating && requirement.status === "not_met");
 
   return (
     <div>
@@ -193,7 +210,7 @@ export function ScholarshipDetailClient({
           <MatchSeal score={scholarship.score} size={64} />
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium text-navy-light uppercase tracking-wide mb-1">
-              {TIER_LABELS[scholarship.tier]}
+              {matchLabel(scholarship)}
             </p>
             <h1 className="font-display text-2xl font-semibold text-navy leading-snug">{scholarship.title}</h1>
             <p className="text-sm text-navy-light mt-1">{scholarship.provider_name}</p>
@@ -243,6 +260,15 @@ export function ScholarshipDetailClient({
           competitivenessTier={scholarship.competitiveness_tier}
           historicalAcceptanceRate={scholarship.historical_acceptance_rate}
         />
+
+        {failedGates.length > 0 && (
+          <div className="mb-4 rounded-xl border border-rose/25 bg-rose-light px-4 py-3" role="status">
+            <p className="text-sm font-semibold text-rose">Not eligible for this scholarship</p>
+            <p className="mt-1 text-xs leading-relaxed text-ink">
+              {failedGates.map((requirement) => requirement.requirement).join(". ")}.
+            </p>
+          </div>
+        )}
 
         {scholarship.competitivenessFactor < 1 && (
           <p className="text-xs text-navy-light mt-2">
@@ -326,6 +352,24 @@ export function ScholarshipDetailClient({
         <div>
           <h2 className="font-display text-lg font-semibold text-navy mb-4">Eligibility requirements</h2>
           <RequirementsList requirements={scholarship.requirements} />
+          {hasNmssGovernmentForm(scholarship) && (
+            <div className="mt-6 rounded-xl border border-navy/15 bg-navy-50 p-4" aria-labelledby="nmss-government-form-title">
+              <h3 id="nmss-government-form-title" className="text-sm font-semibold text-navy">
+                Government official declaration form
+              </h3>
+              <a
+                href={NMSS_GOVERNMENT_FORM_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-flex items-center gap-2 rounded-seal bg-navy px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-navy-light"
+              >
+                Open the official form <span aria-hidden="true">&rarr;</span>
+              </a>
+              <p className="mt-3 text-xs leading-relaxed text-navy-light">
+                This PDF is a government-official declaration and compliance form, not the online scholarship application. The supplied copy shows award year 2025, so confirm in the live 2026/2027 TotalEnergies application flow whether it is requested before completing or submitting it. Never pay anyone to access the form or apply.
+              </p>
+            </div>
+          )}
           <ReportScholarshipButton scholarshipId={scholarship.id} />
         </div>
       </div>

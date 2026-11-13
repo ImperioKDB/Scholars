@@ -1,8 +1,11 @@
 import type { MetadataRoute } from "next";
-import { readAllPublicRows, readAllResourceRows, type SitemapRow } from "@/lib/sitemap-data";
+import { readAllPublicRows, readAllResourceCategoryRows, readAllResourceRows, type SitemapRow } from "@/lib/sitemap-data";
 
 // Query Supabase at request time so CI/build prerendering does not require live
-// public data. Fail-closed behavior remains active when the route is requested.
+// public data. Catalogue query failures are not swallowed: an unsuccessful
+// query propagates as a server error instead of being masked as a complete,
+// incomplete sitemap returning HTTP 200. An empty catalogue is a valid result
+// and returns static/resource entries only.
 export const dynamic = "force-dynamic";
 const STATIC_PATHS = [
   "/",
@@ -10,6 +13,7 @@ const STATIC_PATHS = [
   "/reviews",
   "/scholarships-in-nigeria",
   "/opportunities-for-students",
+  "/resources",
   "/legal/privacy",
   "/legal/terms",
 ];
@@ -22,20 +26,37 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: path === "/" ? 1.0 : 0.5,
   }));
 
-  // Verified rows are the public source of truth. Closed records remain
-  // eligible for the sitemap when their detail pages retain useful history;
-  // active feeds still apply their own deadline filters.
+  // The approved public catalogue views are the source of truth for anonymous
+  // catalogue access. Raw scholarships/opportunities tables are not readable
+  // by the anon role. Neither view exposes updated_at or any content-modification
+  // timestamp: last_verified_at is a verification timestamp, not a modification
+  // timestamp, so it is not used as lastModified. lastModified is omitted for
+  // both scholarships and opportunities rather than publishing misleading values.
+  // Closed (verified) records remain eligible: their detail pages render a CLOSED
+  // status and stay discoverable here.
   const [scholarships, opportunities] = await Promise.all([
-    readAllPublicRows<SitemapRow>("scholarships", "id, slug, updated_at"),
-    readAllPublicRows<SitemapRow>("opportunities", "id, slug, updated_at"),
+    readAllPublicRows<SitemapRow>(
+      "scholarships_public_preview_v1",
+      "id, slug",
+    ),
+    readAllPublicRows<SitemapRow>(
+      "opportunities_public_preview_v1",
+      "id, slug",
+    ),
   ]);
-  const resources = await readAllResourceRows();
+
+  const [resources, resourceCategoryRows] = await Promise.all([
+    readAllResourceRows(),
+    readAllResourceCategoryRows(),
+  ]);
 
   const scholarshipRoutes: MetadataRoute.Sitemap = scholarships.flatMap((row) =>
     row.slug
       ? [{
           url: `${base}/scholarship/${row.slug}`,
-          lastModified: new Date(row.updated_at),
+          // lastModified omitted: last_verified_at is a verification timestamp,
+          // not a content-modification timestamp.
+          lastModified: undefined,
           changeFrequency: "weekly" as const,
           priority: 0.8,
         }]
@@ -45,7 +66,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     row.slug
       ? [{
           url: `${base}/opportunity/${row.slug}`,
-          lastModified: new Date(row.updated_at),
+          // The opportunities preview view exposes no permitted timestamp;
+          // omit lastModified rather than invent one.
+          lastModified: undefined,
           changeFrequency: "weekly" as const,
           priority: 0.7,
         }]
@@ -61,6 +84,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         }]
       : [],
   );
+  const resourceCategoryRoutes: MetadataRoute.Sitemap = [...new Set(resourceCategoryRows.map((row) => row.slug).filter(Boolean))].map((slug) => ({
+    url: `${base}/resources/category/${slug}`,
+    changeFrequency: "monthly" as const,
+    priority: 0.6,
+  }));
 
-  return [...staticRoutes, ...scholarshipRoutes, ...opportunityRoutes, ...resourceRoutes];
+  return [...staticRoutes, ...scholarshipRoutes, ...opportunityRoutes, ...resourceCategoryRoutes, ...resourceRoutes];
 }

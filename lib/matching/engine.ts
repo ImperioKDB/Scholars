@@ -35,9 +35,9 @@ const SUPPORTED_FIELDS = new Set([
 // categorically ineligible (not just "less competitive"): citizenship,
 // state/LGA-of-origin restrictions, age brackets, gender-restricted awards,
 // discipline restrictions, and public-institution-only awards all behave
-// this way. Numeric thresholds (GPA, JAMB, WAEC credits, year of study) stay
-// non-gating so a near-miss still scores proportionally instead of being
-// zeroed out.
+// this way. Academic and exam thresholds are also hard gates: a scholarship
+// that explicitly requires a different level, CGPA, JAMB score, or WAEC
+// result is not an eligible match when the supplied profile fails it.
 const GATING_FIELDS = new Set([
   "discipline",
   "nationality",
@@ -46,6 +46,10 @@ const GATING_FIELDS = new Set([
   "lga_of_origin",
   "age",
   "institution_type",
+  "gpa",
+  "year_of_study",
+  "jamb_score",
+  "waec_credit_count",
 ]);
 
 // Boolean fields with a real default (false) rather than "unset" -- missing
@@ -382,7 +386,11 @@ export function evaluateScholarship(
     const metCount = evaluable.filter((r) => r.status === "met").length;
     eligibilityScore = Math.round((metCount / evaluable.length) * 100);
   }
-  if (gatingFailed) eligibilityScore = Math.min(eligibilityScore, 15);
+  // A failed mandatory requirement is not a low-confidence match. It is an
+  // eligibility failure, so never expose a high (or merely non-zero) score
+  // for it. Missing profile data remains distinguishable from a known
+  // failure and continues to be surfaced as a profile-completion nudge.
+  if (gatingFailed) eligibilityScore = 0;
 
   const competitivenessFactor = computeCompetitivenessFactor(scholarship);
 
@@ -391,9 +399,9 @@ export function evaluateScholarship(
   // a competitiveness factor through it would just produce a confusing
   // fractional single-digit number. Competitiveness only discounts a
   // score that's actually reflecting real eligibility.
-  const score = gatingFailed ? eligibilityScore : Math.round(eligibilityScore * competitivenessFactor);
+  const score = gatingFailed ? 0 : Math.round(eligibilityScore * competitivenessFactor);
 
-  const rankScore = Math.round(score * 0.85 + profile.profile_completeness * 0.15);
+  const rankScore = gatingFailed ? 0 : Math.round(score * 0.85 + profile.profile_completeness * 0.15);
 
   return {
     ...scholarship,
