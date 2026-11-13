@@ -28,6 +28,16 @@ const CSP =
   "report-to csp-endpoint";
 const nextConfig = {
   reactStrictMode: true,
+  async redirects() {
+    return [
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'scholars.com.ng' }],
+        destination: 'https://www.scholars.com.ng/:path*',
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {
