@@ -76,6 +76,17 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
   not_applied: "Didn't apply",
 };
 
+const NMSS_APPLICATION_URL = "https://csr-ngscholarship.totalenergies.com/scholarships/nmss";
+const NMSS_GOVERNMENT_FORM_URL =
+  "https://dragnet-solutions.com/wp-content/uploads/2025/06/NNPC-SNEPCo-NATIONAL-UNIVERSITY-SCHOLARSHIP-GOVERNMENT-OFFICIAL-INFORMATION-FORM-1.pdf";
+
+function hasNmssGovernmentForm(scholarship: ScholarshipDetail): boolean {
+  return (
+    scholarship.application_url === NMSS_APPLICATION_URL &&
+    scholarship.title.toLowerCase().includes("national merit scholarship")
+  );
+}
+
 export function ScholarshipDetailClient({
   scholarship,
   initialSaved,
@@ -341,6 +352,24 @@ export function ScholarshipDetailClient({
         <div>
           <h2 className="font-display text-lg font-semibold text-navy mb-4">Eligibility requirements</h2>
           <RequirementsList requirements={scholarship.requirements} />
+          {hasNmssGovernmentForm(scholarship) && (
+            <div className="mt-6 rounded-xl border border-navy/15 bg-navy-50 p-4" aria-labelledby="nmss-government-form-title">
+              <h3 id="nmss-government-form-title" className="text-sm font-semibold text-navy">
+                Government official declaration form
+              </h3>
+              <a
+                href={NMSS_GOVERNMENT_FORM_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-flex items-center gap-2 rounded-seal bg-navy px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-navy-light"
+              >
+                Open the official form <span aria-hidden="true">&rarr;</span>
+              </a>
+              <p className="mt-3 text-xs leading-relaxed text-navy-light">
+                This PDF is a government-official declaration and compliance form, not the online scholarship application. The supplied copy shows award year 2025, so confirm in the live 2026/2027 TotalEnergies application flow whether it is requested before completing or submitting it. Never pay anyone to access the form or apply.
+              </p>
+            </div>
+          )}
           <ReportScholarshipButton scholarshipId={scholarship.id} />
         </div>
       </div>
