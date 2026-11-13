@@ -4,8 +4,12 @@ export const SITEMAP_BATCH_SIZE = 500;
 
 export type SitemapRow = {
   slug: string | null;
-  updated_at: string;
+  last_verified_at?: string | null;
 };
+
+export type PublicCatalogTable =
+  | "scholarships_public_preview_v1"
+  | "opportunities_public_preview_v1";
 
 export type ResourceSitemapRow = {
   slug: string | null;
@@ -13,8 +17,9 @@ export type ResourceSitemapRow = {
 };
 
 export async function readAllPublicRows<T extends SitemapRow>(
-  table: "scholarships" | "opportunities",
+  table: PublicCatalogTable,
   select: string,
+  orderBy = "id",
 ): Promise<T[]> {
   const supabase = createPublicClient();
   const rows: T[] = [];
@@ -25,7 +30,7 @@ export async function readAllPublicRows<T extends SitemapRow>(
       .select(select)
       .eq("verified", true)
       .not("slug", "is", null)
-      .order("updated_at", { ascending: false })
+      .order(orderBy, { ascending: false })
       .order("id", { ascending: true })
       .range(from, from + SITEMAP_BATCH_SIZE - 1);
 

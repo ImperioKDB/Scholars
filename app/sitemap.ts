@@ -2,7 +2,10 @@ import type { MetadataRoute } from "next";
 import { readAllPublicRows, readAllResourceRows, type SitemapRow } from "@/lib/sitemap-data";
 
 // Query Supabase at request time so CI/build prerendering does not require live
-// public data. Fail-closed behavior remains active when the route is requested.
+// public data. Catalogue query failures are not swallowed: an unsuccessful
+// query propagates as a server error instead of being masked as a complete,
+// incomplete sitemap returning HTTP 200. An empty catalogue is a valid result
+// and returns static/resource entries only.
 export const dynamic = "force-dynamic";
 const STATIC_PATHS = [
   "/",
@@ -22,12 +25,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: path === "/" ? 1.0 : 0.5,
   }));
 
-  // Verified rows are the public source of truth. Closed records remain
-  // eligible for the sitemap when their detail pages retain useful history;
-  // active feeds still apply their own deadline filters.
+  // The approved public catalogue views are the source of truth for anonymous
+  // catalogue access. Raw scholarships/opportunities tables are not readable
+  // by the anon role. Neither view exposes updated_at: scholarships carry
+  // last_verified_at (used for lastModified where present) while opportunities
+  // have no permitted timestamp, so their entries omit lastModified rather
+  // than invent one. Closed (verified) records remain eligible: their detail
+  // pages render a CLOSED status and stay discoverable here.
   const [scholarships, opportunities] = await Promise.all([
-    readAllPublicRows<SitemapRow>("scholarships", "id, slug, updated_at"),
-    readAllPublicRows<SitemapRow>("opportunities", "id, slug, updated_at"),
+    readAllPublicRows<SitemapRow>(
+      "scholarships_public_preview_v1",
+      "id, slug, last_verified_at",
+      "last_verified_at",
+    ),
+    readAllPublicRows<SitemapRow>(
+      "opportunities_public_preview_v1",
+      "id, slug",
+      "id",
+    ),
   ]);
   const resources = await readAllResourceRows();
 
@@ -35,7 +50,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     row.slug
       ? [{
           url: `${base}/scholarship/${row.slug}`,
-          lastModified: new Date(row.updated_at),
+          lastModified: row.last_verified_at ? new Date(row.last_verified_at) : undefined,
           changeFrequency: "weekly" as const,
           priority: 0.8,
         }]
@@ -45,7 +60,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     row.slug
       ? [{
           url: `${base}/opportunity/${row.slug}`,
-          lastModified: new Date(row.updated_at),
+          // The opportunities preview view exposes no permitted timestamp;
+          // omit lastModified rather than invent one.
+          lastModified: undefined,
           changeFrequency: "weekly" as const,
           priority: 0.7,
         }]
