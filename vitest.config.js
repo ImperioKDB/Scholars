@@ -3,9 +3,9 @@ import path from "node:path";
 
 export default defineConfig({
   resolve: {
-    alias: [
-      { find: "@/", replacement: path.resolve(process.cwd()) + "/" },
-    ],
+    alias: {
+      "@": path.resolve(process.cwd()),
+    },
   },
   test: {
     environment: "jsdom",

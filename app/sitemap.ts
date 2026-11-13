@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { readAllPublicRows, readAllResourceRows, type SitemapRow } from "@/lib/sitemap-data";
+import { readAllPublicRows, readAllResourceCategoryRows, readAllResourceRows, type SitemapRow } from "@/lib/sitemap-data";
 
 // Query Supabase at request time so CI/build prerendering does not require live
 // public data. Catalogue query failures are not swallowed: an unsuccessful
@@ -13,6 +13,7 @@ const STATIC_PATHS = [
   "/reviews",
   "/scholarships-in-nigeria",
   "/opportunities-for-students",
+  "/resources",
   "/legal/privacy",
   "/legal/terms",
 ];
@@ -27,30 +28,35 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // The approved public catalogue views are the source of truth for anonymous
   // catalogue access. Raw scholarships/opportunities tables are not readable
-  // by the anon role. Neither view exposes updated_at: scholarships carry
-  // last_verified_at (used for lastModified where present) while opportunities
-  // have no permitted timestamp, so their entries omit lastModified rather
-  // than invent one. Closed (verified) records remain eligible: their detail
-  // pages render a CLOSED status and stay discoverable here.
+  // by the anon role. Neither view exposes updated_at or any content-modification
+  // timestamp: last_verified_at is a verification timestamp, not a modification
+  // timestamp, so it is not used as lastModified. lastModified is omitted for
+  // both scholarships and opportunities rather than publishing misleading values.
+  // Closed (verified) records remain eligible: their detail pages render a CLOSED
+  // status and stay discoverable here.
   const [scholarships, opportunities] = await Promise.all([
     readAllPublicRows<SitemapRow>(
       "scholarships_public_preview_v1",
-      "id, slug, last_verified_at",
-      "last_verified_at",
+      "id, slug",
     ),
     readAllPublicRows<SitemapRow>(
       "opportunities_public_preview_v1",
       "id, slug",
-      "id",
     ),
   ]);
-  const resources = await readAllResourceRows();
+
+  const [resources, resourceCategoryRows] = await Promise.all([
+    readAllResourceRows(),
+    readAllResourceCategoryRows(),
+  ]);
 
   const scholarshipRoutes: MetadataRoute.Sitemap = scholarships.flatMap((row) =>
     row.slug
       ? [{
           url: `${base}/scholarship/${row.slug}`,
-          lastModified: row.last_verified_at ? new Date(row.last_verified_at) : undefined,
+          // lastModified omitted: last_verified_at is a verification timestamp,
+          // not a content-modification timestamp.
+          lastModified: undefined,
           changeFrequency: "weekly" as const,
           priority: 0.8,
         }]
@@ -78,6 +84,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         }]
       : [],
   );
+  const resourceCategoryRoutes: MetadataRoute.Sitemap = [...new Set(resourceCategoryRows.map((row) => row.slug).filter(Boolean))].map((slug) => ({
+    url: `${base}/resources/category/${slug}`,
+    changeFrequency: "monthly" as const,
+    priority: 0.6,
+  }));
 
-  return [...staticRoutes, ...scholarshipRoutes, ...opportunityRoutes, ...resourceRoutes];
+  return [...staticRoutes, ...scholarshipRoutes, ...opportunityRoutes, ...resourceCategoryRoutes, ...resourceRoutes];
 }
