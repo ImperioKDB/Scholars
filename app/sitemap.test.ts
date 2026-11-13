@@ -102,23 +102,59 @@ describe("sitemap route", () => {
     expect(urls).toContain(`${BASE}/resources`);
   });
 
-  it("includes all six local resource category routes", async () => {
+  it("includes resource category routes only for categories with articles", async () => {
     buildAllChains([], [], [], []);
 
     const result = await sitemap();
     const urls = result.map((entry) => entry.url);
 
-    const expectedCategories = [
-      "scholarship-applications",
-      "essays-and-letters",
-      "interviews-and-tests",
-      "study-abroad-and-funding",
-      "study-techniques",
-      "scam-awareness",
-    ];
-    for (const category of expectedCategories) {
-      expect(urls).toContain(`${BASE}/resources/category/${category}`);
-    }
+    // Categories with local articles are included.
+    expect(urls).toContain(`${BASE}/resources/category/scholarship-applications`);
+    expect(urls).toContain(`${BASE}/resources/category/scam-awareness`);
+    expect(urls).toContain(`${BASE}/resources/category/essays-and-letters`);
+    expect(urls).toContain(`${BASE}/resources/category/study-techniques`);
+    expect(urls).toContain(`${BASE}/resources/category/interviews-and-tests`);
+
+    // "study-abroad-and-funding" has no local or DB articles, so excluded.
+    expect(urls).not.toContain(`${BASE}/resources/category/study-abroad-and-funding`);
+  });
+
+  it("includes a category when a database-backed article is assigned to it", async () => {
+    // "study-abroad-and-funding" has no local articles. Add a DB article-category
+    // mapping for it, and it becomes eligible.
+    buildAllChains([], [], [], [
+      { slug: "study-abroad-and-funding" },
+    ]);
+
+    const result = await sitemap();
+    const urls = result.map((entry) => entry.url);
+
+    expect(urls).toContain(`${BASE}/resources/category/study-abroad-and-funding`);
+  });
+
+  it("excludes a category with no published articles", async () => {
+    buildAllChains([], [], [], []);
+
+    const result = await sitemap();
+    const urls = result.map((entry) => entry.url);
+
+    expect(urls).not.toContain(`${BASE}/resources/category/study-abroad-and-funding`);
+  });
+
+  it("does not produce duplicate category URLs for duplicate category mappings", async () => {
+    buildAllChains([], [], [], [
+      { slug: "scholarship-applications" },
+      { slug: "scholarship-applications" },
+      { slug: "essays-and-letters" },
+    ]);
+
+    const result = await sitemap();
+    const urls = result.map((entry) => entry.url);
+
+    const scholarshipAppsCount = urls.filter((u) => u === `${BASE}/resources/category/scholarship-applications`).length;
+    expect(scholarshipAppsCount).toBe(1);
+    const essaysCount = urls.filter((u) => u === `${BASE}/resources/category/essays-and-letters`).length;
+    expect(essaysCount).toBe(1);
   });
 
   it("includes local articles without Supabase configuration", async () => {

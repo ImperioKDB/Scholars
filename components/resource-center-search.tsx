@@ -4,12 +4,30 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { ResourceArticleCard } from "@/lib/resource-center";
 
-export function ResourceSearch({ articles }: { articles: ResourceArticleCard[] }) {
+export type SearchableArticle = ResourceArticleCard & {
+  content_markdown?: string;
+  categoryNames?: string[];
+};
+
+export function ResourceSearch({ articles }: { articles: SearchableArticle[] }) {
   const [query, setQuery] = useState("");
   const normalized = query.trim().toLowerCase();
   const matches = useMemo(() => {
     if (!normalized) return [];
-    return articles.filter((article) => `${article.title} ${article.excerpt ?? ""} ${article.article_type}`.toLowerCase().includes(normalized)).slice(0, 6);
+    return articles
+      .filter((article) => {
+        const haystack = [
+          article.title,
+          article.excerpt ?? "",
+          article.article_type,
+          article.content_markdown ?? "",
+          article.categoryNames?.join(" ") ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(normalized);
+      })
+      .slice(0, 6);
   }, [articles, normalized]);
 
   return (

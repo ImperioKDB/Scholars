@@ -320,18 +320,24 @@ describe("sitemap resource reader (local fallback + database merge)", () => {
     expect(result.some((row) => row.slug === "how-to-find-legitimate-scholarships")).toBe(true);
   });
 
-  it("returns local resource categories when Supabase is not configured", async () => {
+  it("returns local resource categories with articles when Supabase is not configured", async () => {
     setPublicConfig(false);
 
     const result = await readAllResourceCategoryRows();
 
-    expect(result.length).toBe(6);
+    // Only categories with at least one local article are eligible.
+    // "study-abroad-and-funding" has no local articles and should be excluded.
+    expect(result.length).toBe(5);
     const slugs = result.map((row) => row.slug).filter(Boolean);
     expect(slugs).toContain("scholarship-applications");
     expect(slugs).toContain("scam-awareness");
+    expect(slugs).toContain("essays-and-letters");
+    expect(slugs).toContain("study-techniques");
+    expect(slugs).toContain("interviews-and-tests");
+    expect(slugs).not.toContain("study-abroad-and-funding");
   });
 
-  it("returns local resource categories when the category query fails", async () => {
+  it("returns local resource categories with articles when the category query fails", async () => {
     mockFrom.mockImplementation((requestedTable: string) => {
       if (requestedTable === "resource_public_article_categories") {
         return {
@@ -353,7 +359,11 @@ describe("sitemap resource reader (local fallback + database merge)", () => {
 
     const result = await readAllResourceCategoryRows();
 
-    expect(result.length).toBe(6);
+    // Fall back to local categories that have local articles.
+    expect(result.length).toBe(5);
+    const slugs = result.map((row) => row.slug).filter(Boolean);
+    expect(slugs).toContain("scholarship-applications");
+    expect(slugs).not.toContain("study-abroad-and-funding");
   });
 
   it("merges database resource categories with local categories without duplicate slugs", async () => {
@@ -385,8 +395,107 @@ describe("sitemap resource reader (local fallback + database merge)", () => {
 
     const result = await readAllResourceCategoryRows();
 
+    // "new-db-category" is eligible because it has DB articles.
+    // "scholarship-applications" is eligible because it has both local and DB articles.
     expect(result.some((row) => row.slug === "new-db-category")).toBe(true);
     const duplicates = result.filter((row) => row.slug === "scholarship-applications");
     expect(duplicates.length).toBe(1);
+    // "study-abroad-and-funding" has no articles (local or DB) so is excluded.
+    expect(result.some((row) => row.slug === "study-abroad-and-funding")).toBe(false);
+  });
+
+  it("includes a category when its first published article is added", async () => {
+    // "study-abroad-and-funding" has no local articles. Add a DB article
+    // assigned to it, and it becomes eligible.
+    const dbRows = [
+      { slug: "study-abroad-and-funding" },
+    ];
+    mockFrom.mockImplementation((requestedTable: string) => {
+      if (requestedTable === "resource_public_article_categories") {
+        return {
+          select: vi.fn(() => ({
+            order: vi.fn(() => ({
+              range: vi.fn(async () => ({ data: dbRows, error: null })),
+            })),
+          })),
+        };
+      }
+      return {
+        select: vi.fn(() => ({
+          order: vi.fn(() => ({
+            range: vi.fn(async () => ({ data: [], error: null })),
+          })),
+        })),
+      };
+    });
+
+    const result = await readAllResourceCategoryRows();
+
+    expect(result.some((row) => row.slug === "study-abroad-and-funding")).toBe(true);
+  });
+
+  it("excludes unpublished or ineligible articles from making a category eligible", async () => {
+    // The resource_public_article_categories view already filters to only
+    // published articles. Simulate a DB that returns no category-article
+    // mappings for "study-abroad-and-funding".
+    mockFrom.mockImplementation((requestedTable: string) => {
+      if (requestedTable === "resource_public_article_categories") {
+        return {
+          select: vi.fn(() => ({
+            order: vi.fn(() => ({
+              range: vi.fn(async () => ({ data: [], error: null })),
+            })),
+          })),
+        };
+      }
+      return {
+        select: vi.fn(() => ({
+          order: vi.fn(() => ({
+            range: vi.fn(async () => ({ data: [], error: null })),
+          })),
+        })),
+      };
+    });
+
+    const result = await readAllResourceCategoryRows();
+
+    // "study-abroad-and-funding" has no local articles and no DB articles,
+    // so it must be excluded.
+    expect(result.some((row) => row.slug === "study-abroad-and-funding")).toBe(false);
+    // Categories with local articles remain eligible.
+    expect(result.some((row) => row.slug === "scholarship-applications")).toBe(true);
+  });
+
+  it("does not produce duplicate category URLs for duplicate articles", async () => {
+    const dbRows = [
+      { slug: "scholarship-applications" },
+      { slug: "scholarship-applications" },
+      { slug: "essays-and-letters" },
+    ];
+    mockFrom.mockImplementation((requestedTable: string) => {
+      if (requestedTable === "resource_public_article_categories") {
+        return {
+          select: vi.fn(() => ({
+            order: vi.fn(() => ({
+              range: vi.fn(async () => ({ data: dbRows, error: null })),
+            })),
+          })),
+        };
+      }
+      return {
+        select: vi.fn(() => ({
+          order: vi.fn(() => ({
+            range: vi.fn(async () => ({ data: [], error: null })),
+          })),
+        })),
+      };
+    });
+
+    const result = await readAllResourceCategoryRows();
+
+    const duplicates = result.filter((row) => row.slug === "scholarship-applications");
+    expect(duplicates.length).toBe(1);
+    const essaysDuplicates = result.filter((row) => row.slug === "essays-and-letters");
+    expect(essaysDuplicates.length).toBe(1);
   });
 });

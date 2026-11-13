@@ -129,6 +129,7 @@ async function getRelatedArticles(supabase: ReturnType<typeof createClient>, cat
 
 export function getResourceImageUrl(path: string | null | undefined): string | null {
   if (!isApprovedResourceImagePath(path)) return null;
+  if (!hasPublicSupabaseConfig()) return null;
   const supabase = createClient();
   return supabase.storage.from("site").getPublicUrl(path).data.publicUrl || null;
 }

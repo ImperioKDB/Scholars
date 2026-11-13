@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     if (!result) return { title: "Resource not found" };
     const { article } = result;
     const canonical = getResourceCanonicalUrl(article.slug, article.canonical_url);
-    return { title: `${article.title} | Scholars`, description: article.excerpt ?? undefined, alternates: { canonical }, openGraph: { type: "article", title: article.title, description: article.excerpt ?? undefined, url: canonical, publishedTime: article.published_at, modifiedTime: article.last_reviewed_at ?? article.published_at }, twitter: { card: "summary_large_image", title: article.title, description: article.excerpt ?? undefined } };
+    return { title: article.title, description: article.excerpt ?? undefined, alternates: { canonical }, openGraph: { type: "article", title: article.title, description: article.excerpt ?? undefined, url: canonical, publishedTime: article.published_at, modifiedTime: article.last_reviewed_at ?? article.published_at }, twitter: { card: "summary_large_image", title: article.title, description: article.excerpt ?? undefined } };
   } catch {
     return { title: "Resource not found" };
   }

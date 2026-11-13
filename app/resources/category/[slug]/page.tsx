@@ -12,7 +12,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   try {
     const result = await getResourceCategoryWithRepositoryContent(params.slug);
     if (!result) return { title: "Resource category" };
-    return { title: `${result.category.name} resources | Scholars`, description: result.category.description ?? `Guides and updates in ${result.category.name}.`, alternates: { canonical: `https://www.scholars.com.ng/resources/category/${result.category.slug}` }, openGraph: { title: `${result.category.name} resources | Scholars`, description: result.category.description ?? undefined, url: `https://www.scholars.com.ng/resources/category/${result.category.slug}`, type: "website" } };
+    return { title: `${result.category.name} resources`, description: result.category.description ?? `Guides and updates in ${result.category.name}.`, alternates: { canonical: `https://www.scholars.com.ng/resources/category/${result.category.slug}` }, openGraph: { title: `${result.category.name} resources`, description: result.category.description ?? undefined, url: `https://www.scholars.com.ng/resources/category/${result.category.slug}`, type: "website" } };
   } catch {
     return { title: "Resource category" };
   }

@@ -5,10 +5,16 @@ import { Footer } from "@/components/Footer";
 import { OpportunityBridge, ResourceAdSlot, ResourceCard, ResourceEmptyState, ResourceErrorState, ResourcePageFrame } from "@/components/resource-center";
 import { ResourceSearch } from "@/components/resource-center-search";
 import { getResourceHomeWithRepositoryContent } from "@/lib/resource-center";
-import { LOCAL_RESOURCE_CATEGORIES } from "@/lib/resource-content";
+import {
+  LOCAL_RESOURCE_CATEGORIES,
+  getLocalResourceArticlesForCategory,
+  getLocalResourceArticle,
+  getLocalResourceCategoriesForArticle,
+} from "@/lib/resource-content";
+import type { SearchableArticle } from "@/components/resource-center-search";
 
 export const metadata: Metadata = {
-  title: "Resource Center for students | Scholars",
+  title: "Resource Center for students",
   description: "Practical guides and trustworthy updates to help students in Nigeria find and pursue better opportunities.",
   alternates: { canonical: "https://www.scholars.com.ng/resources" },
   openGraph: { title: "Resource Center for students | Scholars", description: "Practical guides and trustworthy updates for students in Nigeria.", url: "https://www.scholars.com.ng/resources", type: "website" },
@@ -23,7 +29,10 @@ export default async function ResourcesPage() {
   }
 
   const { articles, categories } = content;
-  const visibleCategories = categories.length > 0 ? categories : LOCAL_RESOURCE_CATEGORIES;
+  const visibleCategories = categories.filter((category) => {
+    const localArticles = getLocalResourceArticlesForCategory(category.slug);
+    return localArticles.length > 0;
+  });
   const featured = articles[0];
   const latest = featured ? articles.slice(1) : articles;
   const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.scholars.com.ng";
@@ -47,7 +56,7 @@ export default async function ResourcesPage() {
               <div className="max-w-3xl">
                 <p className="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-emerald">The Scholars resource desk</p>
                 <h1 className="mt-4 font-display text-4xl font-semibold leading-[1.02] text-navy sm:text-6xl">Useful guidance for the next opportunity.</h1>
-                <p className="mt-5 max-w-2xl text-base leading-7 text-navy-light sm:text-lg">Clear, practical articles about scholarships, applications, deadlines and the decisions that help students in Nigeria move with confidence.</p>
+                <p className="mt-5 max-w-2xl text-base leading-7 text-navy-light sm:text-lg">Practical guides on scholarships, applications, academic development, skills, student life, and educational systems to help students in Nigeria move with confidence.</p>
               </div>
               <div className="border-l-2 border-emerald pl-5 text-sm leading-6 text-navy-light">
                 <p className="font-display text-xl font-semibold text-navy">Read with purpose.</p>
@@ -56,7 +65,17 @@ export default async function ResourcesPage() {
             </div>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-navy-light">Search the desk for a practical starting point.</p>
-              <ResourceSearch articles={articles} />
+              <ResourceSearch
+                articles={articles.map((article) => {
+                  const localArticle = getLocalResourceArticle(article.slug);
+                  const content = localArticle?.content_markdown ?? "";
+                  const categoryLinks = localArticle
+                    ? getLocalResourceCategoriesForArticle(localArticle.id)
+                    : [];
+                  const categoryNames = categoryLinks.map((c) => c.name);
+                  return { ...article, content_markdown: content, categoryNames } as SearchableArticle;
+                })}
+              />
             </div>
           </div>
         </section>
