@@ -1,9 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockFrom } = vi.hoisted(() => ({ mockFrom: vi.fn() }));
-vi.mock("./supabase/server", () => ({ createClient: () => ({ from: mockFrom }) }));
+vi.mock("./supabase/server", () => ({
+  createClient: () => ({
+    from: mockFrom,
+    storage: {
+      from: () => ({
+        getPublicUrl: () => ({ data: { publicUrl: "https://example.supabase.co/storage/v1/object/public/resource-center/featured/guide.webp" } }),
+      }),
+    },
+  }),
+}));
 
-import { getResourceCanonicalUrl, getResourceCategory, isApprovedResourceImagePath, ResourceDataError, RESOURCE_PAGE_SIZE } from "./resource-center";
+import { getResourceCanonicalUrl, getResourceCategory, getResourceImageUrl, isApprovedResourceImagePath, ResourceDataError, RESOURCE_PAGE_SIZE } from "./resource-center";
 
 const category = { id: "cat-1", slug: "guides", name: "Guides", description: null, display_order: 1 };
 const card = (id: string) => ({ id, slug: `guide-${id}`, title: `Guide ${id}`, excerpt: null, article_type: "Guide", published_at: `2026-01-${String((Number(id.replace(/\D/g, "")) % 28) + 1).padStart(2, "0")}T00:00:00.000Z`, reading_time_minutes: 5, author_name: "Scholars", featured_image_path: null });
@@ -87,5 +96,35 @@ describe("Resource Center public data contract", () => {
     await getResourceCategory("guides");
     expect(mockFrom.mock.calls.map(([table]) => table)).not.toContain("resource_articles");
     expect(mockFrom.mock.calls.map(([table]) => table)).toEqual(expect.arrayContaining(["resource_public_categories", "resource_public_article_categories", "resource_public_articles"]));
+  });
+
+  describe("getResourceImageUrl Supabase config fallback", () => {
+    const originalUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const originalAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    afterEach(() => {
+      process.env.NEXT_PUBLIC_SUPABASE_URL = originalUrl;
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = originalAnon;
+    });
+
+    it("returns null when public Supabase config is absent", () => {
+      delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+      delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      expect(getResourceImageUrl("resource-center/featured/guide.webp")).toBeNull();
+    });
+
+    it("returns a public URL when config is present and path is approved", () => {
+      process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
+      const url = getResourceImageUrl("resource-center/featured/guide.webp");
+      expect(url).toBe("https://example.supabase.co/storage/v1/object/public/resource-center/featured/guide.webp");
+    });
+
+    it("returns null for unapproved paths even when config is present", () => {
+      process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
+      expect(getResourceImageUrl("../../../etc/passwd")).toBeNull();
+      expect(getResourceImageUrl(null)).toBeNull();
+    });
   });
 });

@@ -7,4 +7,26 @@ describe("Resource Center homepage navigation", () => {
     const source = readFileSync(path.join(process.cwd(), "app/resources/page.tsx"), "utf8");
     expect(source).not.toContain("View all");
   });
+
+  it("does not duplicate the | Scholars brand suffix in the page title", () => {
+    const source = readFileSync(path.join(process.cwd(), "app/resources/page.tsx"), "utf8");
+    const titleMatch = source.match(/title:\s*"([^"]*)"/);
+    expect(titleMatch).not.toBeNull();
+    const title = titleMatch![1];
+    expect(title).not.toContain("| Scholars");
+    expect(title).toBe("Resource Center for students");
+  });
+
+  it("excludes categories with no published articles from visibleCategories", () => {
+    const source = readFileSync(path.join(process.cwd(), "app/resources/page.tsx"), "utf8");
+    expect(source).toContain("getLocalResourceArticlesForCategory");
+    expect(source).toContain("localArticles.length > 0");
+  });
+
+  it("updates hero copy to reflect all six content pillars", () => {
+    const source = readFileSync(path.join(process.cwd(), "app/resources/page.tsx"), "utf8");
+    expect(source).toContain("academic development");
+    expect(source).toContain("student life");
+    expect(source).toContain("educational systems");
+  });
 });
