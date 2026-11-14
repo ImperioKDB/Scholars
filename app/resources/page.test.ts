@@ -15,6 +15,13 @@ describe("Resource Center homepage navigation", () => {
     const title = titleMatch![1];
     expect(title).not.toContain("| Scholars");
     expect(title).toBe("Resource Center for students");
+
+    const ogTitleMatch = source.match(/openGraph:\s*\{\s*title:\s*"([^"]*)"/);
+    if (ogTitleMatch) {
+      const ogTitle = ogTitleMatch[1];
+      expect(ogTitle).not.toContain(" | Scholars | Scholars");
+      expect(ogTitle).toContain(" | Scholars");
+    }
   });
 
   it("excludes categories with no published articles from visibleCategories", () => {

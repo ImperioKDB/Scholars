@@ -103,8 +103,16 @@ describe("Resource Center public data contract", () => {
     const originalAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     afterEach(() => {
-      process.env.NEXT_PUBLIC_SUPABASE_URL = originalUrl;
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = originalAnon;
+      if (originalUrl === undefined) {
+        delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+      } else {
+        process.env.NEXT_PUBLIC_SUPABASE_URL = originalUrl;
+      }
+      if (originalAnon === undefined) {
+        delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      } else {
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = originalAnon;
+      }
     });
 
     it("returns null when public Supabase config is absent", () => {
