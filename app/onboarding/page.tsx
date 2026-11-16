@@ -129,6 +129,7 @@ function OnboardingForm() {
   const [saving, setSaving] = useState(false);
   const [skipPending, setSkipPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retrySave, setRetrySave] = useState<(() => void) | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [dirty, setDirty] = useState(false);
@@ -364,43 +365,46 @@ function OnboardingForm() {
     });
   }
   async function saveProfileAndGoDashboard() {
+    setRetrySave(null);
     setSaving(true);
     setError(null);
     try {
       const res = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(profilePayload(form)) });
       if (res.status === 401) { router.replace(`/login?next=${encodeURIComponent(onboardingPath)}`); return; }
-      if (!res.ok) { setError("Couldn't save your profile. Please try again. Your draft is still safe."); return; }
+      if (!res.ok) { setError("Couldn't save your profile. Please try again. Your draft is still safe."); setRetrySave(saveProfileAndGoDashboard); return; }
       trackStepCompletion(0, "provisional_matches");
       terminalEventTracked.current = true; setDirty(false); clearDraft(); router.push(returnTo); router.refresh();
     } catch {
-      setError("Couldn't save your profile. Check your connection and try again. Your draft is still safe.");
+      setError("Couldn't save your profile. Check your connection and try again. Your draft is still safe."); setRetrySave(saveProfileAndGoDashboard);
     } finally { setSaving(false); }
   }
   async function handleFinish() {
     const err = validateStep();
     if (err) { setError(err); return; }
+    setRetrySave(null);
     setSaving(true); setError(null);
     try {
       const res = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(profilePayload(form)) });
       if (res.status === 401) { router.replace(`/login?next=${encodeURIComponent(onboardingPath)}`); return; }
-      if (!res.ok) { setError("Couldn't save your profile. Please try again. Your draft is still safe."); return; }
+      if (!res.ok) { setError("Couldn't save your profile. Please try again. Your draft is still safe."); setRetrySave(handleFinish); return; }
       const validWaecRows = waecRows.filter((r) => r.subject && r.grade);
       const waecRes = await fetch("/api/profile/waec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ results: validWaecRows.map((r) => ({ subject: r.subject, grade: r.grade })) }) });
-      if (!waecRes.ok) { setError("Your profile saved, but your WAEC results didn't. You can retry from this page."); return; }
+      if (!waecRes.ok) { setError("Your profile saved, but your WAEC results didn't. You can retry from this page."); setRetrySave(handleFinish); return; }
       trackStepCompletion(STEPS.length - 1, "finish"); terminalEventTracked.current = true; setDirty(false); clearDraft(); router.push(returnTo); router.refresh();
     } catch {
-      setError("Couldn't save your profile. Check your connection and try again. Your draft is still safe.");
+      setError("Couldn't save your profile. Check your connection and try again. Your draft is still safe."); setRetrySave(handleFinish);
     } finally { setSaving(false); }
   }
   async function handleSkip() {
+    setRetrySave(null);
     setSkipPending(true); setError(null);
     try {
       const res = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(profilePayload(form)) });
       if (res.status === 401) { router.replace(`/login?next=${encodeURIComponent(onboardingPath)}`); return; }
-      if (!res.ok) { setError("Couldn't save before skipping. Your draft is still safe; try again."); return; }
+      if (!res.ok) { setError("Couldn't save before skipping. Your draft is still safe; try again."); setRetrySave(handleSkip); return; }
       trackSkip(); clearDraft(); setDirty(false); router.push(returnTo); router.refresh();
     } catch {
-      setError("Couldn't save before skipping. Check your connection and try again. Your draft is still safe.");
+      setError("Couldn't save before skipping. Check your connection and try again. Your draft is still safe."); setRetrySave(handleSkip);
     } finally { setSkipPending(false); }
   }
   if (loading) {
@@ -427,7 +431,7 @@ function OnboardingForm() {
       </header>
       <main className="mx-auto max-w-2xl px-4 sm:px-6 py-8 sm:py-12">
         <StepIndicator steps={STEPS} current={step} />
-        <form onSubmit={(event) => { event.preventDefault(); if (step < STEPS.length - 1) goNext(); else void handleFinish(); }} className="bg-white rounded-2xl border border-hairline shadow-card p-5 sm:p-8">
+        <form onSubmit={(event) => { event.preventDefault(); if (step < STEPS.length - 1) goNext(); else void handleFinish(); }} className="bg-white rounded-2xl border border-hairline shadow-card p-4 sm:p-5">
           <h1 className="font-display text-2xl font-semibold text-navy mb-1">
             {step === 0 && "Core details"}
             {step === 1 && "Personal information"}
@@ -621,7 +625,16 @@ function OnboardingForm() {
           <div className="sr-only" aria-live="polite" aria-atomic="true">
             {saving || skipPending ? "Saving your profile…" : error ? error : ""}
           </div>
-          {error && <StatusMessage tone="error" className="mb-4">{error}{loadFailed && <button type="button" onClick={() => { setLoading(true); setLoadAttempt((n) => n + 1); }} className="ml-2 font-medium underline">Try again</button>}</StatusMessage>}
+          {error && (
+            <StatusMessage tone="error" className="mb-4">
+              {error}
+              {retrySave ? (
+                <button type="button" onClick={retrySave} className="ml-2 font-medium underline">Try again</button>
+              ) : loadFailed ? (
+                <button type="button" onClick={() => { setLoading(true); setLoadAttempt((n) => n + 1); }} className="ml-2 font-medium underline">Try again</button>
+              ) : null}
+            </StatusMessage>
+          )}
           <div className="flex items-center justify-between mt-6 pt-6 border-t border-hairline gap-3">
             <button type="button" onClick={goBack} disabled={step === 0 || saving || skipPending}
               className="text-sm font-medium text-navy-light hover:text-navy disabled:opacity-0 disabled:pointer-events-none">
