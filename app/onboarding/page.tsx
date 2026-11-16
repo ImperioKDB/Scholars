@@ -371,11 +371,11 @@ function OnboardingForm() {
     try {
       const res = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(profilePayload(form)) });
       if (res.status === 401) { router.replace(`/login?next=${encodeURIComponent(onboardingPath)}`); return; }
-      if (!res.ok) { setError("Couldn't save your profile. Please try again. Your draft is still safe."); setRetrySave(saveProfileAndGoDashboard); return; }
+      if (!res.ok) { setError("Couldn't save your profile. Please try again. Your draft is still safe."); setRetrySave(() => saveProfileAndGoDashboard); return; }
       trackStepCompletion(0, "provisional_matches");
       terminalEventTracked.current = true; setDirty(false); clearDraft(); router.push(returnTo); router.refresh();
     } catch {
-      setError("Couldn't save your profile. Check your connection and try again. Your draft is still safe."); setRetrySave(saveProfileAndGoDashboard);
+      setError("Couldn't save your profile. Check your connection and try again. Your draft is still safe."); setRetrySave(() => saveProfileAndGoDashboard);
     } finally { setSaving(false); }
   }
   async function handleFinish() {
@@ -386,13 +386,13 @@ function OnboardingForm() {
     try {
       const res = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(profilePayload(form)) });
       if (res.status === 401) { router.replace(`/login?next=${encodeURIComponent(onboardingPath)}`); return; }
-      if (!res.ok) { setError("Couldn't save your profile. Please try again. Your draft is still safe."); setRetrySave(handleFinish); return; }
+      if (!res.ok) { setError("Couldn't save your profile. Please try again. Your draft is still safe."); setRetrySave(() => handleFinish); return; }
       const validWaecRows = waecRows.filter((r) => r.subject && r.grade);
       const waecRes = await fetch("/api/profile/waec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ results: validWaecRows.map((r) => ({ subject: r.subject, grade: r.grade })) }) });
-      if (!waecRes.ok) { setError("Your profile saved, but your WAEC results didn't. You can retry from this page."); setRetrySave(handleFinish); return; }
+      if (!waecRes.ok) { setError("Your profile saved, but your WAEC results didn't. You can retry from this page."); setRetrySave(() => handleFinish); return; }
       trackStepCompletion(STEPS.length - 1, "finish"); terminalEventTracked.current = true; setDirty(false); clearDraft(); router.push(returnTo); router.refresh();
     } catch {
-      setError("Couldn't save your profile. Check your connection and try again. Your draft is still safe."); setRetrySave(handleFinish);
+      setError("Couldn't save your profile. Check your connection and try again. Your draft is still safe."); setRetrySave(() => handleFinish);
     } finally { setSaving(false); }
   }
   async function handleSkip() {
@@ -401,10 +401,10 @@ function OnboardingForm() {
     try {
       const res = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(profilePayload(form)) });
       if (res.status === 401) { router.replace(`/login?next=${encodeURIComponent(onboardingPath)}`); return; }
-      if (!res.ok) { setError("Couldn't save before skipping. Your draft is still safe; try again."); setRetrySave(handleSkip); return; }
+      if (!res.ok) { setError("Couldn't save before skipping. Your draft is still safe; try again."); setRetrySave(() => handleSkip); return; }
       trackSkip(); clearDraft(); setDirty(false); router.push(returnTo); router.refresh();
     } catch {
-      setError("Couldn't save before skipping. Check your connection and try again. Your draft is still safe."); setRetrySave(handleSkip);
+      setError("Couldn't save before skipping. Check your connection and try again. Your draft is still safe."); setRetrySave(() => handleSkip);
     } finally { setSkipPending(false); }
   }
   if (loading) {
