@@ -42,9 +42,15 @@ const fetchMock = vi.fn();
 let stepParam: string | null = null;
 let failPostProfileCount = 0;
 
+// A deferred promise so a retry request can be held pending for in-flight tests.
+let deferredResolve: ((value: any) => void) | null = null;
+let deferredReject: ((reason?: any) => void) | null = null;
+
 beforeEach(() => {
   stepParam = null;
   failPostProfileCount = 0;
+  deferredResolve = null;
+  deferredReject = null;
   vi.stubGlobal("fetch", fetchMock);
   vi.resetAllMocks();
   authGetUserMock.mockResolvedValue({
@@ -54,6 +60,13 @@ beforeEach(() => {
   fetchMock.mockImplementation((url: string, init?: any) => {
     const isPost = init?.method === "POST";
     if (url === "/api/profile" && isPost) {
+      // If a deferred retry is in flight, hold it pending until resolved.
+      if (deferredResolve) {
+        return new Promise((resolve, reject) => {
+          deferredResolve = resolve;
+          deferredReject = reject;
+        });
+      }
       if (failPostProfileCount > 0) {
         failPostProfileCount--;
         return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
@@ -81,6 +94,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  deferredResolve = null;
+  deferredReject = null;
 });
 
 async function fillStep0AndSubmit() {
@@ -114,12 +129,6 @@ function countPostProfileCalls() {
   ).length;
 }
 
-function countPostWaecCalls() {
-  return fetchMock.mock.calls.filter(
-    (args) => args[0] === "/api/profile/waec" && args[1]?.method === "POST"
-  ).length;
-}
-
 describe("Onboarding retry behavior", () => {
   it("does not execute retry callback automatically; clicking Try again triggers second save", async () => {
     // failCount=2: tracking POST consumes 1, save POST fails with 500
@@ -138,9 +147,7 @@ describe("Onboarding retry behavior", () => {
       expect(countPostProfileCalls()).toBeGreaterThanOrEqual(1);
     });
 
-    // Callback stored, not executed automatically: exactly 1 POST so far
-    // (tracking POST + save POST = 2 total, but save is the one that failed)
-    // Actually countPostProfileCounts counts ALL POST /api/profile calls.
+    // Callback stored, not executed automatically: count of POST /api/profile calls.
     // With failCount=2: tracking consumes 1 (fails), save consumes 1 (fails).
     // So we should see 2 POST calls total, both failing.
     const postProfileCallsBeforeRetry = countPostProfileCalls();
@@ -309,7 +316,7 @@ describe("Onboarding retry behavior", () => {
     localStorageRemoveItemSpy.mockRestore();
   });
 
-  it("retry controls disappear while a retry is running", async () => {
+  it("retry button unavailable while a retry request is in flight", async () => {
     failPostProfileCount = 2;
 
     render(<OnboardingPage />);
@@ -320,6 +327,7 @@ describe("Onboarding retry behavior", () => {
 
     await fillStep0AndSubmit();
 
+    // Wait for the failed save POST call to complete
     await waitFor(() => {
       expect(countPostProfileCalls()).toBeGreaterThanOrEqual(1);
     });
@@ -328,19 +336,37 @@ describe("Onboarding retry behavior", () => {
     const retryButton = screen.getByRole("button", { name: /Try again/ });
     expect(retryButton).toBeTruthy();
 
-    // Click retry - while saving, retrySave is set to null so button disappears
-    await act(async () => {
-      fireEvent.click(retryButton);
-      await new Promise((resolve) => setTimeout(resolve, 0));
+    // Set up a deferred promise BEFORE clicking retry, so the retry POST
+    // stays pending until we resolve it.
+    const retryPromise = new Promise((resolve) => {
+      deferredResolve = resolve;
     });
 
-    // While saving (retry in flight), the retry button should no longer be rendered
+    // Click retry - this triggers saveProfileAndGoDashboard, which calls
+    // setRetrySave(null) synchronously before the fetch. The button should
+    // disappear immediately while the request is in flight.
+    fireEvent.click(retryButton);
+
+    // While the retry request is pending (deferred), the retry button should
+    // no longer be rendered because setRetrySave(null) runs at save start.
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: /Try again/ })).toBeNull();
     });
 
+    // The saving state should be visible while the retry is in flight.
+    const savingIndicator = screen.getByText(/Saving your profile…/);
+    expect(savingIndicator).toBeTruthy();
+
+    // Resolve the deferred retry request successfully.
+    deferredResolve?.({ ok: true, status: 200, json: () => Promise.resolve({}) });
+
     await waitFor(() => {
       expect(countPostProfileCalls()).toBeGreaterThan(2);
+    });
+
+    // Successful retry navigates to dashboard.
+    await waitFor(() => {
+      expect(pushMock).toHaveBeenCalledWith(expect.stringContaining("/dashboard"));
     });
   });
 
