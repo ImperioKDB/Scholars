@@ -111,16 +111,7 @@ export function calculateTooltipPosition(
   const viewportWidth = Math.max(0, viewport.width);
   const viewportHeight = Math.max(0, viewport.height);
 
-  const maxHeight = Math.max(
-    0,
-    viewportHeight - gutter * 2
-  );
-
-  const cardHeight = Math.min(
-    Math.max(0, tooltip.height),
-    maxHeight
-  );
-
+  const naturalHeight = Math.max(0, tooltip.height);
   const cardWidth = Math.min(
     Math.max(0, tooltip.width),
     Math.max(0, viewportWidth - gutter * 2)
@@ -128,7 +119,6 @@ export function calculateTooltipPosition(
 
   const targetBottom = target.top + target.height;
   const belowTop = targetBottom + gap;
-  const aboveTop = target.top - gap - cardHeight;
 
   const availableBelow = Math.max(
     0,
@@ -141,20 +131,30 @@ export function calculateTooltipPosition(
   );
 
   let top: number;
+  let availableHeight: number;
 
-  if (availableBelow >= cardHeight) {
+  if (availableBelow >= naturalHeight) {
     top = belowTop;
-  } else if (availableAbove >= cardHeight) {
-    top = aboveTop;
+    availableHeight = availableBelow;
+  } else if (availableAbove >= naturalHeight) {
+    availableHeight = availableAbove;
+    top = target.top - gap - Math.min(naturalHeight, availableHeight);
   } else if (availableBelow >= availableAbove) {
     top = belowTop;
+    availableHeight = availableBelow;
   } else {
-    top = target.top - gap - cardHeight;
+    availableHeight = availableAbove;
+    top = target.top - gap - Math.min(naturalHeight, availableHeight);
   }
+
+  // The tooltip may scroll internally, but it must not exceed
+  // the space available on its selected side of the target.
+  const maxHeight = Math.max(0, availableHeight);
+  const renderedHeight = Math.min(naturalHeight, maxHeight);
 
   top = Math.min(
     Math.max(gutter, top),
-    Math.max(gutter, viewportHeight - gutter - cardHeight)
+    Math.max(gutter, viewportHeight - gutter - renderedHeight)
   );
 
   const left = Math.min(
@@ -168,7 +168,6 @@ export function calculateTooltipPosition(
     maxHeight,
   };
 }
-
 function stateFor(rect: SpringRect): SpringRectState {
   return {
     top: settleSpring(rect.top),
@@ -322,7 +321,9 @@ export function useSpringRect({
 
     tooltipSizeRef.current = {
       width: rect.width,
-      height: rect.height,
+      // scrollHeight retains the natural content height even when
+      // the tooltip is currently constrained by a previous viewport.
+      height: Math.max(rect.height, tooltip.scrollHeight),
     };
 
     positionTooltipRef.current();
@@ -541,6 +542,23 @@ export function useSpringRect({
 
         if (parent) {
           const parentObserver = new MutationObserver(() => {
+            const currentElement = getTargetElement(target);
+
+            // The active target was removed or replaced.
+            // Re-discover immediately and attach observers to the
+            // replacement instead of continuing to observe the old node.
+            if (!element.isConnected || currentElement !== element) {
+              discoverTarget();
+
+              // If the target no longer exists, temporarily resume
+              // document discovery until it appears again.
+              if (!activeElementRef.current) {
+                beginDiscovery();
+              }
+
+              return;
+            }
+
             scheduleMeasurementRef.current();
           });
 
@@ -560,6 +578,9 @@ export function useSpringRect({
       const element = getTargetElement(target);
 
       if (!element) {
+        // The target has disappeared. Release observers attached to
+        // the old node before waiting for a replacement.
+        disconnectTargetObservers();
         activeElementRef.current = null;
         targetRef.current = null;
         setAvailability(false);
