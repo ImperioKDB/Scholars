@@ -5,7 +5,8 @@ import { assertAdmin } from "@/lib/admin/guard";
 import { checkRateLimit } from "@/lib/ratelimit";
 import { logError, logWarn } from "@/lib/logging";
 import { renderNigeriaIndependenceDayGreeting } from "@/lib/email/template";
-import { sendEmail } from "@/lib/email/send";
+import { isEmailSendingConfigured, sendEmail, type SendResult } from "@/lib/email/send";
+import { safeEmailErrorDiagnostic } from "@/lib/email/providers/types";
 import { listEnabledPushProfileIds, sendAdminBroadcastPush } from "@/lib/push/adminBroadcast";
 import { INDEPENDENCE_DAY_PUSH_MESSAGE } from "@/lib/push/broadcastContent";
 import { selectEmailBatch, type EmailBatch } from "@/lib/email/batches";
@@ -19,7 +20,6 @@ const CAMPAIGN_IDS: Record<EmailBatch, string> = {
   C: "00000000-0000-4000-8000-000000000003",
 };
 const SEND_CONCURRENCY = 5;
-const MAX_ATTEMPTS = 3;
 
 type Recipient = { id: string; email: string; fullName: string | null };
 
@@ -58,21 +58,6 @@ async function listRecipients(service: ReturnType<typeof createServiceClient>): 
     page += 1;
   }
   return recipients;
-}
-
-async function sendWithRetry(params: { to: string; subject: string; html: string; text: string }) {
-  let lastError: unknown = null;
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-    try {
-      const result = await sendEmail({ ...params, manual: true });
-      if (result.dry) throw new Error("Email sending is not configured on the server.");
-      return { attempts: attempt };
-    } catch (error) {
-      lastError = error;
-      if (attempt < MAX_ATTEMPTS) await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** (attempt - 1)));
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 export async function GET() {
@@ -125,8 +110,8 @@ export async function POST(request: Request) {
   if (!isIndependenceDay()) {
     return NextResponse.json({ error: "This campaign is only available on Nigeria's Independence Day." }, { status: 409 });
   }
-  if (!process.env.BREVO_API_KEY || !process.env.REMINDER_FROM_EMAIL) {
-    return NextResponse.json({ error: "Email sending is not configured on Vercel. Add BREVO_API_KEY and REMINDER_FROM_EMAIL first." }, { status: 503 });
+  if (!isEmailSendingConfigured()) {
+    return NextResponse.json({ error: "Email sending is not configured on Vercel. Configure a complete Brevo or Resend provider." }, { status: 503 });
   }
   const raw = await request.json().catch(() => ({})) as { batch?: unknown };
   const batch = raw.batch === "A" || raw.batch === "B" || raw.batch === "C" ? raw.batch as EmailBatch : null;
@@ -170,29 +155,35 @@ export async function POST(request: Request) {
       const recipient = recipients[index];
       const firstName = recipient.fullName?.trim().split(/\s+/)[0] || recipient.email.split("@")[0];
       const email = renderNigeriaIndependenceDayGreeting({ firstName, baseUrl });
+      let outcome: SendResult;
       try {
-        const outcome = await sendWithRetry({ to: recipient.email, ...email });
-        sent += 1;
-        await service.from("broadcast_delivery_log").insert({
-          broadcast_id: campaignId,
-          recipient_email: recipient.email,
-          recipient_user_id: recipient.id,
-          status: "sent",
-          attempts: outcome.attempts,
-        });
+        outcome = await sendEmail({ to: recipient.email, ...email, manual: true, idempotencyKey: `independence-day/${campaignId}/${recipient.id}` });
+        if (outcome.dry) throw new Error("Email sending is not configured on the server.");
       } catch (error) {
         failed += 1;
-        logError(ROUTE, "send_failed", { email: recipient.email }, error);
-        const message = error instanceof Error ? error.message : String(error);
+        const diagnostic = safeEmailErrorDiagnostic(error);
+        logError(ROUTE, "send_failed", { broadcast_id: campaignId, recipient_user_id: recipient.id, ...diagnostic });
+        const message = `${diagnostic.provider}:${diagnostic.classification}:${diagnostic.status ?? "no_status"}:${diagnostic.code ?? "unknown"}`;
         await service.from("broadcast_delivery_log").insert({
           broadcast_id: campaignId,
           recipient_email: recipient.email,
           recipient_user_id: recipient.id,
           status: "failed",
-          attempts: MAX_ATTEMPTS,
+          attempts: 1,
           error_message: message,
         });
+        continue;
       }
+      sent += 1;
+      const { error: logWriteError } = await service.from("broadcast_delivery_log").insert({
+        broadcast_id: campaignId,
+        recipient_email: recipient.email,
+        recipient_user_id: recipient.id,
+        status: "sent",
+        attempts: 1,
+        provider_message: outcome.messageId ?? null,
+      });
+      if (logWriteError) logError(ROUTE, "sent_delivery_log_failed", { broadcast_id: campaignId, recipient_user_id: recipient.id }, logWriteError);
     }
   }
 

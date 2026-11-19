@@ -1,14 +1,10 @@
-// lib/email/send.ts
-// Shared Brevo sender for explicitly initiated admin actions.
-// Authentication confirmation and password-reset emails are sent by Supabase Auth.
-//
-// Dry-run safe: missing BREVO_API_KEY or REMINDER_FROM_EMAIL logs and
-// returns dry:true instead of throwing, so a misconfigured environment
-// never breaks the caller. The digest summary surfaces dry_run so the
-// admin UI can say honestly that nothing was sent.
+// Application-side transactional mail only. Supabase Auth email delivery is a separate path.
 import { logWarn } from '@/lib/logging'
+import { sendWithBrevo } from '@/lib/email/providers/brevo'
+import { sendWithResend } from '@/lib/email/providers/resend'
+import { EmailProviderError, type EmailProvider, type ProviderSendResult } from '@/lib/email/providers/types'
 
-export type SendResult = { sent: number; failed: number; dry: boolean }
+export type SendResult = { sent: number; failed: number; dry: boolean; provider?: EmailProvider; messageId?: string | null }
 
 export class AutomaticEmailDisabledError extends Error {
   constructor() {
@@ -17,34 +13,59 @@ export class AutomaticEmailDisabledError extends Error {
   }
 }
 
+export function isEmailSendingConfigured(): boolean {
+  const brevo = Boolean(process.env.BREVO_API_KEY && process.env.REMINDER_FROM_EMAIL)
+  const resend = Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL)
+  if (process.env.RESEND_API_KEY && !process.env.RESEND_FROM_EMAIL) {
+    logWarn('email/send', 'resend_disabled_missing_sender', { provider: 'resend', code: 'missing_from_email' })
+  }
+  return brevo || resend
+}
+
 export async function sendEmail(params: {
   to: string
   subject: string
   html: string
   text: string
   manual?: boolean
+  idempotencyKey?: string
 }): Promise<SendResult> {
   if (!params.manual) throw new AutomaticEmailDisabledError()
-  const apiKey = process.env.BREVO_API_KEY
-  const from = process.env.REMINDER_FROM_EMAIL
-  if (!apiKey || !from) {
-    logWarn('email/send', 'email_skipped_dry_run', { to: params.to, subject: params.subject })
+  const input = {
+    to: params.to, subject: params.subject, html: params.html, text: params.text,
+    idempotencyKey: params.idempotencyKey,
+  }
+  const brevoConfigured = Boolean(process.env.BREVO_API_KEY && process.env.REMINDER_FROM_EMAIL)
+  const resendConfigured = Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL)
+
+  if (brevoConfigured) {
+    try {
+      const result = await sendWithBrevo(input)
+      return successfulResult(result)
+    } catch (error) {
+      if (!(error instanceof EmailProviderError) || error.classification !== 'definitive_rejection') throw error
+      if (!resendConfigured) throw error
+      logWarn('email/send', 'brevo_definitive_rejection_falling_back', {
+        provider: error.provider, status: error.status, code: error.code, classification: error.classification,
+      })
+    }
+  }
+
+  if (resendConfigured) return successfulResult(await sendWithResend(input))
+
+  if (process.env.RESEND_API_KEY && !process.env.RESEND_FROM_EMAIL) {
+    logWarn('email/send', 'resend_disabled_missing_sender', { provider: 'resend', code: 'missing_from_email' })
+  }
+  if (!brevoConfigured) {
+    logWarn('email/send', 'email_skipped_dry_run', { subject: params.subject })
     return { sent: 0, failed: 0, dry: true }
   }
-  const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: { 'api-key': apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({
-      sender: { email: from, name: 'Scholars' },
-      to: [{ email: params.to }],
-      subject: params.subject,
-      htmlContent: params.html,
-      textContent: params.text,
-    }),
+  // Reachable when Brevo definitively rejected and no usable fallback exists.
+  throw new EmailProviderError({
+    provider: 'brevo', status: null, code: 'fallback_unavailable', classification: 'definitive_rejection',
   })
-  if (!resp.ok) {
-    const body = await resp.text().catch(() => '')
-    throw new Error(`Brevo API error ${resp.status}: ${body.slice(0, 300)}`)
-  }
-  return { sent: 1, failed: 0, dry: false }
+}
+
+function successfulResult(result: ProviderSendResult): SendResult {
+  return { sent: 1, failed: 0, dry: false, provider: result.provider, messageId: result.messageId }
 }

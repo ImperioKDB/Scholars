@@ -41,8 +41,9 @@
 import { createServiceClient } from '@/lib/supabase/service'
 import { logError } from '@/lib/logging'
 import { renderProfileNudge } from '@/lib/email/template'
-import { sendEmail } from '@/lib/email/send'
-import { claimNotificationDelivery, markNotificationAccepted, markNotificationRetryable } from '@/lib/email/outbox'
+import { isEmailSendingConfigured, sendEmail } from '@/lib/email/send'
+import { isUncertainEmailError } from '@/lib/email/providers/types'
+import { claimNotificationDelivery, markNotificationAccepted, markNotificationDeadLetter, markNotificationFailed } from '@/lib/email/outbox'
 import { selectEmailBatch, type EmailBatch } from '@/lib/email/batches'
 export const PROFILE_NUDGE_INTERVAL_MS =
 Number(process.env.PROFILE_REMINDER_INTERVAL_DAYS ?? 2) * 86400000
@@ -136,7 +137,7 @@ emails_sent: 0,
 failed: 0,
 skipped_missing_columns: false,
 outside_send_window: false,
-dry_run: !process.env.BREVO_API_KEY || !process.env.REMINDER_FROM_EMAIL,
+dry_run: !isEmailSendingConfigured(),
 first_error: null,
 }
 // Record the first failure message so the admin UI can show WHY a pass
@@ -225,10 +226,32 @@ missingLabels: missingProfileLabels(p),
 baseUrl,
 })
 try {
-const res = await sendEmail({ to: email, subject, html, text, manual })
+let res
+try {
+res = await sendEmail({ to: email, subject, html, text, manual, idempotencyKey: `profile-nudge/${delivery.id}` })
+} catch (err) {
+summary.failed += 1
+noteError(err)
+const terminalize = isUncertainEmailError(err) ? markNotificationDeadLetter : markNotificationFailed
+await terminalize(supabase, delivery.id, err).catch((stateError) => {
+logError('email/profile-nudges', 'outbox_terminal_state_failed', { delivery_id: delivery.id }, stateError)
+})
+logError('email/profile-nudges', 'send_failed', { delivery_id: delivery.id }, err)
+continue
+}
 summary.emails_sent += res.sent
 if (res.dry) summary.dry_run = true
-await markNotificationAccepted(supabase, delivery.id)
+if (!res.dry) {
+await markNotificationAccepted(supabase, delivery.id, res.messageId).catch(async (stateError) => {
+logError('email/profile-nudges', 'accepted_state_write_failed', { delivery_id: delivery.id }, stateError)
+await markNotificationDeadLetter(supabase, delivery.id, {
+code: 'accepted_state_persist_failed', provider: res.provider ?? null,
+}).catch((deadLetterError) => logError('email/profile-nudges', 'outbox_dead_letter_failed', { delivery_id: delivery.id }, deadLetterError))
+})
+} else {
+await markNotificationAccepted(supabase, delivery.id).catch((stateError) =>
+logError('email/profile-nudges', 'dry_run_state_write_failed', { delivery_id: delivery.id }, stateError))
+}
 const { error: stateError } = await supabase
 .from('profiles')
 .update({
@@ -244,10 +267,7 @@ summary.students_emailed += 1
 } catch (err) {
 summary.failed += 1
 noteError(err)
-await markNotificationRetryable(supabase, delivery.id, err).catch((outboxError) => {
-logError('email/profile-nudges', 'outbox_retry_state_failed', { profile: p.id }, outboxError)
-})
-logError('email/profile-nudges', 'send_failed', { profile: p.id, email }, err)
+logError('email/profile-nudges', 'bookkeeping_failed_after_send', { profile: p.id }, err)
 }
 }
 } catch (err) {

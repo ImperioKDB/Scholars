@@ -12,6 +12,7 @@ import { assertAdmin } from '@/lib/admin/guard'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { logError, logWarn } from '@/lib/logging'
 import { sendEmail as sendTransactionalEmail } from '@/lib/email/send'
+import { safeEmailErrorDiagnostic } from '@/lib/email/providers/types'
 import { renderBroadcastDigest, type EmailListing } from '@/lib/email/template'
 import { listEnabledPushProfileIds, sendAdminBroadcastPush } from '@/lib/push/adminBroadcast'
 import { buildListingBroadcastPushMessage } from '@/lib/push/broadcastContent'
@@ -20,7 +21,6 @@ import { selectEmailBatch, type EmailBatch } from '@/lib/email/batches'
 export const maxDuration = 300
 
 const ROUTE = '/api/admin/broadcast'
-const MAX_ATTEMPTS = 3
 const SEND_CONCURRENCY = 5
 const bodySchema = z.object({
   scholarship_ids: z.array(z.string().uuid()).optional().default([]),
@@ -36,7 +36,7 @@ const bodySchema = z.object({
 )
 
 type Recipient = { id: string; email: string; fullName: string | null }
-type SendOutcome = { messageId: string | null; attempts: number }
+type SendOutcome = { messageId: string | null; attempts: number; provider?: string }
 
 function baseUrlOf(): string {
   return process.env.NEXT_PUBLIC_APP_URL || 'https://www.scholars.com.ng'
@@ -49,28 +49,16 @@ const KIND_LABELS: Record<string, string> = {
   mentorship: 'Mentorship',
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
 async function sendEmail(params: {
   to: string
   subject: string
   html: string
   text: string
+  idempotencyKey: string
 }): Promise<SendOutcome> {
-  let lastError: Error | null = null
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    try {
-      const result = await sendTransactionalEmail({ ...params, manual: true })
-      if (result.dry) throw new Error('Email sending is not configured on the server.')
-      return { messageId: null, attempts: attempt }
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err))
-      if (attempt < MAX_ATTEMPTS) await sleep(250 * 2 ** (attempt - 1))
-    }
-  }
-  throw lastError ?? new Error('Email delivery failed')
+  const result = await sendTransactionalEmail({ ...params, manual: true })
+  if (result.dry) throw new Error('Email sending is not configured on the server.')
+  return { messageId: result.messageId ?? null, attempts: 1, provider: result.provider }
 }
 
 async function listRecipients(service: ReturnType<typeof createServiceClient>): Promise<Recipient[]> {
@@ -197,34 +185,38 @@ export async function POST(request: Request) {
   async function processRecipient(r: Recipient) {
     const firstName = r.fullName?.trim().split(/\s+/)[0] || r.email.split('@')[0]
     const { subject, html, text } = renderBroadcastDigest({ firstName, items, baseUrl })
+    let outcome: SendOutcome
     try {
-      const outcome = await sendEmail({ to: r.email, subject, html, text })
-      sent++
-      if (profileIds.has(r.id)) {
-        const logInsert = [
-          ...input.scholarship_ids.map((id) => ({ profile_id: r.id, listing_kind: 'scholarship', listing_id: id })),
-          ...input.opportunity_ids.map((id) => ({ profile_id: r.id, listing_kind: 'opportunity', listing_id: id })),
-        ]
-        const { error: announcementError } = await service
-          .from('announcement_log')
-          .upsert(logInsert, { onConflict: 'profile_id,listing_kind,listing_id', ignoreDuplicates: true })
-        if (announcementError) logWarn(ROUTE, 'announcement_log_failed', { email: r.email, error: announcementError.message })
-      }
-      await service.from('broadcast_delivery_log').insert({
-        broadcast_id: broadcastId, recipient_email: r.email, recipient_user_id: r.id,
-        status: 'sent', attempts: outcome.attempts, provider_message: outcome.messageId,
-      })
+      outcome = await sendEmail({ to: r.email, subject, html, text, idempotencyKey: `broadcast/${broadcastId}/${r.id}` })
     } catch (err) {
       failed++
-      const message = err instanceof Error ? err.message : String(err)
-      logError(ROUTE, 'send_failed', { email: r.email, broadcast_id: broadcastId }, err)
+      const diagnostic = safeEmailErrorDiagnostic(err)
+      const message = `${diagnostic.provider}:${diagnostic.classification}:${diagnostic.status ?? 'no_status'}:${diagnostic.code ?? 'unknown'}`
+      logError(ROUTE, 'send_failed', { broadcast_id: broadcastId, recipient_user_id: r.id, ...diagnostic })
       await service.from('broadcast_delivery_log').insert({
         broadcast_id: broadcastId, recipient_email: r.email, recipient_user_id: r.id,
-        status: 'failed', attempts: MAX_ATTEMPTS, error_message: message,
+        status: 'failed', attempts: 1, error_message: message,
       })
-    } finally {
       attempted++
+      return
     }
+    sent++
+    if (profileIds.has(r.id)) {
+      const logInsert = [
+        ...input.scholarship_ids.map((id) => ({ profile_id: r.id, listing_kind: 'scholarship', listing_id: id })),
+        ...input.opportunity_ids.map((id) => ({ profile_id: r.id, listing_kind: 'opportunity', listing_id: id })),
+      ]
+      const { error: announcementError } = await service
+        .from('announcement_log')
+        .upsert(logInsert, { onConflict: 'profile_id,listing_kind,listing_id', ignoreDuplicates: true })
+      if (announcementError) logWarn(ROUTE, 'announcement_log_failed', { broadcast_id: broadcastId, error: announcementError.message })
+    }
+    const { error: logErrorResult } = await service.from('broadcast_delivery_log').insert({
+      broadcast_id: broadcastId, recipient_email: r.email, recipient_user_id: r.id,
+      status: 'sent', attempts: outcome.attempts, provider_message: outcome.messageId,
+    })
+    if (logErrorResult) logError(ROUTE, 'sent_delivery_log_failed', { broadcast_id: broadcastId, recipient_user_id: r.id }, logErrorResult)
+    attempted++
   }
 
   let nextIndex = 0
