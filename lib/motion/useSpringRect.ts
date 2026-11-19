@@ -30,29 +30,142 @@ type UseSpringRectOptions = {
   onAvailabilityChange?: (available: boolean) => void;
 };
 
+type TooltipSize = {
+  width: number;
+  height: number;
+};
+
+type ViewportSize = {
+  width: number;
+  height: number;
+};
+
+type TooltipPosition = {
+  top: number;
+  left: number;
+  maxHeight: number;
+};
+
+/**
+ * These values preserve the existing tour geometry.
+ * Tooltip dimensions are measured from the rendered element,
+ * not estimated from a fixed card height.
+ */
 const SPOTLIGHT_PADDING = 8;
-const TOOLTIP_CARD_HEIGHT = 220;
 const TOOLTIP_GUTTER = 18;
 const VIEWPORT_GUTTER = 16;
 const TOOLTIP_MAX_WIDTH = 380;
 
 function getTargetElement(target?: string): Element | null {
   if (!target || typeof document === "undefined") return null;
-  return document.querySelector(`[data-tour="${target}"]`);
+
+  return document.querySelector(
+    `[data-tour="${CSS.escape(target)}"]`
+  );
 }
 
-function getTargetRect(target?: string): SpringRect | null {
-  const element = getTargetElement(target);
+function getTargetRectFromElement(element: Element | null): SpringRect | null {
   if (!element || !element.isConnected) return null;
+
   const computedStyle = window.getComputedStyle(element);
-  if (computedStyle.display === "none" || computedStyle.visibility === "hidden") return null;
+
+  if (
+    computedStyle.display === "none" ||
+    computedStyle.visibility === "hidden"
+  ) {
+    return null;
+  }
+
   const rect = element.getBoundingClientRect();
+
   if (rect.width <= 0 || rect.height <= 0) return null;
+
   return {
     top: rect.top - SPOTLIGHT_PADDING,
     left: rect.left - SPOTLIGHT_PADDING,
     width: rect.width + SPOTLIGHT_PADDING * 2,
     height: rect.height + SPOTLIGHT_PADDING * 2,
+  };
+}
+
+/**
+ * Pure geometry calculation.
+ *
+ * Preference:
+ * 1. Below the highlighted target, if the card fits.
+ * 2. Above the target, if the card fits.
+ * 3. The side with more available space, with its top clamped
+ *    to the viewport.
+ *
+ * A card taller than the available viewport receives a bounded
+ * max-height and internal scrolling.
+ */
+export function calculateTooltipPosition(
+  target: SpringRect,
+  tooltip: TooltipSize,
+  viewport: ViewportSize
+): TooltipPosition {
+  const gutter = VIEWPORT_GUTTER;
+  const gap = TOOLTIP_GUTTER;
+
+  const viewportWidth = Math.max(0, viewport.width);
+  const viewportHeight = Math.max(0, viewport.height);
+
+  const maxHeight = Math.max(
+    0,
+    viewportHeight - gutter * 2
+  );
+
+  const cardHeight = Math.min(
+    Math.max(0, tooltip.height),
+    maxHeight
+  );
+
+  const cardWidth = Math.min(
+    Math.max(0, tooltip.width),
+    Math.max(0, viewportWidth - gutter * 2)
+  );
+
+  const targetBottom = target.top + target.height;
+  const belowTop = targetBottom + gap;
+  const aboveTop = target.top - gap - cardHeight;
+
+  const availableBelow = Math.max(
+    0,
+    viewportHeight - gutter - belowTop
+  );
+
+  const availableAbove = Math.max(
+    0,
+    target.top - gap - gutter
+  );
+
+  let top: number;
+
+  if (availableBelow >= cardHeight) {
+    top = belowTop;
+  } else if (availableAbove >= cardHeight) {
+    top = aboveTop;
+  } else if (availableBelow >= availableAbove) {
+    top = belowTop;
+  } else {
+    top = target.top - gap - cardHeight;
+  }
+
+  top = Math.min(
+    Math.max(gutter, top),
+    Math.max(gutter, viewportHeight - gutter - cardHeight)
+  );
+
+  const left = Math.min(
+    Math.max(gutter, target.left),
+    Math.max(gutter, viewportWidth - gutter - cardWidth)
+  );
+
+  return {
+    top,
+    left,
+    maxHeight,
   };
 }
 
@@ -82,22 +195,51 @@ export function useSpringRect({
 }: UseSpringRectOptions) {
   const targetRef = useRef<SpringRect | null>(null);
   const stateRef = useRef<SpringRectState | null>(null);
+
   const animationFrameRef = useRef<number | null>(null);
   const measurementFrameRef = useRef<number | null>(null);
+
   const reducedMotionRef = useRef(false);
   const availableRef = useRef(false);
+
+  const tooltipSizeRef = useRef<TooltipSize | null>(null);
+
   const onAvailabilityChangeRef = useRef(onAvailabilityChange);
   onAvailabilityChangeRef.current = onAvailabilityChange;
 
+  const activeElementRef = useRef<Element | null>(null);
+
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const targetMutationObserverRef = useRef<MutationObserver | null>(null);
+  const parentMutationObserverRef = useRef<MutationObserver | null>(null);
+  const discoveryObserverRef = useRef<MutationObserver | null>(null);
+
   const setAvailability = (available: boolean) => {
     if (availableRef.current === available) return;
+
     availableRef.current = available;
     onAvailabilityChangeRef.current?.(available);
   };
 
+  const cancelAnimation = () => {
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+  };
+
   const writeFrameRef = useRef<(state: SpringRectState) => void>(() => {});
+  const positionTooltipRef = useRef<() => void>(() => {});
+
+  /**
+   * Update spotlight CSS variables.
+   *
+   * Tooltip positioning uses cached dimensions. No DOM geometry
+   * reads occur inside the spring animation loop.
+   */
   writeFrameRef.current = (state) => {
     const spotlight = spotlightRef.current;
+
     const rect = {
       top: state.top.value,
       left: state.left.value,
@@ -112,36 +254,85 @@ export function useSpringRect({
       spotlight.style.setProperty("--tour-height", `${rect.height}px`);
     }
 
-    const tooltip = tooltipRef.current;
-    if (!tooltip || typeof window === "undefined") return;
-
-    const targetRect = {
-      top: rect.top + SPOTLIGHT_PADDING,
-      left: rect.left + SPOTLIGHT_PADDING,
-      width: Math.max(0, rect.width - SPOTLIGHT_PADDING * 2),
-      height: Math.max(0, rect.height - SPOTLIGHT_PADDING * 2),
-    };
-    const top = targetRect.top + targetRect.height + TOOLTIP_GUTTER + TOOLTIP_CARD_HEIGHT < window.innerHeight
-      ? targetRect.top + targetRect.height + TOOLTIP_GUTTER
-      : Math.max(TOOLTIP_GUTTER, targetRect.top - TOOLTIP_CARD_HEIGHT - TOOLTIP_GUTTER);
-    const left = Math.min(
-      Math.max(VIEWPORT_GUTTER, targetRect.left),
-      Math.max(VIEWPORT_GUTTER, window.innerWidth - TOOLTIP_MAX_WIDTH),
-    );
-    tooltip.style.setProperty("--tour-card-top", `${top}px`);
-    tooltip.style.setProperty("--tour-card-left", `${left}px`);
+    positionTooltipRef.current();
   };
 
-  const cancelAnimation = () => {
-    if (animationFrameRef.current !== null) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
+  /**
+   * Uses the current spring rectangle and the last measured
+   * tooltip dimensions. This avoids getBoundingClientRect()
+   * on every animation frame.
+   */
+  positionTooltipRef.current = () => {
+    const tooltip = tooltipRef.current;
+    const state = stateRef.current;
+    const tooltipSize = tooltipSizeRef.current;
+
+    if (!tooltip || !state || !tooltipSize) return;
+
+    const targetRect = {
+      top: state.top.value + SPOTLIGHT_PADDING,
+      left: state.left.value + SPOTLIGHT_PADDING,
+      width: Math.max(
+        0,
+        state.width.value - SPOTLIGHT_PADDING * 2
+      ),
+      height: Math.max(
+        0,
+        state.height.value - SPOTLIGHT_PADDING * 2
+      ),
+    };
+
+    const position = calculateTooltipPosition(
+      targetRect,
+      tooltipSize,
+      {
+        width: window.innerWidth,
+        height: window.innerHeight,
+      }
+    );
+
+    tooltip.style.setProperty(
+      "--tour-card-top",
+      `${position.top}px`
+    );
+
+    tooltip.style.setProperty(
+      "--tour-card-left",
+      `${position.left}px`
+    );
+
+    tooltip.style.maxHeight = `${position.maxHeight}px`;
+    tooltip.style.overflowY = "auto";
+    tooltip.style.overflowX = "hidden";
+  };
+
+  /**
+   * Measure tooltip dimensions outside the spring loop.
+   * ResizeObserver triggers this when content or available width
+   * changes.
+   */
+  const measureTooltip = () => {
+    const tooltip = tooltipRef.current;
+
+    if (!tooltip || !tooltip.isConnected) return;
+
+    const rect = tooltip.getBoundingClientRect();
+
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    tooltipSizeRef.current = {
+      width: rect.width,
+      height: rect.height,
+    };
+
+    positionTooltipRef.current();
   };
 
   const startAnimationRef = useRef<() => void>(() => {});
+
   startAnimationRef.current = () => {
     const targetRect = targetRef.current;
+
     if (!targetRect) return;
 
     if (reducedMotionRef.current) {
@@ -149,12 +340,15 @@ export function useSpringRect({
       writeFrameRef.current(stateRef.current);
       return;
     }
+
     if (animationFrameRef.current !== null) return;
 
     let previous = performance.now();
+
     const tick = (now: number) => {
       const currentTarget = targetRef.current;
       const currentState = stateRef.current;
+
       if (!currentTarget || !currentState) {
         animationFrameRef.current = null;
         return;
@@ -162,13 +356,36 @@ export function useSpringRect({
 
       const delta = (now - previous) / 1000;
       previous = now;
+
       const config = MOTION_SPRINGS.responsive;
+
       const nextState: SpringRectState = {
-        top: springStep(currentState.top, currentTarget.top, delta, config),
-        left: springStep(currentState.left, currentTarget.left, delta, config),
-        width: springStep(currentState.width, currentTarget.width, delta, config),
-        height: springStep(currentState.height, currentTarget.height, delta, config),
+        top: springStep(
+          currentState.top,
+          currentTarget.top,
+          delta,
+          config
+        ),
+        left: springStep(
+          currentState.left,
+          currentTarget.left,
+          delta,
+          config
+        ),
+        width: springStep(
+          currentState.width,
+          currentTarget.width,
+          delta,
+          config
+        ),
+        height: springStep(
+          currentState.height,
+          currentTarget.height,
+          delta,
+          config
+        ),
       };
+
       stateRef.current = nextState;
       writeFrameRef.current(nextState);
 
@@ -178,22 +395,76 @@ export function useSpringRect({
         isSpringAtRest(nextState.width, currentTarget.width, config) &&
         isSpringAtRest(nextState.height, currentTarget.height, config)
       );
+
       if (atRest) {
         stateRef.current = settledState(currentTarget);
         writeFrameRef.current(stateRef.current);
         animationFrameRef.current = null;
         return;
       }
+
       animationFrameRef.current = requestAnimationFrame(tick);
     };
 
     animationFrameRef.current = requestAnimationFrame(tick);
   };
 
+  /**
+   * Re-measure the active target once per animation frame.
+   */
+  const scheduleMeasurementRef = useRef<() => void>(() => {});
+
+  scheduleMeasurementRef.current = () => {
+    if (measurementFrameRef.current !== null) return;
+
+    measurementFrameRef.current = requestAnimationFrame(() => {
+      measurementFrameRef.current = null;
+
+      const element = getTargetElement(target);
+
+      if (!element) {
+        targetRef.current = null;
+        activeElementRef.current = null;
+        setAvailability(false);
+        cancelAnimation();
+        return;
+      }
+
+      if (activeElementRef.current !== element) {
+        activeElementRef.current = element;
+        targetRef.current = null;
+        stateRef.current = null;
+      }
+
+      const nextTarget = getTargetRectFromElement(element);
+
+      if (!nextTarget) {
+        targetRef.current = null;
+        setAvailability(false);
+        cancelAnimation();
+        return;
+      }
+
+      targetRef.current = nextTarget;
+
+      if (!stateRef.current) {
+        stateRef.current = stateFor(nextTarget);
+      }
+
+      setAvailability(true);
+      startAnimationRef.current();
+      measureTooltip();
+    });
+  };
+
   useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const mediaQuery = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    );
+
     const updateReducedMotion = () => {
       reducedMotionRef.current = mediaQuery.matches;
+
       if (mediaQuery.matches) {
         cancelAnimation();
         startAnimationRef.current();
@@ -201,72 +472,191 @@ export function useSpringRect({
         startAnimationRef.current();
       }
     };
+
     updateReducedMotion();
+
     mediaQuery.addEventListener?.("change", updateReducedMotion);
-    return () => mediaQuery.removeEventListener?.("change", updateReducedMotion);
+
+    return () => {
+      mediaQuery.removeEventListener?.(
+        "change",
+        updateReducedMotion
+      );
+    };
   }, []);
 
   useEffect(() => {
-    const scheduleMeasurement = () => {
-      if (measurementFrameRef.current !== null) return;
-      measurementFrameRef.current = requestAnimationFrame(() => {
-        measurementFrameRef.current = null;
-        const nextTarget = getTargetRect(target);
-        if (!nextTarget) {
-          targetRef.current = null;
-          setAvailability(false);
-          cancelAnimation();
-          return;
-        }
-
-        targetRef.current = nextTarget;
-        if (!stateRef.current) stateRef.current = stateFor(nextTarget);
-        setAvailability(true);
-        startAnimationRef.current();
-      });
-    };
-
     if (!target) {
       targetRef.current = null;
+      stateRef.current = null;
+      activeElementRef.current = null;
       setAvailability(false);
       cancelAnimation();
       return;
     }
 
-    scheduleMeasurement();
-    const targetElement = getTargetElement(target);
-    const resizeObserver = typeof ResizeObserver === "undefined" || !targetElement
-      ? null
-      : new ResizeObserver(scheduleMeasurement);
-    if (resizeObserver && targetElement) resizeObserver.observe(targetElement);
+    let disposed = false;
 
-    window.addEventListener("resize", scheduleMeasurement);
-    window.addEventListener("scroll", scheduleMeasurement, true);
+    const disconnectTargetObservers = () => {
+      resizeObserverRef.current?.disconnect();
+      targetMutationObserverRef.current?.disconnect();
+      parentMutationObserverRef.current?.disconnect();
 
-    const mutationObserver = typeof MutationObserver === "undefined" || !document.body
-      ? null
-      : new MutationObserver(scheduleMeasurement);
-    mutationObserver?.observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
-    if (mutationObserver && targetElement) {
-      mutationObserver.observe(targetElement, {
-        attributes: true,
-        attributeFilter: ["class", "hidden", "style"],
+      resizeObserverRef.current = null;
+      targetMutationObserverRef.current = null;
+      parentMutationObserverRef.current = null;
+    };
+
+    const attachTargetObservers = (element: Element) => {
+      disconnectTargetObservers();
+
+      if (typeof ResizeObserver !== "undefined") {
+        const resizeObserver = new ResizeObserver(() => {
+          scheduleMeasurementRef.current();
+          measureTooltip();
+        });
+
+        resizeObserver.observe(element);
+        resizeObserverRef.current = resizeObserver;
+      }
+
+      if (typeof MutationObserver !== "undefined") {
+        const targetObserver = new MutationObserver(() => {
+          scheduleMeasurementRef.current();
+        });
+
+        targetObserver.observe(element, {
+          attributes: true,
+          attributeFilter: ["class", "hidden", "style"],
+        });
+
+        targetMutationObserverRef.current = targetObserver;
+
+        /**
+         * Observe only the target's immediate parent for direct
+         * replacement/removal. Do not observe the entire document
+         * after the target has been discovered.
+         */
+        const parent = element.parentElement;
+
+        if (parent) {
+          const parentObserver = new MutationObserver(() => {
+            scheduleMeasurementRef.current();
+          });
+
+          parentObserver.observe(parent, {
+            childList: true,
+            subtree: false,
+          });
+
+          parentMutationObserverRef.current = parentObserver;
+        }
+      }
+    };
+
+    const discoverTarget = () => {
+      if (disposed) return;
+
+      const element = getTargetElement(target);
+
+      if (!element) {
+        activeElementRef.current = null;
+        targetRef.current = null;
+        setAvailability(false);
+        return;
+      }
+
+      if (activeElementRef.current !== element) {
+        activeElementRef.current = element;
+        attachTargetObservers(element);
+      }
+
+      scheduleMeasurementRef.current();
+
+      /**
+       * Once found, stop observing the whole document.
+       */
+      discoveryObserverRef.current?.disconnect();
+      discoveryObserverRef.current = null;
+    };
+
+    const beginDiscovery = () => {
+      if (disposed) return;
+
+      discoverTarget();
+
+      if (activeElementRef.current) return;
+
+      if (
+        typeof MutationObserver !== "undefined" &&
+        !discoveryObserverRef.current
+      ) {
+        const observer = new MutationObserver(() => {
+          discoverTarget();
+        });
+
+        observer.observe(document.body, {
+          childList: true,
+          subtree: true,
+        });
+
+        discoveryObserverRef.current = observer;
+      }
+    };
+
+    const handleViewportChange = () => {
+      scheduleMeasurementRef.current();
+      measureTooltip();
+    };
+
+    const handleScroll = () => {
+      scheduleMeasurementRef.current();
+    };
+
+    beginDiscovery();
+
+    window.addEventListener("resize", handleViewportChange);
+    window.addEventListener("scroll", handleScroll, true);
+
+    let tooltipResizeObserver: ResizeObserver | null = null;
+
+    if (
+      typeof ResizeObserver !== "undefined" &&
+      tooltipRef.current
+    ) {
+      tooltipResizeObserver = new ResizeObserver(() => {
+        measureTooltip();
       });
+
+      tooltipResizeObserver.observe(tooltipRef.current);
     }
 
     return () => {
+      disposed = true;
+
       if (measurementFrameRef.current !== null) {
         cancelAnimationFrame(measurementFrameRef.current);
         measurementFrameRef.current = null;
       }
+
       cancelAnimation();
-      resizeObserver?.disconnect();
-      mutationObserver?.disconnect();
-      window.removeEventListener("resize", scheduleMeasurement);
-      window.removeEventListener("scroll", scheduleMeasurement, true);
+
+      disconnectTargetObservers();
+
+      discoveryObserverRef.current?.disconnect();
+      discoveryObserverRef.current = null;
+
+      tooltipResizeObserver?.disconnect();
+
+      window.removeEventListener("resize", handleViewportChange);
+      window.removeEventListener("scroll", handleScroll, true);
+
+      tooltipSizeRef.current = null;
+      activeElementRef.current = null;
     };
   }, [target]);
+
+  useEffect(() => {
+    measureTooltip();
+  });
 }
