@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { StatusMessage } from "@/components/StatusMessage";
 import { DeadlineBadge } from "@/components/DeadlineBadge";
+import { ResendTestButton } from "@/components/admin/ResendTestButton";
 import { SendIndependenceDayButton } from "@/components/admin/SendIndependenceDayButton";
 import { EmailBatchButtons } from "@/components/admin/EmailBatchButtons";
 import type { EmailBatch } from "@/lib/email/batches";
@@ -199,6 +200,8 @@ export default function AdminBroadcastPage() {
           Newest first. One email per student, never one per listing.
         </p>
       </div>
+
+      <ResendTestButton />
 
       <SendIndependenceDayButton />
 
