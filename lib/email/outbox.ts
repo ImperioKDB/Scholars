@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { safeEmailErrorDiagnostic } from '@/lib/email/providers/types'
 
 const LEASE_MS = 10 * 60 * 1000
 
@@ -74,15 +75,46 @@ export async function claimNotificationDeliveryById(
 export async function markNotificationAccepted(
   supabase: SupabaseClient,
   deliveryId: string,
+  providerMessageId?: string | null,
 ): Promise<void> {
   const { error } = await supabase
     .from('notification_deliveries')
-    .update({ status: 'accepted', sent_at: new Date().toISOString(), lease_until: null })
+    .update({
+      status: 'accepted', sent_at: new Date().toISOString(), lease_until: null,
+      provider_message_id: providerMessageId ?? null,
+    })
     .eq('id', deliveryId)
     .eq('status', 'leased')
   if (error) throw error
 }
 
+async function markTerminal(
+  supabase: SupabaseClient,
+  deliveryId: string,
+  status: 'failed' | 'dead_letter',
+  error: unknown,
+): Promise<void> {
+  const { error: updateError } = await supabase
+    .from('notification_deliveries')
+    .update({
+      status,
+      lease_until: null,
+      last_error: safeEmailErrorDiagnostic(error),
+    })
+    .eq('id', deliveryId)
+    .eq('status', 'leased')
+  if (updateError) throw updateError
+}
+
+export function markNotificationFailed(supabase: SupabaseClient, deliveryId: string, error: unknown) {
+  return markTerminal(supabase, deliveryId, 'failed', error)
+}
+
+export function markNotificationDeadLetter(supabase: SupabaseClient, deliveryId: string, error: unknown) {
+  return markTerminal(supabase, deliveryId, 'dead_letter', error)
+}
+
+// Retained for unrelated existing callers; email callers now use terminal states.
 export async function markNotificationRetryable(
   supabase: SupabaseClient,
   deliveryId: string,

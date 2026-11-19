@@ -17,9 +17,10 @@
 import { createServiceClient } from '@/lib/supabase/service'
 import { logError } from '@/lib/logging'
 import { renderNewListingsDigest, type EmailListing } from '@/lib/email/template'
-import { sendEmail } from '@/lib/email/send'
+import { isEmailSendingConfigured, sendEmail } from '@/lib/email/send'
+import { isUncertainEmailError } from '@/lib/email/providers/types'
 import { firstName, getAuthEmailsByUserId } from '@/lib/email/authRecipients'
-import { claimNotificationDelivery, markNotificationAccepted, markNotificationRetryable } from '@/lib/email/outbox'
+import { claimNotificationDelivery, markNotificationAccepted, markNotificationDeadLetter, markNotificationFailed } from '@/lib/email/outbox'
 import { selectEmailBatch, type EmailBatch } from '@/lib/email/batches'
 
 export const DIGEST_WINDOW_DAYS = 7
@@ -50,7 +51,7 @@ export async function runNewListingDigest(opts: { minIntervalMs?: number; manual
     emails_sent: 0,
     listings_announced: 0,
     failed: 0,
-    dry_run: !process.env.BREVO_API_KEY || !process.env.REMINDER_FROM_EMAIL,
+    dry_run: !isEmailSendingConfigured(),
   }
   try {
     const since = new Date(Date.now() - DIGEST_WINDOW_DAYS * 86400000).toISOString()
@@ -147,10 +148,31 @@ export async function runNewListingDigest(opts: { minIntervalMs?: number; manual
         })
         if (!delivery) continue
         deliveryId = delivery.id
-        const res = await sendEmail({ to: email, subject, html, text, manual })
+        let res
+        try {
+          res = await sendEmail({ to: email, subject, html, text, manual, idempotencyKey: `digest/${delivery.id}` })
+        } catch (err) {
+          summary.failed += 1
+          const terminalize = isUncertainEmailError(err) ? markNotificationDeadLetter : markNotificationFailed
+          await terminalize(supabase, delivery.id, err).catch((stateError) => {
+            logError('email/digest', 'outbox_terminal_state_failed', { delivery_id: delivery.id }, stateError)
+          })
+          logError('email/digest', 'digest_send_failed', { delivery_id: delivery.id }, err)
+          continue
+        }
         summary.emails_sent += res.sent
         if (res.dry) summary.dry_run = true
-        await markNotificationAccepted(supabase, delivery.id)
+        if (!res.dry) {
+          await markNotificationAccepted(supabase, delivery.id, res.messageId).catch(async (stateError) => {
+            logError('email/digest', 'accepted_state_write_failed', { delivery_id: delivery.id }, stateError)
+            await markNotificationDeadLetter(supabase, delivery.id, {
+              code: 'accepted_state_persist_failed', provider: res.provider ?? null,
+            }).catch((deadLetterError) => logError('email/digest', 'outbox_dead_letter_failed', { delivery_id: delivery.id }, deadLetterError))
+          })
+        } else {
+          await markNotificationAccepted(supabase, delivery.id).catch((stateError) =>
+            logError('email/digest', 'dry_run_state_write_failed', { delivery_id: delivery.id }, stateError))
+        }
         const { error: announcementError } = await supabase.from('announcement_log').insert(logInsert)
         if (announcementError) {
           logError('email/digest', 'announcement_log_write_failed_after_send', { profile: p.id }, announcementError)
@@ -159,9 +181,6 @@ export async function runNewListingDigest(opts: { minIntervalMs?: number; manual
         summary.listings_announced += logInsert.length
       } catch (err) {
         summary.failed += 1
-        if (deliveryId) {
-          await markNotificationRetryable(supabase, deliveryId, err).catch(() => {})
-        }
         logError('email/digest', 'digest_send_failed', { profile: p.id }, err)
       }
     }
