@@ -242,7 +242,7 @@ export function Sidebar({
       <nav
         className={[
           "md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-hairline pb-[env(safe-area-inset-bottom)]",
-          "transition-transform duration-300 motion-reduce:transition-none",
+          "transition-transform duration-[var(--motion-duration-navigation)] motion-reduce:transition-none",
           "translate-y-0",
         ].join(" ")}
       >

@@ -21,7 +21,7 @@ export function StepIndicator({
                 aria-current={active ? "step" : undefined}
                 aria-label={`${done ? "Completed" : active ? "Current" : "Upcoming"}: ${label}`}
                 className={[
-                  "flex items-center justify-center w-8 h-8 rounded-seal border font-mono text-xs transition-[background-color,border-color,color,transform] duration-300",
+                  "flex items-center justify-center w-8 h-8 rounded-seal border font-mono text-xs transition-[background-color,border-color,color,transform] duration-[var(--motion-duration-step)] motion-reduce:transition-none",
                   done
                     ? "bg-navy border-navy text-white"
                     : active
@@ -46,7 +46,7 @@ export function StepIndicator({
               >
                 <span
                   aria-hidden="true"
-                  className="absolute inset-y-0 left-0 bg-navy origin-left transition-transform duration-300 ease-out motion-reduce:transition-none"
+                  className="absolute inset-y-0 left-0 bg-navy origin-left transition-transform duration-[var(--motion-duration-step)] ease-[var(--motion-ease-out)] motion-reduce:transition-none"
                   style={{ transform: `scaleX(${i < current ? 1 : i === current ? "var(--step-progress)" : 0})`, width: "100%" }}
                 />
               </div>
