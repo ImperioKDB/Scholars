@@ -20,6 +20,7 @@
 import { StatusMessage } from "@/components/StatusMessage";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/Logo";
 import { StepIndicator } from "@/components/StepIndicator";
@@ -133,6 +134,8 @@ function OnboardingForm() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [dirty, setDirty] = useState(false);
+  const [isStepTransitioning, setIsStepTransitioning] = useState(false);
+  const reducedMotion = useReducedMotion();
   const lastTrackedStep = useRef<number | null>(null);
   const completedSteps = useRef(new Set<number>());
   const terminalEventTracked = useRef(false);
@@ -333,6 +336,7 @@ function OnboardingForm() {
   }
   const coreValid = step === 0 && validateStep() === null;
   function goNext() {
+    if (isStepTransitioning) return;
     const err = validateStep();
     if (err) {
       setError(err);
@@ -340,10 +344,13 @@ function OnboardingForm() {
     }
     setError(null);
     trackStepCompletion(step, "continue");
+    setIsStepTransitioning(true);
     setStep((s) => Math.min(s + 1, STEPS.length - 1));
   }
   function goBack() {
+    if (isStepTransitioning) return;
     setError(null);
+    setIsStepTransitioning(true);
     setStep((s) => Math.max(s - 1, 0));
   }
   function trackStepCompletion(completedStep: number, path: "continue" | "provisional_matches" | "finish") {
@@ -432,28 +439,50 @@ function OnboardingForm() {
       <main className="mx-auto max-w-2xl px-4 sm:px-6 py-8 sm:py-12">
         <StepIndicator steps={STEPS} current={step} />
         <form onSubmit={(event) => { event.preventDefault(); if (step < STEPS.length - 1) goNext(); else void handleFinish(); }} className="bg-white rounded-2xl border border-hairline shadow-card p-4 sm:p-5">
-          <h1 className="font-display text-2xl font-semibold text-navy mb-1">
-            {step === 0 && "Core details"}
-            {step === 1 && "Personal information"}
-            {step === 2 && "Academic results"}
-            {step === 3 && "Documents & goals"}
-            {step === 4 && "Get better scholarship matches"}
-          </h1>
-          <p className="text-sm text-navy-light mb-2">
-            {step === 0 && "Name, school, course and level. That is all we need for your first real matches."}
-            {step === 1 && "State, LGA and age drive many Nigerian awards. Each one you add can unlock matches."}
-            {step === 2 && "JAMB and WAEC results -- most Nigerian scholarships gate on these directly."}
-            {step === 3 && "Tell us which documents you already have ready to submit."}
-            {step === 4 && "One clear authorization, then we compare your profile with opportunity requirements."}
-          </p>
-          <p className="text-xs text-navy-light mb-8">
-            {step === 0
-              ? "Everything after this step sharpens your matches. Your answers save automatically on this device."
-              : step === 4
-                ? "You can withdraw this authorization later in Settings."
-                : "Only what you fill is stored. Your answers save automatically on this device."}
-          </p>
-          {step === 0 && (
+          <AnimatePresence
+            mode="wait"
+            initial={false}
+            onExitComplete={() => setIsStepTransitioning(false)}
+          >
+            <motion.div
+              key={step}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{
+                opacity: 0,
+                y: -4,
+                transition: {
+                  duration: reducedMotion ? 0 : 0.12,
+                  ease: [0.16, 1, 0.3, 1],
+                },
+              }}
+              transition={{
+                duration: reducedMotion ? 0 : 0.18,
+                ease: [0.16, 1, 0.3, 1],
+              }}
+            >
+              <h1 className="font-display text-2xl font-semibold text-navy mb-1">
+                {step === 0 && "Core details"}
+                {step === 1 && "Personal information"}
+                {step === 2 && "Academic results"}
+                {step === 3 && "Documents & goals"}
+                {step === 4 && "Get better scholarship matches"}
+              </h1>
+              <p className="text-sm text-navy-light mb-2">
+                {step === 0 && "Name, school, course and level. That is all we need for your first real matches."}
+                {step === 1 && "State, LGA and age drive many Nigerian awards. Each one you add can unlock matches."}
+                {step === 2 && "JAMB and WAEC results -- most Nigerian scholarships gate on these directly."}
+                {step === 3 && "Tell us which documents you already have ready to submit."}
+                {step === 4 && "One clear authorization, then we compare your profile with opportunity requirements."}
+              </p>
+              <p className="text-xs text-navy-light mb-8">
+                {step === 0
+                  ? "Everything after this step sharpens your matches. Your answers save automatically on this device."
+                  : step === 4
+                    ? "You can withdraw this authorization later in Settings."
+                    : "Only what you fill is stored. Your answers save automatically on this device."}
+              </p>
+              {step === 0 && (
             <>
               <FormField label="Full name">
                 <input className={inputClass} type="text" value={form.full_name} onChange={(e) => update("full_name", e.target.value)} placeholder="Enter your full name" />
@@ -498,7 +527,7 @@ function OnboardingForm() {
               </FormField>
             </>
           )}
-          {step === 1 && (
+              {step === 1 && (
             <>
               <FormField label="Date of birth" hint="Used to check age-based eligibility rules.">
                 <input className={inputClass} type="date" value={form.date_of_birth} onChange={(e) => update("date_of_birth", e.target.value)} />
@@ -539,7 +568,7 @@ function OnboardingForm() {
               </FormField>
             </>
           )}
-          {step === 2 && (
+              {step === 2 && (
             <>
               <FormField label="GPA / CGPA (optional)" hint="Enter it on your institution's own scale, e.g. 3.72.">
                 <input className={inputClass} type="number" step="0.01" min="0" max="5" value={form.gpa} onChange={(e) => update("gpa", e.target.value)} placeholder="3.72" />
@@ -572,7 +601,7 @@ function OnboardingForm() {
               </FormField>
             </>
           )}
-          {step === 3 && (
+              {step === 3 && (
             <>
               <p className="text-sm font-medium text-ink mb-3">Documents ready to submit</p>
               <div className="space-y-3 mb-6">
@@ -594,7 +623,7 @@ function OnboardingForm() {
               </FormField>
             </>
           )}
-          {step === 4 && (
+              {step === 4 && (
             <div className="space-y-6">
               <div className="rounded-xl border border-navy/15 bg-navy-50/60 p-5">
                 <h2 className="font-display text-lg font-semibold text-navy mb-2">How matching works</h2>
@@ -621,7 +650,9 @@ function OnboardingForm() {
                 Read our <a href="/legal/privacy" className="font-medium text-navy underline">Privacy Notice</a> and <a href="/legal/terms" className="font-medium text-navy underline">Terms of Service</a>. See <button type="button" className="font-medium text-navy underline" onClick={() => setError("Matching uses the profile fields you provide to compare your eligibility with opportunity requirements.")}>how matching uses your information</button>.
               </p>
             </div>
-          )}
+              )}
+            </motion.div>
+          </AnimatePresence>
           <div className="sr-only" aria-live="polite" aria-atomic="true">
             {saving || skipPending ? "Saving your profile…" : error ? error : ""}
           </div>
@@ -636,13 +667,13 @@ function OnboardingForm() {
             </StatusMessage>
           )}
           <div className="flex items-center justify-between mt-6 pt-6 border-t border-hairline gap-3">
-            <button type="button" onClick={goBack} disabled={step === 0 || saving || skipPending}
+            <button type="button" onClick={goBack} disabled={step === 0 || saving || skipPending || isStepTransitioning}
               className="text-sm font-medium text-navy-light hover:text-navy disabled:opacity-0 disabled:pointer-events-none">
               Back
             </button>
             <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-3">
               {step > 0 && (
-                <button type="button" onClick={handleSkip} disabled={saving || skipPending}
+                <button type="button" onClick={handleSkip} disabled={saving || skipPending || isStepTransitioning}
                   aria-busy={skipPending}
                   className="inline-flex min-h-[44px] items-center justify-center gap-2 text-sm font-medium text-navy-light hover:text-navy px-3 py-2 disabled:cursor-wait disabled:opacity-60">
                   {skipPending && <SpinnerIcon className="h-4 w-4" />}
@@ -651,11 +682,11 @@ function OnboardingForm() {
               )}
               {step === 0 ? (
                 <>
-                  <button type="button" onClick={goNext} disabled={saving || skipPending}
+                  <button type="button" onClick={goNext} disabled={saving || skipPending || isStepTransitioning}
                     className="w-full sm:w-auto min-h-[44px] rounded-seal border border-hairline bg-white text-navy text-sm font-medium px-5 py-2.5 hover:bg-navy-50 transition-colors disabled:opacity-60">
                     Continue
                   </button>
-                  <button type="button" onClick={saveProfileAndGoDashboard} disabled={!coreValid || saving || skipPending}
+                  <button type="button" onClick={saveProfileAndGoDashboard} disabled={!coreValid || saving || skipPending || isStepTransitioning}
                     aria-busy={saving}
                     className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60">
                     {saving && (
@@ -668,12 +699,12 @@ function OnboardingForm() {
                   </button>
                 </>
               ) : step < STEPS.length - 1 ? (
-                <button type="button" onClick={goNext} disabled={saving || skipPending}
+                <button type="button" onClick={goNext} disabled={saving || skipPending || isStepTransitioning}
                   className="min-h-[44px] rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60">
                   Continue
                 </button>
               ) : (
-                <button type="button" onClick={handleFinish} disabled={saving || skipPending}
+                <button type="button" onClick={handleFinish} disabled={saving || skipPending || isStepTransitioning}
                   aria-busy={saving}
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-seal bg-navy text-white text-sm font-medium px-6 py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60">
                   {saving && (

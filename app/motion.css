@@ -29,8 +29,8 @@
 }
 
 /* Onboarding tour: the backdrop arrives first, then the card and spotlight
-   settle into place. Position/size transitions keep the guide attached to a
-   target while smooth scrolling finishes on smaller screens. */
+   settle into place while the coordinated controller keeps them attached to a
+   target during smooth scrolling on smaller screens. */
 .tour-shell {
   animation: tour-shell-in var(--motion-duration-overlay) var(--motion-ease-out) both;
 }
@@ -43,15 +43,10 @@
   width: var(--tour-width, 0px);
   height: var(--tour-height, 0px);
   transform: translate3d(var(--tour-left, 0px), var(--tour-top, 0px), 0);
-  will-change: transform, width, height, opacity;
+  will-change: transform, opacity;
   animation: tour-spotlight-in 260ms var(--motion-ease-out) both;
 }
 .tour-card {
-  transition: top 280ms var(--motion-ease-out),
-    left 280ms var(--motion-ease-out),
-    transform 280ms var(--motion-ease-out);
-  /* Positioning transforms come from the inline tooltip style; do not animate
-     transform on this element or the centered mobile fallback will be lost. */
   animation: tour-card-in 260ms var(--motion-ease-out) 40ms both;
 }
 .tour-card-content {

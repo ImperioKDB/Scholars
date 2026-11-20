@@ -7,6 +7,8 @@
   --motion-duration-card: 320ms;
   --motion-duration-enter: 380ms;
   --motion-duration-overlay: 200ms;
+  --motion-duration-step: 180ms;
+  --motion-duration-navigation: 200ms;
   --motion-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 

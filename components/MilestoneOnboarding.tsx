@@ -1,14 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { track } from "@/lib/analytics";
-import { useSpringValue } from "@/lib/motion/useSpring";
+import { useSpringRect } from "@/lib/motion/useSpringRect";
 
 type MilestoneId = "welcome_tour" | "discover_tip" | "saved_tip" | "application_tip";
 type Context = "dashboard" | "discover" | "applications";
-type TargetRect = { top: number; left: number; width: number; height: number };
-
 type TourStep = {
   id: string;
   title: string;
@@ -113,29 +111,20 @@ function getTargetElement(target?: string): Element | null {
   return document.querySelector(`[data-tour="${target}"]`);
 }
 
-function getTargetRect(target?: string): TargetRect | null {
-  if (!target || typeof document === "undefined") return null;
-  const element = getTargetElement(target);
-  if (!element || !element.isConnected) return null;
-  const rect = element.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) return null;
-  return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
-}
-
 export function MilestoneOnboarding({ context, userId }: { context: Context; userId: string }) {
   const router = useRouter();
   const [state, setState] = useState<Partial<Record<MilestoneId, boolean>>>({});
   const [tourIndex, setTourIndex] = useState<number | null>(null);
   const [contextStep, setContextStep] = useState<TourStep | null>(null);
-  const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
+  const [targetAvailable, setTargetAvailable] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const spotlightRef = useRef<HTMLDivElement>(null);
-  const transitionTimerRef = useRef<number | null>(null);
-  const [isTransitioning, setIsTransitioning] = useState(false);
+  const tooltipRef = useRef<HTMLDivElement>(null);
 
   const dashboardTour = context === "dashboard" ? DASHBOARD_STEPS : [];
   const activeStep = contextStep ?? (tourIndex === null ? null : dashboardTour[tourIndex]);
   const isDashboardTour = contextStep === null && tourIndex !== null;
+  const hasTarget = Boolean(activeStep?.target) && targetAvailable;
   const stepCount = dashboardTour.length;
 
   useEffect(() => {
@@ -173,41 +162,12 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
     });
   }, [activeStep?.id]);
 
-  useEffect(() => {
-    if (!activeStep) {
-      setTargetRect(null);
-      return;
-    }
-    let frame = 0;
-    const update = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => setTargetRect(getTargetRect(activeStep.target)));
-    };
-    update();
-    const target = getTargetElement(activeStep.target);
-    const observer = typeof ResizeObserver === "undefined" || !target ? null : new ResizeObserver(update);
-    if (observer && target) observer.observe(target);
-    window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, true);
-    return () => {
-      cancelAnimationFrame(frame);
-      observer?.disconnect();
-      window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
-    };
-  }, [activeStep]);
-
-  const spotlightTop = targetRect ? targetRect.top - 8 : 0;
-  const spotlightLeft = targetRect ? targetRect.left - 8 : 0;
-  const spotlightWidth = targetRect ? targetRect.width + 16 : 0;
-  const spotlightHeight = targetRect ? targetRect.height + 16 : 0;
-  useSpringValue(spotlightTop, (value) => spotlightRef.current?.style.setProperty("--tour-top", `${value}px`));
-  useSpringValue(spotlightLeft, (value) => spotlightRef.current?.style.setProperty("--tour-left", `${value}px`));
-  useSpringValue(spotlightWidth, (value) => spotlightRef.current?.style.setProperty("--tour-width", `${value}px`));
-  useSpringValue(spotlightHeight, (value) => spotlightRef.current?.style.setProperty("--tour-height", `${value}px`));
-  useEffect(() => {
-    if (spotlightRef.current) spotlightRef.current.style.opacity = targetRect ? "1" : "0";
-  }, [targetRect]);
+  useSpringRect({
+    target: activeStep?.target,
+    spotlightRef,
+    tooltipRef,
+    onAvailabilityChange: setTargetAvailable,
+  });
 
   useEffect(() => {
     if (!activeStep) return;
@@ -233,22 +193,6 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeStep?.id, isDashboardTour]);
 
-  useEffect(() => () => {
-    if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
-  }, []);
-
-  const tooltipStyle = useMemo(() => {
-    if (!targetRect) {
-      return { top: "50%", left: "50%", transform: "translate(-50%, -50%)" } as const;
-    }
-    const cardHeight = 220;
-    const top = targetRect.top + targetRect.height + 18 + cardHeight < window.innerHeight
-      ? targetRect.top + targetRect.height + 18
-      : Math.max(18, targetRect.top - cardHeight - 18);
-    const left = Math.min(Math.max(16, targetRect.left), Math.max(16, window.innerWidth - 380));
-    return { top, left, transform: "none" } as const;
-  }, [targetRect]);
-
   if (!activeStep) return null;
 
   function finishContextStep() {
@@ -272,7 +216,6 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
   }
 
   function next() {
-    if (isTransitioning) return;
     if (contextStep) {
       finishContextStep();
       return;
@@ -283,9 +226,7 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
       return;
     }
     track("onboarding_step_completed", { step: tourIndex, label: activeStep?.id ?? "unknown", path: "milestone" });
-    setIsTransitioning(true);
     setTourIndex((index) => (index === null ? null : index + 1));
-    transitionTimerRef.current = window.setTimeout(() => setIsTransitioning(false), 280);
   }
 
   function skip() {
@@ -299,21 +240,21 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
 
   return (
     <div className="tour-shell fixed inset-0 z-[90]" role="presentation">
-      {targetRect ? (
-        <div
-          ref={spotlightRef}
-          className="tour-spotlight absolute rounded-2xl border-2 border-white/90 shadow-[0_0_0_9999px_rgba(11,30,61,0.7)]"
-          aria-hidden="true"
-        />
-      ) : (
-        <div className="tour-backdrop absolute inset-0 bg-navy/70" aria-hidden="true" />
-      )}
       <div
+        ref={spotlightRef}
+        className={`tour-spotlight absolute rounded-2xl border-2 border-white/90 shadow-[0_0_0_9999px_rgba(11,30,61,0.7)]${hasTarget ? "" : " invisible"}`}
+        aria-hidden="true"
+      />
+      {!hasTarget && <div className="tour-backdrop absolute inset-0 bg-navy/70" aria-hidden="true" />}
+      <div
+        ref={tooltipRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="milestone-onboarding-title"
         className="tour-card absolute w-[calc(100%-2rem)] max-w-[360px] rounded-2xl border border-white/20 bg-white p-5 text-ink shadow-2xl"
-        style={tooltipStyle}
+        style={hasTarget
+          ? { top: 0, left: 0, transform: "translate3d(var(--tour-card-left, 0px), var(--tour-card-top, 0px), 0)" }
+          : { top: "50%", left: "50%", transform: "translate(-50%, -50%)" }}
       >
         <div key={activeStep.id} className="tour-card-content">
           <div className="mb-4 flex items-start justify-between gap-4">
@@ -326,7 +267,7 @@ export function MilestoneOnboarding({ context, userId }: { context: Context; use
           <p className="text-sm leading-6 text-navy-light">{activeStep.body}</p>
           <div className="mt-5 flex items-center justify-between gap-3">
             {!isDashboardTour ? <span className="text-xs text-navy-light">You can revisit this anytime.</span> : <span />}
-            <button type="button" onClick={next} disabled={isTransitioning} className="inline-flex min-h-[44px] items-center justify-center rounded-seal bg-navy px-5 py-2.5 text-sm font-medium text-white hover:bg-navy-light disabled:cursor-wait disabled:opacity-70">{activeStep.action}</button>
+            <button type="button" onClick={next} className="inline-flex min-h-[44px] items-center justify-center rounded-seal bg-navy px-5 py-2.5 text-sm font-medium text-white hover:bg-navy-light">{activeStep.action}</button>
           </div>
         </div>
       </div>
