@@ -6,7 +6,7 @@ import { ProviderMonogram } from "@/components/ProviderMonogram";
 import { ShareButton } from "@/components/ShareButton";
 import { DeadlineBadge } from "@/components/DeadlineBadge";
 import { saveReturnScroll } from "@/lib/scrollRestore";
-import { daysUntil, formatLastClosedLabel, formatOpensLabel } from "@/lib/dates";
+import { daysUntil, formatApplicationWindowLabel, formatLastClosedLabel, formatOpensLabel } from "@/lib/dates";
 import type { CyclePrediction } from "@/lib/cycles";
 export type CardScholarship = {
   id: string;
@@ -95,6 +95,10 @@ export function ScholarshipCard({
     return () => window.clearTimeout(timer);
   }, [firstSaveCelebration]);
   const opensIn = scholarship.opens_at ? daysUntil(scholarship.opens_at) : null;
+  const deadlineIn = daysUntil(scholarship.deadline);
+  const hasApplicationWindow = Boolean(
+    scholarship.opens_at && scholarship.deadline && deadlineIn !== null && deadlineIn >= 0,
+  );
   const opensSoon = scholarship.isOpenNow === false && opensIn !== null && opensIn > 0;
   const closedUnknownReopen =
     scholarship.isOpenNow === false && !opensSoon && Boolean(scholarship.last_cycle_closed_at);
@@ -123,9 +127,11 @@ export function ScholarshipCard({
           <p className="text-xs text-navy-light mt-0.5">{scholarship.provider_name}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 mt-3">
-          {opensSoon ? (
+          {opensSoon || (scholarship.isOpenNow === true && hasApplicationWindow) ? (
             <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-light text-amber">
-              {formatOpensLabel(scholarship.opens_at as string)}
+              {hasApplicationWindow
+                ? formatApplicationWindowLabel(scholarship.opens_at as string, scholarship.deadline as string)
+                : formatOpensLabel(scholarship.opens_at as string)}
             </span>
           ) : closedUnknownReopen ? (
             <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-light text-amber">

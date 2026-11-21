@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { createPublicClient } from "@/lib/supabase/public";
 import { SeoJsonLd } from "@/components/SeoJsonLd";
-import { todayUtcIso } from "@/lib/dates";
+import { formatApplicationWindowLabel, todayUtcIso } from "@/lib/dates";
 import { pageHref, pageStart, parsePublicPage, PUBLIC_PAGE_SIZE } from "@/lib/public-pagination";
 
 const PATH = "/scholarships-in-nigeria";
@@ -44,6 +44,7 @@ type Scholarship = {
   provider_name: string;
   amount: string | null;
   deadline: string | null;
+  opens_at: string | null;
   discipline: string | null;
 };
 
@@ -64,7 +65,7 @@ export default async function ScholarshipsInNigeriaPage({
   const supabase = createPublicClient();
   const { data, count } = await supabase
     .from("scholarships_public_preview_v1")
-    .select("id, slug, title, provider_name, amount, deadline, last_cycle_closed_at, discipline", { count: "exact" })
+    .select("id, slug, title, provider_name, amount, deadline, opens_at, last_cycle_closed_at, discipline", { count: "exact" })
     .eq("verified", true)
     .in("level", ["undergrad", "both"])
     .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
@@ -104,7 +105,11 @@ export default async function ScholarshipsInNigeriaPage({
                   </h3>
                   <div className="mt-4 flex flex-wrap gap-2 text-xs">
                     {scholarship.amount && <span className="rounded-full bg-emerald-light px-2.5 py-1 font-mono text-emerald">{scholarship.amount}</span>}
-                    <span className="rounded-full bg-rose-light px-2.5 py-1 text-rose">Deadline {formatDeadline(scholarship.deadline)}</span>
+                    {scholarship.opens_at && scholarship.deadline ? (
+                      <span className="rounded-full bg-amber-light px-2.5 py-1 text-amber">{formatApplicationWindowLabel(scholarship.opens_at, scholarship.deadline)}</span>
+                    ) : (
+                      <span className="rounded-full bg-rose-light px-2.5 py-1 text-rose">Deadline {formatDeadline(scholarship.deadline)}</span>
+                    )}
                     {scholarship.discipline && <span className="rounded-full bg-navy-50 px-2.5 py-1 text-navy-light">{scholarship.discipline}</span>}
                   </div>
                   <Link href={`/scholarship/${scholarship.slug}`} className="mt-5 inline-block text-sm font-medium text-navy underline">View scholarship details</Link>

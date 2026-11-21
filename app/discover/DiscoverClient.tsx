@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { ScholarshipCard, type CardScholarship } from "@/components/ScholarshipCard";
 import { LogoLoader } from "@/components/LogoLoader";
 import { isCurrentlyOpen } from "@/lib/discovery";
+import { daysUntil } from "@/lib/dates";
 import { fetchWithTimeout, FetchTimeoutError, FetchNetworkError } from "@/lib/fetch";
 import { MilestoneOnboarding } from "@/components/MilestoneOnboarding";
 import { readCachedScholarshipCatalog, writeCachedScholarshipCatalog } from "@/lib/offline/catalog-cache";
@@ -139,9 +140,22 @@ export function DiscoverClient({ userId, initialSavedIds, initialSavedError }: {
     [items]
   );
 
-  const comingSoonItems = useMemo(
-    () => items.filter((s) => !isCurrentlyOpen(s)).map((s) => ({ ...s, isOpenNow: false })),
+  const openingSoonItems = useMemo(
+    () => items
+      .filter((s) => {
+        const days = daysUntil(s.opens_at);
+        return !isCurrentlyOpen(s) && days !== null && days > 0 && days <= 7;
+      })
+      .sort((a, b) => (daysUntil(a.opens_at) ?? 99) - (daysUntil(b.opens_at) ?? 99))
+      .map((s) => ({ ...s, isOpenNow: false })),
     [items]
+  );
+
+  const openingSoonIds = useMemo(() => new Set(openingSoonItems.map((s) => s.id)), [openingSoonItems]);
+
+  const comingSoonItems = useMemo(
+    () => items.filter((s) => !isCurrentlyOpen(s) && !openingSoonIds.has(s.id)).map((s) => ({ ...s, isOpenNow: false })),
+    [items, openingSoonIds]
   );
 
   async function toggleSave(scholarshipId: string) {
@@ -258,6 +272,19 @@ export function DiscoverClient({ userId, initialSavedIds, initialSavedError }: {
         </div>
       ) : (
         <>
+          {openingSoonItems.length > 0 && (
+            <section className="mb-8" aria-labelledby="opening-soon-heading">
+              <h2 id="opening-soon-heading" className="font-display text-lg font-semibold text-navy mb-1">Opening this week</h2>
+              <p className="text-sm text-navy-light mb-4">
+                Verified scholarships scheduled to open in the next seven days.
+              </p>
+              <ScrollReveal className="grid md:grid-cols-2 gap-4">
+                {openingSoonItems.map((s) => (
+                  <ScholarshipCard key={s.id} scholarship={s} saved={savedIds.has(s.id)} pending={pendingIds.has(s.id)} onToggleSave={() => toggleSave(s.id)} sharerId={userId} />
+                ))}
+              </ScrollReveal>
+            </section>
+          )}
           {openNowItems.length > 0 && (
             <ScrollReveal data-tour="scholarships-list" className="grid md:grid-cols-2 gap-4">
               {openNowItems.map((s) => (

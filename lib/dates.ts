@@ -48,6 +48,25 @@ export function formatOpensLabel(opensAt: string): string {
   });
   return `Opens ${formatted}`;
 }
+export function formatApplicationWindowLabel(opensAt: string, deadline: string): string {
+  const opens = new Date(`${opensAt}T00:00:00Z`);
+  const closes = new Date(`${deadline}T00:00:00Z`);
+  if (Number.isNaN(opens.getTime()) || Number.isNaN(closes.getTime())) {
+    return `Applications open ${opensAt} – ${deadline}`;
+  }
+  const sameYear = opens.getUTCFullYear() === closes.getUTCFullYear();
+  const formatDate = (date: Date, includeYear: boolean) => {
+    const weekday = date.toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
+    const dayMonth = date.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: includeYear ? "numeric" : undefined,
+      timeZone: "UTC",
+    });
+    return `${weekday}, ${dayMonth}`;
+  };
+  return `Applications open ${formatDate(opens, !sameYear)} – ${formatDate(closes, true)}`;
+}
 export function formatLastClosedLabel(closedAt: string): string {
   const date = new Date(`${closedAt}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return `Last cycle closed ${closedAt}`;
