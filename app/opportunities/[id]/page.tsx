@@ -28,7 +28,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
   if (!user) {
     return null;
   }
-  const supabase = createClient();
+  const supabase = await createClient();
   const [opportunityResult, savedResult] = await Promise.all([
     supabase
       .from("opportunities")

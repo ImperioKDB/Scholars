@@ -27,7 +27,7 @@ export default async function AchievementsPage() {
   if (!user) {
     return null;
   }
-  const supabase = createClient();
+  const supabase = await createClient();
   const [
     { data: achievements },
     { data: unlocked },

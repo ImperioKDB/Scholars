@@ -6,7 +6,7 @@ vi.mock("./supabase/server", () => ({
     from: mockFrom,
     storage: {
       from: () => ({
-        getPublicUrl: () => ({ data: { publicUrl: "https://example.supabase.co/storage/v1/object/public/resource-center/featured/guide.webp" } }),
+        getPublicUrl: () => ({ data: { publicUrl: "https://example.supabase.co/storage/v1/object/public/site/resource-center/featured/guide.webp" } }),
       }),
     },
   }),
@@ -125,7 +125,7 @@ describe("Resource Center public data contract", () => {
       process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
       const url = getResourceImageUrl("resource-center/featured/guide.webp");
-      expect(url).toBe("https://example.supabase.co/storage/v1/object/public/resource-center/featured/guide.webp");
+      expect(url).toBe("https://example.supabase.co/storage/v1/object/public/site/resource-center/featured/guide.webp");
     });
 
     it("returns null for unapproved paths even when config is present", () => {

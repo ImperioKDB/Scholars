@@ -8,7 +8,7 @@ import { SendTestProfileNudgeButton } from "@/components/admin/SendTestProfileNu
 // relevant during an application cycle.
 const ACTIVATION_WINDOW_DAYS = 30;
 async function getStats() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const sinceIso = new Date(Date.now() - ACTIVATION_WINDOW_DAYS * 86400000).toISOString();
   const [
     { count: totalScholarships },

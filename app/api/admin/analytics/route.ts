@@ -27,7 +27,7 @@ function csv(rows: Record<string, unknown>[]): string {
 }
 
 export async function GET(request: Request) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const admin = await assertAdmin(supabase);
   if (!admin.ok) return admin.response;
 

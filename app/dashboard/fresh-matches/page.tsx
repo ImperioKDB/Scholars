@@ -11,7 +11,7 @@ export default async function FreshMatchesPage() {
 
   const [{ matches, error }, savedResult] = await Promise.all([
     getMatchesForCurrentUser(),
-    createClient()
+    (await createClient())
       .from("saved_scholarships")
       .select("scholarship_id")
       .eq("profile_id", user.id),

@@ -8,7 +8,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { sendPushForProfile } from "@/lib/push/deliver";
 
 async function getUser(request: Request) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) return { supabase, user: null, response: NextResponse.json({ error: "Not authenticated" }, { status: 401 }) };
   const limited = await checkRateLimit(request, { route: "scholarship-discussion-helpful", limit: 30, extraKeys: [`user:${user.id}`] });
@@ -16,21 +16,22 @@ async function getUser(request: Request) {
   return { supabase, user, response: null };
 }
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
-  if (!isUuid(params.id)) return NextResponse.json({ error: "Invalid discussion id" }, { status: 400 });
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  if (!isUuid(id)) return NextResponse.json({ error: "Invalid discussion id" }, { status: 400 });
   const { supabase, user, response } = await getUser(request);
   if (response || !user) return response ?? NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   const { error } = await supabase
     .from("scholarship_discussion_reactions")
-    .insert({ discussion_id: params.id, profile_id: user.id });
+    .insert({ discussion_id: id, profile_id: user.id });
   if (error && error.code !== "23505") return dbErrorResponse("scholarship_discussion_helpful", error);
   if (!error) {
-    trackServerEvent(supabase, user.id, "community_helpful_reaction", { discussion_id: params.id });
+    trackServerEvent(supabase, user.id, "community_helpful_reaction", { discussion_id: id });
     try {
       const { data: discussion } = await supabase
         .from("scholarship_discussions")
         .select("author_id")
-        .eq("id", params.id)
+        .eq("id", id)
         .maybeSingle();
       if (discussion && discussion.author_id !== user.id) {
         await sendPushForProfile(createServiceClient(), discussion.author_id, {
@@ -48,11 +49,12 @@ export async function POST(request: Request, { params }: { params: { id: string 
   return NextResponse.json({ helpful: true });
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
-  if (!isUuid(params.id)) return NextResponse.json({ error: "Invalid discussion id" }, { status: 400 });
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  if (!isUuid(id)) return NextResponse.json({ error: "Invalid discussion id" }, { status: 400 });
   const { supabase, user, response } = await getUser(request);
   if (response || !user) return response ?? NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  const { error } = await supabase.from("scholarship_discussion_reactions").delete().eq("discussion_id", params.id).eq("profile_id", user.id);
+  const { error } = await supabase.from("scholarship_discussion_reactions").delete().eq("discussion_id", id).eq("profile_id", user.id);
   if (error) return dbErrorResponse("scholarship_discussion_helpful_delete", error);
   return NextResponse.json({ helpful: false });
 }

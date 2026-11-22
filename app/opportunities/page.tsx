@@ -24,7 +24,7 @@ export default async function OpportunitiesPage() {
   if (!user) {
     return null;
   }
-  const supabase = createClient();
+  const supabase = await createClient();
   const savedResult = await supabase
     .from("saved_opportunities")
     .select(`id, saved_at, opportunity:opportunities!inner ( ${OPPORTUNITY_COLUMNS} )`)

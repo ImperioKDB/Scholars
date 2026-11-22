@@ -1,11 +1,12 @@
 import Link from "next/link";
 
-export default function ConnectionProblemPage({
+export default async function ConnectionProblemPage({
   searchParams,
 }: {
-  searchParams?: { next?: string | string[] };
+  searchParams?: Promise<{ next?: string | string[] }>;
 }) {
-  const candidate = Array.isArray(searchParams?.next) ? searchParams?.next[0] : searchParams?.next;
+  const resolvedSearchParams = await searchParams;
+  const candidate = Array.isArray(resolvedSearchParams?.next) ? resolvedSearchParams?.next[0] : resolvedSearchParams?.next;
   const nextPath = candidate?.startsWith("/") && !candidate.startsWith("//") ? candidate : "/dashboard";
 
   return (

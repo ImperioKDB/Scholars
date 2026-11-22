@@ -10,7 +10,7 @@ const roleSchema = z.object({
 });
 
 export async function PATCH(request: Request) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const guard = await assertAdmin(supabase);
   if (!guard.ok) return guard.response;
   const parsed = roleSchema.safeParse(await request.json().catch(() => null));

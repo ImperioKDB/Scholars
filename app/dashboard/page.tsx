@@ -15,7 +15,7 @@ export default async function DashboardPage() {
   if (!user) {
     return null;
   }
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ matches, profileCompleteness, error: matchError }, savedResult, trendingResult] = await Promise.all([
     getMatchesForCurrentUser(),
     supabase

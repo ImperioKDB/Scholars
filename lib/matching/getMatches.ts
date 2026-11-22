@@ -32,7 +32,7 @@ type CachedCatalogPayload = {
 // table is missing (migration not applied yet) or the read errors, matches
 // return exactly as before with cycle left undefined.
 async function attachCyclePredictions(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   matches: ScholarshipMatch[]
 ): Promise<ScholarshipMatch[]> {
   const ids = matches.map((m) => m.id);
@@ -63,7 +63,7 @@ export async function getMatchesForCurrentUser(): Promise<{
   if (!user) return { matches: [], profileCompleteness: 0, error: "not_authenticated" };
   if (!profileRow) return { matches: [], profileCompleteness: 0, error: "profile_not_found" };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const retainedIds = await getRetainedScholarshipIds(supabase, user.id);
 
   // PERF (batch 1): warm-cache path. Returns the exact same payload
@@ -192,7 +192,7 @@ export async function getMatchForScholarship(scholarshipId: string): Promise<{
   if (!profileRow) return { match: null, profileCompleteness: 0, error: "profile_not_found" };
 
   const profile: MatchableProfile = toMatchableProfile(profileRow);
-  const supabase = createClient();
+  const supabase = await createClient();
   const retainedIds = await getRetainedScholarshipIds(supabase, user.id);
   const [
     { data: scholarship, error: scholarshipError },

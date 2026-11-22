@@ -21,7 +21,7 @@ export default async function DiscoverPage() {
     return null;
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: savedRows, error: savedError } = await supabase
     .from("saved_scholarships")
     .select("scholarship_id")

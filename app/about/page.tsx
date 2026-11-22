@@ -39,7 +39,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default async function AboutPage() {
   const { user, profile } = await getCurrentUserAndProfile();
   const isAdmin = Boolean(profile?.is_admin);
-  const supabase = createClient();
+  const supabase = await createClient();
   // Probe existence + updated_at. Pre-migration (bucket missing) this
   // errors and objs stays null, so the page degrades to the placeholder
   // instead of failing.

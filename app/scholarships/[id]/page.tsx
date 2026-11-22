@@ -32,7 +32,7 @@ export default async function ScholarshipDetailPage({ params }: { params: Promis
     return null;
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // LATENCY FIX: getMatchForScholarship (2 queries) used to run first, then
   // saved + application ran as a second wave. All four queries are
