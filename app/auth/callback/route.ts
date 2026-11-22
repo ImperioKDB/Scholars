@@ -36,7 +36,7 @@ import { getAuthRedirectOrigin } from "@/lib/auth/redirect-origin";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   let cookieNext = "";
   try {
     cookieNext = decodeURIComponent(cookieStore.get("scholars_auth_next")?.value ?? "");
@@ -46,7 +46,7 @@ export async function GET(request: Request) {
   const next = safeNextPath(searchParams.get("next") || cookieNext, "/dashboard");
   const redirectOrigin = getAuthRedirectOrigin(origin, process.env.NEXT_PUBLIC_APP_URL);
   if (code) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error && data.user) {
       const refId = cookieStore.get(COOKIE_NAMES.REF)?.value;
@@ -84,10 +84,10 @@ export async function GET(request: Request) {
       // The browser sets this short-lived fallback marker before OAuth or
       // signup. Remove it on the normal callback path so a later root-level
       // auth rescue cannot inherit an old onboarding destination.
-      const authCookieDomain =
-        process.env.VERCEL_ENV === "production"
-          ? getAuthCookieDomain("www.scholars.com.ng")
-          : undefined;
+      // Clear the parent-domain fallback only when this callback
+      // is running on one of the approved Scholars hostnames.
+      const callbackHostname = new URL(request.url).hostname.toLowerCase();
+      const authCookieDomain = getAuthCookieDomain(callbackHostname);
       cookieStore.set("scholars_auth_next", "", {
         maxAge: 0,
         path: "/",
