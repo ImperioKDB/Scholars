@@ -36,9 +36,10 @@ async function loadProfile(profileId: string): Promise<ContributorProfile | null
 export async function generateMetadata({
   params,
 }: {
-  params: { profileId: string };
+  params: Promise<{ profileId: string }>;
 }): Promise<Metadata> {
-  const profile = await loadProfile(params.profileId);
+  const { profileId } = await params;
+  const profile = await loadProfile(profileId);
   if (!profile) return { title: "Contributor profile | Scholars" };
   return {
     title: `${profile.display_name} | Scholars community`,
@@ -50,9 +51,10 @@ export async function generateMetadata({
 export default async function ContributorProfilePage({
   params,
 }: {
-  params: { profileId: string };
+  params: Promise<{ profileId: string }>;
 }) {
-  const profile = await loadProfile(params.profileId);
+  const { profileId } = await params;
+  const profile = await loadProfile(profileId);
   if (!profile) notFound();
 
   return (

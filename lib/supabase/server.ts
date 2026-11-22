@@ -17,16 +17,26 @@ import { createTimeoutFetch } from "@/lib/fetch";
 //   - SameSite=lax against CSRF, Secure against network interception,
 //   - RLS + server-side checks on every sensitive operation, so a stolen
 //     browser token still only sees what RLS allows that user.
-export function createClient() {
-  const cookieStore = cookies();
-  const requestHeaders = headers();
-  const requestHost = (
-    requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? ""
-  ).split(",")[0].trim().split(":")[0].toLowerCase();
-  const authCookieDomain =
-    process.env.VERCEL_ENV === "production"
-      ? getAuthCookieDomain(requestHost)
-      : undefined;
+export async function createClient() {
+  const cookieStore = await cookies();
+  const requestHeaders = await headers();
+  const forwardedHost = (
+    requestHeaders.get("x-forwarded-host") ??
+    requestHeaders.get("host") ??
+    ""
+  ).split(",")[0].trim();
+
+  // Use the actual request hostname. The allowlist in
+  // getAuthCookieDomain prevents preview and unrelated hosts
+  // from receiving the shared Scholars cookie domain.
+  let requestHost = "";
+  try {
+    requestHost = new URL(`https://${forwardedHost}`).hostname.toLowerCase();
+  } catch {
+    requestHost = "";
+  }
+
+  const authCookieDomain = getAuthCookieDomain(requestHost);
   const hardened = (options: CookieOptions): CookieOptions => ({
     ...options,
     sameSite: "lax",

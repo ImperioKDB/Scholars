@@ -142,7 +142,7 @@ function AllClear() {
 }
 export default async function AdminHealthPage() {
   await requireAdmin();
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("scholarships")
     .select("id, title, provider_name, deadline, verified, application_url, how_to_apply, created_at")

@@ -35,7 +35,7 @@ onboarding_step?: number;
 onboarding_last_activity_at?: string | null;
 };
 export const getCurrentUserAndProfile = cache(async () => {
-const supabase = createClient();
+const supabase = await createClient();
 const {
 data: { user },
 } = await supabase.auth.getUser();

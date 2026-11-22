@@ -43,11 +43,12 @@ function PeriodSelector({ selected }: { selected: ProviderAnalyticsRange }) {
   return <div className="flex flex-wrap gap-2" aria-label="Analytics reporting period">{PROVIDER_ANALYTICS_RANGES.map((range) => <Link key={String(range)} href={`/admin/analytics?range=${range}`} aria-current={range === selected ? "page" : undefined} className={`rounded-full border px-3 py-2 text-xs font-medium transition-colors ${range === selected ? "border-navy bg-navy text-white" : "border-hairline bg-white text-navy hover:border-navy"}`}>{PROVIDER_ANALYTICS_RANGE_LABELS[range]}</Link>)}</div>;
 }
 
-export default async function ProviderAnalyticsPage({ searchParams }: { searchParams?: { range?: string } }) {
+export default async function ProviderAnalyticsPage({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
   await requireAdmin();
-  const range = parseProviderAnalyticsRange(searchParams?.range);
+  const resolvedSearchParams = await searchParams;
+  const range = parseProviderAnalyticsRange(resolvedSearchParams?.range);
   const { since, until } = getProviderAnalyticsWindow(range);
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase.rpc("get_provider_analytics", { p_since: since.toISOString(), p_until: until.toISOString(), p_scholarship_id: null });
   const confirmationSince = new Date(since);
   confirmationSince.setDate(confirmationSince.getDate() - 30);

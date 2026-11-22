@@ -6,11 +6,12 @@ import { Footer } from "@/components/Footer";
 import { OpportunityBridge, ResourceAdSlot, ResourceCard, ResourceEmptyState, ResourceErrorState, ResourcePageFrame } from "@/components/resource-center";
 import { getResourceCategoryWithRepositoryContent, ResourceDataError } from "@/lib/resource-center";
 
-type Props = { params: { slug: string } };
+type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params;
   try {
-    const result = await getResourceCategoryWithRepositoryContent(params.slug);
+    const result = await getResourceCategoryWithRepositoryContent(slug);
     if (!result) return { title: "Resource category" };
     return { title: `${result.category.name} resources`, description: result.category.description ?? `Guides and updates in ${result.category.name}.`, alternates: { canonical: `https://www.scholars.com.ng/resources/category/${result.category.slug}` }, openGraph: { title: `${result.category.name} resources`, description: result.category.description ?? undefined, url: `https://www.scholars.com.ng/resources/category/${result.category.slug}`, type: "website" } };
   } catch {
@@ -19,9 +20,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function ResourceCategoryPage({ params }: Props) {
+  const { slug } = await params;
   let result;
   try {
-    result = await getResourceCategoryWithRepositoryContent(params.slug);
+    result = await getResourceCategoryWithRepositoryContent(slug);
   } catch (error) {
     if (error instanceof ResourceDataError) return <ResourcePageFrame><main className="mx-auto max-w-6xl px-6 py-16"><ResourceErrorState /></main><Footer /></ResourcePageFrame>;
     throw error;

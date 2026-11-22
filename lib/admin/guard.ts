@@ -6,7 +6,7 @@ import type { createClient } from "@/lib/supabase/server";
 // The database privilege migration is the primary defense: normal API roles
 // cannot write profiles.is_admin. This guard is defense in depth and also
 // supports staged AAL2 enforcement through REQUIRE_ADMIN_MFA=true.
-type Supabase = ReturnType<typeof createClient>;
+type Supabase = Awaited<ReturnType<typeof createClient>>;
 
 export type AdminGuard =
   | { ok: true; userId: string }

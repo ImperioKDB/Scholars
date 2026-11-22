@@ -3,10 +3,11 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { dbErrorResponse } from "@/lib/errors";
 
-type RouteContext = { params: { discussionId: string } };
+type RouteContext = { params: Promise<{ discussionId: string }> };
 
 export async function GET(_request: Request, { params }: RouteContext) {
-  const discussionId = z.string().uuid().safeParse(params.discussionId);
+  const { discussionId: rawDiscussionId } = await params;
+  const discussionId = z.string().uuid().safeParse(rawDiscussionId);
   if (!discussionId.success) {
     return NextResponse.json({ error: "Invalid discussion" }, { status: 400 });
   }

@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 const bodySchema = z.object({ factorId: z.string().uuid() });
 
 export async function POST(request: Request) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

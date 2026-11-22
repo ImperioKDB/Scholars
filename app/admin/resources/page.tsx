@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 type Article = { id: string; title: string; slug: string; status: string; article_type: string; updated_at: string; author_identity_id: string; reviewer_identity_id: string | null };
 export default async function AdminResourcesPage() {
   await requireAdmin();
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: articles, error } = await supabase.from("resource_articles").select("id,title,slug,status,article_type,updated_at,author_identity_id,reviewer_identity_id").order("updated_at", { ascending: false }).limit(100);
   const rows = (articles ?? []) as Article[];
   return (

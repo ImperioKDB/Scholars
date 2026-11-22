@@ -119,10 +119,9 @@ export async function middleware(request: NextRequest) {
   }
 
   let response = NextResponse.next({ request: { headers: request.headers } });
-  const authCookieDomain =
-    process.env.VERCEL_ENV === "production"
-      ? getAuthCookieDomain(hostname)
-      : undefined;
+  // Cookie scope is determined by the exact hostname allowlist,
+  // not by a hosting-provider-specific environment variable.
+  const authCookieDomain = getAuthCookieDomain(hostname);
   const hostOnlyCookiesToExpire = new Set<string>();
   const pendingCookieMutations = new Map<
     string,

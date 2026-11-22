@@ -122,7 +122,7 @@ export default async function PublicOpportunityPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
-  const sessionClient = createClient();
+  const sessionClient = await createClient();
   const { data: { user } } = await sessionClient.auth.getUser();
   if (user) {
     const { data: authenticatedOpportunity } = await sessionClient

@@ -31,7 +31,7 @@ function messageFor(type: string, metadata: Record<string, unknown> | null | und
 }
 
 export async function GET() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
@@ -51,7 +51,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   const parsed = readSchema.safeParse(await request.json().catch(() => null));

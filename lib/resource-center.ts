@@ -54,7 +54,7 @@ function assertNoError<T>(data: T | null, error: unknown, message: string): T {
 }
 
 export async function getResourceHome() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: articles, error: articlesError }, { data: categories, error: categoriesError }] = await Promise.all([
     supabase.from("resource_public_articles").select(CARD_SELECT).order("published_at", { ascending: false }).order("id", { ascending: true }).limit(50),
     supabase.from("resource_public_categories").select("id,slug,name,description,display_order").order("display_order", { ascending: true }).order("slug", { ascending: true }).limit(30),
@@ -66,7 +66,7 @@ export async function getResourceHome() {
 }
 
 export async function getResourceCategory(slug: string) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: category, error: categoryError } = await supabase.from("resource_public_categories").select("id,slug,name,description,display_order").eq("slug", slug).maybeSingle();
   if (categoryError) throw new ResourceDataError("Unable to load this resource category", categoryError);
   if (!category) return null;
@@ -82,7 +82,7 @@ export async function getResourceCategory(slug: string) {
   };
 }
 
-async function readAllCategoryArticleIds(supabase: ReturnType<typeof createClient>, slug: string): Promise<string[]> {
+async function readAllCategoryArticleIds(supabase: Awaited<ReturnType<typeof createClient>>, slug: string): Promise<string[]> {
   const ids: string[] = [];
   for (let from = 0; ; from += RESOURCE_PAGE_SIZE) {
     const { data, error } = await supabase.from("resource_public_article_categories").select("article_id").eq("slug", slug).order("article_id", { ascending: true }).range(from, from + RESOURCE_PAGE_SIZE - 1);
@@ -92,7 +92,7 @@ async function readAllCategoryArticleIds(supabase: ReturnType<typeof createClien
   }
 }
 
-async function readArticlesByIds(supabase: ReturnType<typeof createClient>, ids: string[]): Promise<ResourceArticleCard[]> {
+async function readArticlesByIds(supabase: Awaited<ReturnType<typeof createClient>>, ids: string[]): Promise<ResourceArticleCard[]> {
   const articles: ResourceArticleCard[] = [];
   for (let from = 0; from < ids.length; from += RESOURCE_PAGE_SIZE) {
     const chunk = ids.slice(from, from + RESOURCE_PAGE_SIZE);
@@ -103,7 +103,7 @@ async function readArticlesByIds(supabase: ReturnType<typeof createClient>, ids:
 }
 
 export async function getResourceArticle(slug: string) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: article, error: articleError } = await supabase.from("resource_public_articles").select(ARTICLE_SELECT).eq("slug", slug).maybeSingle();
   if (articleError) throw new ResourceDataError("Unable to load this resource", articleError);
   if (!article) return null;
@@ -115,7 +115,7 @@ export async function getResourceArticle(slug: string) {
   return { article: article as ResourceArticle, categories: categoryLinks, related };
 }
 
-async function getRelatedArticles(supabase: ReturnType<typeof createClient>, categorySlugs: string[], currentArticleId: string) {
+async function getRelatedArticles(supabase: Awaited<ReturnType<typeof createClient>>, categorySlugs: string[], currentArticleId: string) {
   const relatedCounts = new Map<string, number>();
   for (let from = 0; ; from += RESOURCE_PAGE_SIZE) {
     const { data, error } = await supabase.from("resource_public_article_categories").select("article_id").in("slug", categorySlugs).neq("article_id", currentArticleId).order("article_id", { ascending: true }).range(from, from + RESOURCE_PAGE_SIZE - 1);
@@ -130,8 +130,11 @@ async function getRelatedArticles(supabase: ReturnType<typeof createClient>, cat
 export function getResourceImageUrl(path: string | null | undefined): string | null {
   if (!isApprovedResourceImagePath(path)) return null;
   if (!hasPublicSupabaseConfig()) return null;
-  const supabase = createClient();
-  return supabase.storage.from("site").getPublicUrl(path).data.publicUrl || null;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!supabaseUrl) return null;
+
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  return `${supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/public/site/${encodedPath}`;
 }
 
 export function isApprovedResourceImagePath(path: string | null | undefined): path is string {

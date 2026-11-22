@@ -61,7 +61,7 @@ export default async function ApplicationsPage() {
     return null;
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const [appsResult, savedResult] = await Promise.all([
     supabase

@@ -1,7 +1,11 @@
 node_modules
 .next
-.env
-.env.local
+
+# Environment configuration and secrets
+.env*
+!.env.example
+.dev.vars*
+
 .vercel
 .codegraph
 *.log

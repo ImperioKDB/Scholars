@@ -35,13 +35,23 @@ function getLimiter(route: string, limit: number, client: Redis): Ratelimit {
 }
 
 export function clientIp(request: Request): string {
-  // The first value in a client-provided x-forwarded-for header is
-  // attacker-controlled and must not be used as the bucket key.
-  return (
-    request.headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim() ??
-    request.headers.get('x-real-ip')?.trim() ??
-    'unknown'
-  )
+  // Cloudflare supplies CF-Connecting-IP to the Worker for the
+  // visitor address. Prefer it when the application is behind
+  // Cloudflare, then retain the Vercel and real-IP fallbacks.
+  // Never use client-provided x-forwarded-for as the bucket key.
+  const cloudflareIp = request.headers.get('cf-connecting-ip')?.trim();
+  if (cloudflareIp) return cloudflareIp;
+
+  const vercelIp = request.headers
+    .get('x-vercel-forwarded-for')
+    ?.split(',')[0]
+    ?.trim();
+  if (vercelIp) return vercelIp;
+
+  const realIp = request.headers.get('x-real-ip')?.trim();
+  if (realIp) return realIp;
+
+  return 'unknown';
 }
 
 function unavailableResponse(): NextResponse {

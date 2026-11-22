@@ -88,7 +88,7 @@ export default async function SettingsPage() {
   if (!user) {
     return null;
   }
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: profile }, { data: waec }] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
     supabase

@@ -7,7 +7,7 @@ import { dbErrorResponse } from "@/lib/errors";
 export async function GET(request: Request) {
   const limited = await checkRateLimit(request, { route: "admin-discussions", limit: 60 });
   if (limited) return limited;
-  const supabase = createClient();
+  const supabase = await createClient();
   const guard = await assertAdmin(supabase);
   if (!guard.ok) return guard.response;
 

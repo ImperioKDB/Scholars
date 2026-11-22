@@ -8,11 +8,12 @@ import { ResourceAdSlot, ResourceCard, ResourceImage, ResourcePageFrame } from "
 import { getResourceArticleWithRepositoryContent, getResourceCanonicalUrl, getResourceImageUrl, ResourceDataError } from "@/lib/resource-center";
 import Link from "next/link";
 
-type Props = { params: { slug: string } };
+type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params;
   try {
-    const result = await getResourceArticleWithRepositoryContent(params.slug);
+    const result = await getResourceArticleWithRepositoryContent(slug);
     if (!result) return { title: "Resource not found" };
     const { article } = result;
     const canonical = getResourceCanonicalUrl(article.slug, article.canonical_url);
@@ -23,9 +24,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function ResourceArticlePage({ params }: Props) {
+  const { slug } = await params;
   let result;
   try {
-    result = await getResourceArticleWithRepositoryContent(params.slug);
+    result = await getResourceArticleWithRepositoryContent(slug);
   } catch (error) {
     if (error instanceof ResourceDataError) return <ResourcePageFrame><main className="mx-auto max-w-6xl px-6 py-16"><div role="alert" className="rounded-2xl border border-rose/30 bg-white p-8 md:p-12"><p className="font-mono text-xs uppercase tracking-[0.16em] text-rose">A quiet moment</p><h1 className="mt-3 font-display text-3xl font-semibold text-navy">We could not load this guide.</h1><p className="mt-3 max-w-xl text-sm leading-6 text-navy-light">Please try again shortly, or return to the Resource Center.</p><Link href="/resources" className="mt-6 inline-flex rounded-seal bg-navy px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy-light">Back to resources</Link></div></main><Footer /></ResourcePageFrame>;
     throw error;
