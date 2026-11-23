@@ -23,9 +23,27 @@ const CATALOG_KEY = "scholars:catalog:v2";
 let redis: Redis | null = null;
 
 function getRedis(): Redis | null {
-  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) return null;
-  if (!redis) redis = Redis.fromEnv();
-  return redis;
+  const rawUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const rawToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (!rawUrl || !rawToken) return null;
+
+  try {
+    // Normalize accidental whitespace/newlines in dashboard variables.
+    const url = rawUrl.trim();
+    const token = rawToken.trim();
+
+    if (!url || !token) return null;
+
+    const parsedUrl = new URL(url);
+    if (parsedUrl.protocol !== "https:" || !parsedUrl.hostname) return null;
+
+    if (!redis) redis = new Redis({ url, token });
+    return redis;
+  } catch {
+    // Cache is an optimization: initialization failure must fail open.
+    return null;
+  }
 }
 
 export async function getCachedMatches(userId: string): Promise<unknown | null> {
