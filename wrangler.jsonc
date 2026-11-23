@@ -16,7 +16,12 @@
   "keep_vars": true,
   "secrets": {
     "required": [
-      "UPSTASH_REDIS_REST_TOKEN"
+      "UPSTASH_REDIS_REST_TOKEN",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "BREVO_API_KEY",
+      "RESEND_API_KEY",
+      "WEB_PUSH_VAPID_PRIVATE_KEY",
+      "CRON_SECRET"
     ]
   }
 }
