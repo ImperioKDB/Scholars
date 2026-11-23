@@ -157,7 +157,9 @@ const OPEN_DISCIPLINE_VALUES = new Set([
   "all disciplines",
   "any discipline",
   "all fields",
+  "all fields of study",
   "any field",
+  "any field of study",
   "open to all disciplines",
   "open to any discipline",
 ]);

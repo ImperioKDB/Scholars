@@ -82,6 +82,18 @@ describe("discipline matching", () => {
     expect(result.tier).not.toBe("unlikely");
   });
 
+  it("treats all fields of study as an open discipline requirement", () => {
+    const openScholarship = {
+      ...scholarship,
+      id: "jim-ovia-foundation",
+      title: "Jim Ovia Foundation Undergraduate Scholarship",
+      discipline: "All fields of study",
+    } satisfies ScholarshipRow;
+    const result = evaluateScholarship(profile("English Language"), openScholarship, []);
+    expect(result.requirements[0]?.status).toBe("met");
+    expect(result.tier).not.toBe("unlikely");
+  });
+
   it("meets both related-tech and explicit Airtel discipline rules for Computer Engineering", () => {
     const airtelScholarship = {
       ...scholarship,
