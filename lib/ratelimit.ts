@@ -14,9 +14,28 @@ let redis: Redis | null = null
 const limiters = new Map<string, Ratelimit>()
 
 function getRedis(): Redis | null {
-  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) return null
-  if (!redis) redis = Redis.fromEnv()
-  return redis
+  const rawUrl = process.env.UPSTASH_REDIS_REST_URL
+  const rawToken = process.env.UPSTASH_REDIS_REST_TOKEN
+
+  if (!rawUrl || !rawToken) return null
+
+  try {
+    // Cloudflare dashboard copy/paste can introduce trailing newlines.
+    // Normalize both values before constructing the Upstash client.
+    const url = rawUrl.trim()
+    const token = rawToken.trim()
+
+    if (!url || !token) return null
+
+    const parsedUrl = new URL(url)
+    if (parsedUrl.protocol !== 'https:' || !parsedUrl.hostname) return null
+
+    if (!redis) redis = new Redis({ url, token })
+    return redis
+  } catch {
+    // Initialization errors are handled by checkRateLimit as fail-closed.
+    return null
+  }
 }
 
 function getLimiter(route: string, limit: number, client: Redis): Ratelimit {
@@ -74,10 +93,12 @@ export async function checkRateLimit(
     return null
   }
 
-  const limiter = getLimiter(opts.route, opts.limit, client)
-  const keys = [`ip:${clientIp(request)}`, ...(opts.extraKeys ?? [])]
-
   try {
+    // Include limiter construction inside the protected block. Redis
+    // initialization and limiter construction must not escape uncaught.
+    const limiter = getLimiter(opts.route, opts.limit, client)
+    const keys = [`ip:${clientIp(request)}`, ...(opts.extraKeys ?? [])]
+
     for (const key of keys) {
       const { success } = await limiter.limit(key)
       if (!success) {
