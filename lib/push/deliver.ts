@@ -1,51 +1,15 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import webpush from 'web-push'
 import { sendExpoPushMessages } from './send'
+import {
+  getSafePushErrorDiagnostic,
+  getSafeHttpStatusCode,
+} from './errorDiagnostics'
 
 type PushMessage = { title: string; body: string; data?: Record<string, string> }
 type WebPushSubscriptionRow = { id: string; endpoint: string; p256dh: string; auth: string }
 type ChannelResult = { targets: number; accepted: number; failed: number }
 export type PushDeliverySummary = { targets: number; accepted: number; failed: number }
-
-
-function getSafeErrorDiagnostic(error: unknown): {
-  errorName: string
-  errorCode: string | null
-  errorMessage: string | null
-} {
-  if (!error || typeof error !== 'object') {
-    return {
-      errorName: 'UnknownError',
-      errorCode: null,
-      errorMessage: null,
-    }
-  }
-
-  const value = error as Record<string, unknown>
-  const code = value.code
-  const message = value.message
-
-  return {
-    errorName: error instanceof Error ? error.name : 'UnknownError',
-    errorCode:
-      typeof code === 'string' && /^[A-Za-z0-9_.:-]{1,80}$/.test(code)
-        ? code
-        : null,
-    errorMessage:
-      typeof message === 'string'
-        ? message.replace(/https?:\/\/\S+/gi, '[redacted-url]')
-            .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[redacted-email]')
-            .slice(0, 200)
-        : null,
-  }
-}
-
-function getStatusCode(error: unknown): number | null {
-  if (typeof error !== 'object' || error === null || !('statusCode' in error)) return null
-  const statusCode = (error as { statusCode?: unknown }).statusCode
-  return typeof statusCode === 'number' ? statusCode : null
-}
-
 async function sendExpoPushForProfile(
   supabase: SupabaseClient,
   profileId: string,
@@ -123,7 +87,7 @@ async function sendWebPushForProfile(
       accepted += 1
     } catch (error) {
       failed += 1
-      const statusCode = getStatusCode(error)
+      const statusCode = getSafeHttpStatusCode(error)
       if (statusCode === 404 || statusCode === 410) {
         const { error: removeError } = await supabase.from('web_push_subscriptions').delete().eq('id', row.id)
         if (removeError) throw removeError
@@ -133,7 +97,7 @@ async function sendWebPushForProfile(
       console.warn('[Push] Web Push delivery failed', {
         profileId,
         statusCode,
-        ...getSafeErrorDiagnostic(error),
+        ...getSafePushErrorDiagnostic(error),
       })
     }
   }))
@@ -159,7 +123,7 @@ export async function sendPushForProfile(
       console.warn('[Push] Delivery channel failed', {
         channel: index === 0 ? 'expo' : 'web',
         profileId,
-        ...getSafeErrorDiagnostic(result.reason),
+        ...getSafePushErrorDiagnostic(result.reason),
       })
       return
     }
