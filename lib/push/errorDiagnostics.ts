@@ -57,25 +57,37 @@ function readStringProperty(
 export function getSafePushErrorDiagnostic(
   error: unknown,
 ): SafePushErrorDiagnostic {
-  if (typeof error !== 'object' || error === null) {
-    return {
-      errorName: 'UnknownError',
-      errorCode: null,
+  let current: unknown = error
+  const visited = new Set<object>()
+
+  let safeName: string | null = null
+  let safeCode: string | null = null
+
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (typeof current !== 'object' || current === null) break
+    if (visited.has(current)) break
+    visited.add(current)
+
+    const rawName = readStringProperty(current, 'name')
+    const rawCode = readStringProperty(current, 'code')
+
+    if (!safeName && rawName && SAFE_ERROR_NAMES.has(rawName)) {
+      safeName = rawName
+    }
+    if (!safeCode && rawCode && SAFE_ERROR_CODES.has(rawCode)) {
+      safeCode = rawCode
+    }
+
+    try {
+      current = (current as Record<string, unknown>).cause
+    } catch {
+      break
     }
   }
 
-  const rawName = readStringProperty(error, 'name')
-  const rawCode = readStringProperty(error, 'code')
-
   return {
-    errorName:
-      rawName && SAFE_ERROR_NAMES.has(rawName)
-        ? rawName
-        : 'UnknownError',
-    errorCode:
-      rawCode && SAFE_ERROR_CODES.has(rawCode)
-        ? rawCode
-        : null,
+    errorName: safeName ?? 'UnknownError',
+    errorCode: safeCode,
   }
 }
 
