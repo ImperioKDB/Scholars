@@ -1,0 +1,135 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { sendExpoPushMessages } from './send'
+import webpush from 'web-push'
+import { sendPushForProfile } from './deliver'
+
+vi.mock('./send', () => ({
+  sendExpoPushMessages: vi.fn(),
+}))
+
+vi.mock('web-push', () => ({
+  default: {
+    setVapidDetails: vi.fn(),
+    sendNotification: vi.fn(),
+  },
+}))
+
+const mockedExpoSend = vi.mocked(sendExpoPushMessages)
+const mockedWebPush = vi.mocked(webpush)
+
+function makeSupabase(options?: {
+  expoError?: unknown
+  webSubscriptions?: Array<{
+    id: string
+    endpoint: string
+    p256dh: string
+    auth: string
+  }>
+}) {
+  return {
+    from(table: string) {
+      return {
+        select() { return this },
+        eq() { return this },
+        limit() {
+          if (table === 'push_tokens') {
+            return options?.expoError
+              ? Promise.reject(options.expoError)
+              : Promise.resolve({ data: [], error: null })
+          }
+
+          return Promise.resolve({
+            data: options?.webSubscriptions ?? [],
+            error: null,
+          })
+        },
+      }
+    },
+  } as never
+}
+
+describe('push delivery diagnostics', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.clearAllMocks()
+  })
+
+  it('does not log Web Push endpoints, keys, or raw provider errors', async () => {
+    process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY = 'public-test-key'
+    process.env.WEB_PUSH_VAPID_PRIVATE_KEY = 'private-test-key'
+
+    const endpoint = 'https://push.example.test/private-endpoint?token=endpoint-secret'
+    const p256dh = 'p256dh-private-value'
+    const auth = 'auth-private-value'
+    const secretMessage = 'provider failed with https://push.example.test/token=provider-secret'
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    mockedExpoSend.mockResolvedValue({
+      invalidTokens: [],
+      tickets: [],
+    } as never)
+
+    mockedWebPush.sendNotification.mockRejectedValue(
+      new Error(secretMessage),
+    )
+
+    const result = await sendPushForProfile(
+      makeSupabase({
+        webSubscriptions: [{
+          id: 'subscription-1',
+          endpoint,
+          p256dh,
+          auth,
+        }],
+      }),
+      'profile-test',
+      { title: 'Test', body: 'Test body' },
+    )
+
+    expect(result.failed).toBe(1)
+
+    const logged = JSON.stringify(warn.mock.calls)
+
+    for (const secret of [
+      endpoint,
+      p256dh,
+      auth,
+      secretMessage,
+      'provider-secret',
+    ]) {
+      expect(logged).not.toContain(secret)
+    }
+
+    expect(logged).toContain('"errorName":"Error"')
+  })
+
+  it('sanitizes Expo channel query failures', async () => {
+    process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY = ''
+    process.env.WEB_PUSH_VAPID_PRIVATE_KEY = ''
+
+    const secretMessage =
+      'database error https://db.example.test/?apikey=private-secret'
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    mockedExpoSend.mockResolvedValue({
+      invalidTokens: [],
+      tickets: [],
+    } as never)
+
+    const result = await sendPushForProfile(
+      makeSupabase({ expoError: new Error(secretMessage) }),
+      'profile-test',
+      { title: 'Test', body: 'Test body' },
+    )
+
+    expect(result.failed).toBe(1)
+
+    const logged = JSON.stringify(warn.mock.calls)
+
+    expect(logged).not.toContain(secretMessage)
+    expect(logged).not.toContain('private-secret')
+    expect(logged).toContain('"errorName":"Error"')
+  })
+})
