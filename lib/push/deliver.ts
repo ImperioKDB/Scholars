@@ -7,6 +7,39 @@ type WebPushSubscriptionRow = { id: string; endpoint: string; p256dh: string; au
 type ChannelResult = { targets: number; accepted: number; failed: number }
 export type PushDeliverySummary = { targets: number; accepted: number; failed: number }
 
+
+function getSafeErrorDiagnostic(error: unknown): {
+  errorName: string
+  errorCode: string | null
+  errorMessage: string | null
+} {
+  if (!error || typeof error !== 'object') {
+    return {
+      errorName: 'UnknownError',
+      errorCode: null,
+      errorMessage: null,
+    }
+  }
+
+  const value = error as Record<string, unknown>
+  const code = value.code
+  const message = value.message
+
+  return {
+    errorName: error instanceof Error ? error.name : 'UnknownError',
+    errorCode:
+      typeof code === 'string' && /^[A-Za-z0-9_.:-]{1,80}$/.test(code)
+        ? code
+        : null,
+    errorMessage:
+      typeof message === 'string'
+        ? message.replace(/https?:\/\/\S+/gi, '[redacted-url]')
+            .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[redacted-email]')
+            .slice(0, 200)
+        : null,
+  }
+}
+
 function getStatusCode(error: unknown): number | null {
   if (typeof error !== 'object' || error === null || !('statusCode' in error)) return null
   const statusCode = (error as { statusCode?: unknown }).statusCode
@@ -97,7 +130,11 @@ async function sendWebPushForProfile(
         return
       }
       // Push endpoints are private bearer URLs; never log the URL or keys.
-      console.warn('[Push] Web Push delivery failed', { profileId, statusCode })
+      console.warn('[Push] Web Push delivery failed', {
+        profileId,
+        statusCode,
+        ...getSafeErrorDiagnostic(error),
+      })
     }
   }))
   return { targets: subscriptions.length, accepted, failed }
@@ -122,7 +159,7 @@ export async function sendPushForProfile(
       console.warn('[Push] Delivery channel failed', {
         channel: index === 0 ? 'expo' : 'web',
         profileId,
-        errorName: result.reason instanceof Error ? result.reason.name : 'UnknownError',
+        ...getSafeErrorDiagnostic(result.reason),
       })
       return
     }
