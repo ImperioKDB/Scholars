@@ -52,7 +52,10 @@ describe('admin broadcast failure diagnostics', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
     mockedEnsure.mockResolvedValue({ id: 'delivery-1' } as never)
-    mockedClaim.mockResolvedValue(true)
+    mockedClaim.mockResolvedValue({
+      id: 'delivery-1',
+      dedupeKey: 'delivery-1',
+    })
     mockedSend.mockRejectedValue(new Error(secretMessage))
 
     const result = await sendAdminBroadcastPush(
