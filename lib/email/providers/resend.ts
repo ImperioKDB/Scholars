@@ -21,9 +21,13 @@ export async function sendWithResend(input: ProviderSendInput): Promise<Provider
       },
       body: JSON.stringify({ from, to: [input.to], subject: input.subject, html: input.html, text: input.text }),
     })
-  } catch {
+  } catch (error) {
     throw new EmailProviderError({
-      provider: 'resend', status: null, code: 'network_error', classification: 'uncertain_outcome',
+      provider: 'resend',
+      status: null,
+      code: 'network_error',
+      classification: 'uncertain_outcome',
+      networkError: error,
     })
   }
 
