@@ -130,7 +130,12 @@ describe('POST /api/admin/resend-test', () => {
     expect(body).not.toContain('test-resend-secret')
     expect(body).not.toContain(ADMIN_EMAIL)
     expect(mocks.logError).toHaveBeenCalledWith('admin/resend-test', 'resend_test_send_failed', {
-      provider: 'resend', classification: 'definitive_rejection', status: 401, code: 'invalid_api_key',
+      provider: 'resend',
+      classification: 'definitive_rejection',
+      status: 401,
+      code: 'invalid_api_key',
+      networkErrorName: null,
+      networkErrorCode: null,
     })
   })
 })

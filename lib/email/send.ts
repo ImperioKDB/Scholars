@@ -2,7 +2,12 @@
 import { logWarn } from '@/lib/logging'
 import { sendWithBrevo } from '@/lib/email/providers/brevo'
 import { sendWithResend } from '@/lib/email/providers/resend'
-import { EmailProviderError, type EmailProvider, type ProviderSendResult } from '@/lib/email/providers/types'
+import {
+  EmailProviderError,
+  safeEmailErrorDiagnostic,
+  type EmailProvider,
+  type ProviderSendResult,
+} from '@/lib/email/providers/types'
 
 export type SendResult = { sent: number; failed: number; dry: boolean; provider?: EmailProvider; messageId?: string | null }
 
@@ -43,15 +48,30 @@ export async function sendEmail(params: {
       const result = await sendWithBrevo(input)
       return successfulResult(result)
     } catch (error) {
-      if (!(error instanceof EmailProviderError) || error.classification !== 'definitive_rejection') throw error
+      logWarn('email/send', 'brevo_send_failed', safeEmailErrorDiagnostic(error))
+
+      if (!(error instanceof EmailProviderError) || error.classification !== 'definitive_rejection') {
+        throw error
+      }
       if (!resendConfigured) throw error
+
       logWarn('email/send', 'brevo_definitive_rejection_falling_back', {
-        provider: error.provider, status: error.status, code: error.code, classification: error.classification,
+        provider: error.provider,
+        status: error.status,
+        code: error.code,
+        classification: error.classification,
       })
     }
   }
 
-  if (resendConfigured) return successfulResult(await sendWithResend(input))
+  if (resendConfigured) {
+    try {
+      return successfulResult(await sendWithResend(input))
+    } catch (error) {
+      logWarn('email/send', 'resend_send_failed', safeEmailErrorDiagnostic(error))
+      throw error
+    }
+  }
 
   if (process.env.RESEND_API_KEY && !process.env.RESEND_FROM_EMAIL) {
     logWarn('email/send', 'resend_disabled_missing_sender', { provider: 'resend', code: 'missing_from_email' })

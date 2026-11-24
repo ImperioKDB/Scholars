@@ -23,9 +23,13 @@ export async function sendWithBrevo(input: ProviderSendInput): Promise<ProviderS
         textContent: input.text,
       }),
     })
-  } catch {
+  } catch (error) {
     throw new EmailProviderError({
-      provider: 'brevo', status: null, code: 'network_error', classification: 'uncertain_outcome',
+      provider: 'brevo',
+      status: null,
+      code: 'network_error',
+      classification: 'uncertain_outcome',
+      networkError: error,
     })
   }
 
