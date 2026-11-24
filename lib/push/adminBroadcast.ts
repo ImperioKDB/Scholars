@@ -5,6 +5,7 @@ import {
   markNotificationAccepted,
 } from '@/lib/email/outbox'
 import { sendPushForProfile, type PushDeliverySummary } from './deliver'
+import { getSafePushErrorDiagnostic } from './errorDiagnostics'
 
 const DEVICE_PAGE_SIZE = 500
 const MAX_DEVICE_ROWS_PER_CHANNEL = 10_000
@@ -131,13 +132,13 @@ async function deliverToProfile(
       console.error('[AdminPushBroadcast] Could not record a failed delivery', {
         broadcastId,
         profileId,
-        errorName: recordError instanceof Error ? recordError.name : 'UnknownError',
+        ...getSafePushErrorDiagnostic(recordError),
       })
     }
     console.warn('[AdminPushBroadcast] Push delivery failed', {
       broadcastId,
       profileId,
-      errorName: error instanceof Error ? error.name : 'UnknownError',
+      ...getSafePushErrorDiagnostic(error),
     })
     return { state: 'failed' }
   }
@@ -175,7 +176,7 @@ export async function sendAdminBroadcastPush(
         console.warn('[AdminPushBroadcast] Could not process recipient', {
           broadcastId,
           profileId: profileIds[index],
-          errorName: error instanceof Error ? error.name : 'UnknownError',
+          ...getSafePushErrorDiagnostic(error),
         })
         continue
       }
