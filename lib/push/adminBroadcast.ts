@@ -11,6 +11,38 @@ const MAX_DEVICE_ROWS_PER_CHANNEL = 10_000
 const MAX_PUSH_PROFILES = 2_000
 const SEND_CONCURRENCY = 5
 
+function safePushErrorDiagnostic(error: unknown): {
+  errorName: string
+  errorCode: string | null
+  errorMessage: string | null
+} {
+  if (!error || typeof error !== 'object') {
+    return {
+      errorName: 'UnknownError',
+      errorCode: null,
+      errorMessage: null,
+    }
+  }
+
+  const value = error as Record<string, unknown>
+  const code = value.code
+  const message = value.message
+
+  return {
+    errorName: error instanceof Error ? error.name : 'UnknownError',
+    errorCode:
+      typeof code === 'string' && /^[A-Za-z0-9_.:-]{1,80}$/.test(code)
+        ? code
+        : null,
+    errorMessage:
+      typeof message === 'string'
+        ? message.replace(/https?:\/\/\S+/gi, '[redacted-url]')
+            .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[redacted-email]')
+            .slice(0, 200)
+        : null,
+  }
+}
+
 type PushTable = 'push_tokens' | 'web_push_subscriptions'
 
 export type AdminBroadcastPushMessage = {
@@ -131,13 +163,13 @@ async function deliverToProfile(
       console.error('[AdminPushBroadcast] Could not record a failed delivery', {
         broadcastId,
         profileId,
-        errorName: recordError instanceof Error ? recordError.name : 'UnknownError',
+        ...safePushErrorDiagnostic(recordError),
       })
     }
     console.warn('[AdminPushBroadcast] Push delivery failed', {
       broadcastId,
       profileId,
-      errorName: error instanceof Error ? error.name : 'UnknownError',
+      ...safePushErrorDiagnostic(error),
     })
     return { state: 'failed' }
   }
@@ -175,7 +207,7 @@ export async function sendAdminBroadcastPush(
         console.warn('[AdminPushBroadcast] Could not process recipient', {
           broadcastId,
           profileId: profileIds[index],
-          errorName: error instanceof Error ? error.name : 'UnknownError',
+          ...safePushErrorDiagnostic(error),
         })
         continue
       }
