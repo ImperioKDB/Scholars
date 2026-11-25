@@ -148,13 +148,28 @@ export function NotificationBell() {
     if (next) {
       const latestUnread = await load();
       if (latestUnread > 0) {
-        await fetch("/api/notifications", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ all: true }),
-        }).catch(() => {});
-        setUnread(0);
-        setItems((current) => current.map((item) => ({ ...item, read_at: item.read_at ?? new Date().toISOString() })));
+        try {
+          const response = await fetch("/api/notifications", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ all: true }),
+          });
+
+          if (!response.ok) {
+            throw new Error("notifications_mark_read_failed");
+          }
+
+          setUnread(0);
+          setItems((current) =>
+            current.map((item) => ({
+              ...item,
+              read_at: item.read_at ?? new Date().toISOString(),
+            })),
+          );
+        } catch {
+          // Keep unread state intact; the next successful refresh reconciles it.
+          setError(true);
+        }
       }
     }
   }
