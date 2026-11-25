@@ -38,12 +38,16 @@ export function NotificationBell() {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const inFlightRef = useRef<Promise<number> | null>(null);
+  const mutationVersionRef = useRef(0);
+  const nextPanelSessionRef = useRef(0);
+  const activePanelSessionRef = useRef<number | null>(null);
 
   async function load(): Promise<number> {
     if (inFlightRef.current) {
       return inFlightRef.current;
     }
 
+    const requestMutationVersion = mutationVersionRef.current;
     const request = (async () => {
       setLoading(true);
       setError(false);
@@ -63,8 +67,10 @@ export function NotificationBell() {
           ? payload.unreadCount
           : 0;
 
-        setItems(nextItems);
-        setUnread(nextUnread);
+        if (requestMutationVersion === mutationVersionRef.current) {
+          setItems(nextItems);
+          setUnread(nextUnread);
+        }
 
         return nextUnread;
       } catch {
@@ -121,7 +127,7 @@ export function NotificationBell() {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape" && open) {
         event.preventDefault();
-        setOpen(false);
+        closePanel();
         triggerRef.current?.focus();
       }
     }
@@ -135,42 +141,75 @@ export function NotificationBell() {
 
   useEffect(() => {
     function close(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!rootRef.current?.contains(event.target as Node)) closePanel();
     }
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, []);
 
-  async function openNotifications() {
-    const next = !open;
-    setOpen(next);
-    if (!next) triggerRef.current?.focus();
-    if (next) {
-      const latestUnread = await load();
-      if (latestUnread > 0) {
-        try {
-          const response = await fetch("/api/notifications", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ all: true }),
-          });
+  function closePanel() {
+    activePanelSessionRef.current = null;
+    setOpen(false);
+  }
 
-          if (!response.ok) {
-            throw new Error("notifications_mark_read_failed");
-          }
+  async function markAllRead(sessionId: number) {
+    try {
+      const response = await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ all: true }),
+      });
 
-          setUnread(0);
-          setItems((current) =>
-            current.map((item) => ({
-              ...item,
-              read_at: item.read_at ?? new Date().toISOString(),
-            })),
-          );
-        } catch {
-          // Keep unread state intact; the next successful refresh reconciles it.
-          setError(true);
-        }
+      if (!response.ok) {
+        throw new Error("notifications_mark_read_failed");
       }
+
+      mutationVersionRef.current += 1;
+      if (activePanelSessionRef.current !== sessionId) return;
+
+      setUnread(0);
+      setItems((current) =>
+        current.map((item) => ({
+          ...item,
+          read_at: item.read_at ?? new Date().toISOString(),
+        })),
+      );
+    } catch {
+      // Keep unread state intact; the next successful refresh reconciles it.
+      if (activePanelSessionRef.current === sessionId) setError(true);
+    }
+  }
+
+  async function openNotifications() {
+    if (open) {
+      closePanel();
+      triggerRef.current?.focus();
+      return;
+    }
+
+    const sessionId = ++nextPanelSessionRef.current;
+    activePanelSessionRef.current = sessionId;
+    setOpen(true);
+
+    const latestUnread = await load();
+    if (
+      activePanelSessionRef.current === sessionId &&
+      latestUnread > 0
+    ) {
+      await markAllRead(sessionId);
+    }
+  }
+
+  async function retryNotifications() {
+    const sessionId = activePanelSessionRef.current;
+    if (sessionId === null) return;
+
+    const latestUnread = await load();
+    if (
+      activePanelSessionRef.current === sessionId &&
+      latestUnread > 0
+    ) {
+      await markAllRead(sessionId);
     }
   }
 
@@ -198,7 +237,10 @@ export function NotificationBell() {
               <p id="notification-heading" className="font-display text-base font-semibold text-navy">Notifications</p>
               <p className="text-[11px] text-navy-light">Replies and helpful reactions from the community.</p>
             </div>
-            <span className="text-xs font-mono text-navy-light">{unread} new</span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-mono text-navy-light">{unread} new</span>
+              <button type="button" onClick={() => { closePanel(); triggerRef.current?.focus(); }} aria-label="Close notifications" className="text-navy-light hover:text-navy">×</button>
+            </div>
           </div>
           <div className="max-h-80 overflow-y-auto">
             {loading && items.length === 0 ? (
@@ -206,7 +248,7 @@ export function NotificationBell() {
             ) : error ? (
               <div role="alert" className="px-4 py-5 text-sm text-navy-light">
                 <p>Notifications are temporarily unavailable.</p>
-                <button type="button" onClick={() => void load()} className="mt-2 font-medium text-emerald hover:underline">Try again</button>
+                <button type="button" onClick={() => void retryNotifications()} className="mt-2 font-medium text-emerald hover:underline">Try again</button>
               </div>
             ) : items.length === 0 ? (
               <p className="px-4 py-5 text-sm text-navy-light">You’re all caught up.</p>
@@ -216,7 +258,7 @@ export function NotificationBell() {
                   <p className="text-sm leading-relaxed text-ink">{item.message}</p>
                   <div className="mt-1 flex items-center justify-between gap-3">
                     <span className="text-[11px] text-navy-light">{relativeDate(item.created_at)}</span>
-                    {item.scholarship_id && <Link href={`/scholarships/${item.scholarship_id}`} onClick={() => setOpen(false)} className="text-[11px] font-medium text-emerald hover:underline">View discussion →</Link>}
+                    {item.scholarship_id && <Link href={`/scholarships/${item.scholarship_id}`} onClick={closePanel} className="text-[11px] font-medium text-emerald hover:underline">View discussion →</Link>}
                   </div>
                 </div>
               ))
