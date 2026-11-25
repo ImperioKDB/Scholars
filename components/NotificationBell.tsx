@@ -177,7 +177,7 @@ export function NotificationBell() {
         {unread > 0 && <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-rose" aria-hidden="true" />}
       </button>
       {open && (
-        <div id="notification-panel" ref={panelRef} role="region" aria-labelledby="notification-heading" tabIndex={-1} className="absolute right-0 top-12 z-50 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-hairline bg-white shadow-card">
+        <div id="notification-panel" ref={panelRef} role="region" aria-labelledby="notification-heading" tabIndex={-1} className="absolute right-0 top-12 z-50 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-hairline bg-white shadow-card md:left-0 md:right-auto">
           <div className="flex items-center justify-between border-b border-hairline px-4 py-3">
             <div>
               <p id="notification-heading" className="font-display text-base font-semibold text-navy">Notifications</p>
