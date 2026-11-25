@@ -37,27 +37,84 @@ export function NotificationBell() {
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const inFlightRef = useRef<Promise<number> | null>(null);
 
-  async function load() {
-    setLoading(true);
-    setError(false);
+  async function load(): Promise<number> {
+    if (inFlightRef.current) {
+      return inFlightRef.current;
+    }
+
+    const request = (async () => {
+      setLoading(true);
+      setError(false);
+
+      try {
+        const response = await fetch("/api/notifications", {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error("notifications_load_failed");
+        }
+
+        const payload = await response.json();
+        const nextItems = payload.notifications ?? [];
+        const nextUnread = Number.isFinite(payload.unreadCount)
+          ? payload.unreadCount
+          : 0;
+
+        setItems(nextItems);
+        setUnread(nextUnread);
+
+        return nextUnread;
+      } catch {
+        setError(true);
+        return -1;
+      } finally {
+        setLoading(false);
+      }
+    })();
+
+    inFlightRef.current = request;
+
     try {
-      const response = await fetch("/api/notifications", { cache: "no-store" });
-      if (!response.ok) throw new Error("notifications_load_failed");
-      const payload = await response.json();
-      setItems(payload.notifications ?? []);
-      setUnread(payload.unreadCount ?? 0);
-    } catch {
-      setError(true);
+      return await request;
     } finally {
-      setLoading(false);
+      if (inFlightRef.current === request) {
+        inFlightRef.current = null;
+      }
     }
   }
 
   useEffect(() => {
-    void load();
-    const interval = window.setInterval(() => void load(), 60_000);
-    return () => window.clearInterval(interval);
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") {
+        void load();
+      }
+    };
+
+    refreshIfVisible();
+
+    const interval = window.setInterval(
+      refreshIfVisible,
+      60_000
+    );
+
+    document.addEventListener(
+      "visibilitychange",
+      refreshIfVisible
+    );
+
+    window.addEventListener("focus", refreshIfVisible);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener(
+        "visibilitychange",
+        refreshIfVisible
+      );
+      window.removeEventListener("focus", refreshIfVisible);
+    };
   }, []);
 
   useEffect(() => {
@@ -89,8 +146,8 @@ export function NotificationBell() {
     setOpen(next);
     if (!next) triggerRef.current?.focus();
     if (next) {
-      await load();
-      if (unread > 0) {
+      const latestUnread = await load();
+      if (latestUnread > 0) {
         await fetch("/api/notifications", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
