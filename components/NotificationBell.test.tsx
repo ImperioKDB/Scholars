@@ -157,7 +157,7 @@ describe("NotificationBell polling and read state", () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
-    const trigger = screen.getByRole("button", {
+    const trigger = await screen.findByRole("button", {
       name: "1 unread notifications",
     });
 
