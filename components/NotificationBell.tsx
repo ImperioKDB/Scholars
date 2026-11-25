@@ -41,16 +41,23 @@ export function NotificationBell() {
   const mutationVersionRef = useRef(0);
   const nextPanelSessionRef = useRef(0);
   const activePanelSessionRef = useRef<number | null>(null);
+  const markAllReadInFlightRef = useRef<Promise<void> | null>(null);
+  const mountedRef = useRef(true);
 
-  async function load(): Promise<number> {
+  async function load(
+    sessionId?: number,
+    guardSession = false,
+  ): Promise<number> {
     if (inFlightRef.current) {
       return inFlightRef.current;
     }
 
     const requestMutationVersion = mutationVersionRef.current;
     const request = (async () => {
-      setLoading(true);
-      setError(false);
+      if (mountedRef.current) {
+        setLoading(true);
+        setError(false);
+      }
 
       try {
         const response = await fetch("/api/notifications", {
@@ -67,17 +74,27 @@ export function NotificationBell() {
           ? payload.unreadCount
           : 0;
 
-        if (requestMutationVersion === mutationVersionRef.current) {
+        if (
+          mountedRef.current &&
+          requestMutationVersion === mutationVersionRef.current &&
+          (!guardSession || activePanelSessionRef.current === sessionId)
+        ) {
           setItems(nextItems);
           setUnread(nextUnread);
+          return nextUnread;
         }
 
-        return nextUnread;
+        return -1;
       } catch {
-        setError(true);
+        if (
+          mountedRef.current &&
+          (!guardSession || activePanelSessionRef.current === sessionId)
+        ) {
+          setError(true);
+        }
         return -1;
       } finally {
-        setLoading(false);
+        if (mountedRef.current) setLoading(false);
       }
     })();
 
@@ -93,6 +110,7 @@ export function NotificationBell() {
   }
 
   useEffect(() => {
+    mountedRef.current = true;
     const refreshIfVisible = () => {
       if (document.visibilityState === "visible") {
         void load();
@@ -114,6 +132,8 @@ export function NotificationBell() {
     window.addEventListener("focus", refreshIfVisible);
 
     return () => {
+      mountedRef.current = false;
+      activePanelSessionRef.current = null;
       window.clearInterval(interval);
       document.removeEventListener(
         "visibilitychange",
@@ -152,31 +172,56 @@ export function NotificationBell() {
     setOpen(false);
   }
 
+  async function reloadAfterMutation(sessionId: number): Promise<number> {
+    while (inFlightRef.current) {
+      const pending = inFlightRef.current;
+      await pending;
+      await Promise.resolve();
+    }
+    return load(sessionId, true);
+  }
+
   async function markAllRead(sessionId: number) {
-    try {
-      const response = await fetch("/api/notifications", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ all: true }),
-      });
+    if (markAllReadInFlightRef.current) {
+      return markAllReadInFlightRef.current;
+    }
 
-      if (!response.ok) {
-        throw new Error("notifications_mark_read_failed");
+    const request = (async () => {
+      try {
+        const response = await fetch("/api/notifications", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ all: true }),
+        });
+
+        if (!response.ok) {
+          throw new Error("notifications_mark_read_failed");
+        }
+
+        // The PATCH response does not identify the rows it changed. Bump the
+        // version first, then reconcile from a fresh authoritative GET so a
+        // notification created during the mutation remains unread locally.
+        mutationVersionRef.current += 1;
+        if (!mountedRef.current || activePanelSessionRef.current === null) return;
+        await reloadAfterMutation(sessionId);
+      } catch {
+        // Keep unread state intact; the next successful refresh reconciles it.
+        if (
+          mountedRef.current &&
+          activePanelSessionRef.current === sessionId
+        ) {
+          setError(true);
+        }
       }
+    })();
 
-      mutationVersionRef.current += 1;
-      if (activePanelSessionRef.current !== sessionId) return;
-
-      setUnread(0);
-      setItems((current) =>
-        current.map((item) => ({
-          ...item,
-          read_at: item.read_at ?? new Date().toISOString(),
-        })),
-      );
-    } catch {
-      // Keep unread state intact; the next successful refresh reconciles it.
-      if (activePanelSessionRef.current === sessionId) setError(true);
+    markAllReadInFlightRef.current = request;
+    try {
+      await request;
+    } finally {
+      if (markAllReadInFlightRef.current === request) {
+        markAllReadInFlightRef.current = null;
+      }
     }
   }
 
@@ -191,7 +236,7 @@ export function NotificationBell() {
     activePanelSessionRef.current = sessionId;
     setOpen(true);
 
-    const latestUnread = await load();
+    const latestUnread = await load(sessionId);
     if (
       activePanelSessionRef.current === sessionId &&
       latestUnread > 0
@@ -204,7 +249,7 @@ export function NotificationBell() {
     const sessionId = activePanelSessionRef.current;
     if (sessionId === null) return;
 
-    const latestUnread = await load();
+    const latestUnread = await load(sessionId);
     if (
       activePanelSessionRef.current === sessionId &&
       latestUnread > 0
