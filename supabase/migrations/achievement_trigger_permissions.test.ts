@@ -23,9 +23,10 @@ describe("achievement trigger permission hardening", () => {
       "public.check_community_discussion_achievements()",
       "public.check_community_reaction_achievements()",
     ]) {
-      expect(migration).toContain(`REVOKE EXECUTE ON FUNCTION ${signature}`);
+      expect(migration).toContain(
+        `REVOKE EXECUTE ON FUNCTION ${signature}\nFROM PUBLIC, anon, authenticated;`,
+      );
     }
-    expect(migration).toMatch(/FROM PUBLIC, anon, authenticated;/);
     expect(migration).not.toMatch(/drop\s+(trigger|function)|disable\s+trigger/i);
 
     expect(triggerMigration).toContain("security definer");

@@ -202,13 +202,14 @@ export function NotificationBell() {
         // version first, then reconcile from a fresh authoritative GET so a
         // notification created during the mutation remains unread locally.
         mutationVersionRef.current += 1;
-        if (!mountedRef.current || activePanelSessionRef.current === null) return;
-        await reloadAfterMutation(sessionId);
+        const activeSessionId = activePanelSessionRef.current;
+        if (!mountedRef.current || activeSessionId === null) return;
+        await reloadAfterMutation(activeSessionId);
       } catch {
         // Keep unread state intact; the next successful refresh reconciles it.
         if (
           mountedRef.current &&
-          activePanelSessionRef.current === sessionId
+          activePanelSessionRef.current !== null
         ) {
           setError(true);
         }

@@ -364,6 +364,86 @@ describe("NotificationBell polling and read state", () => {
     expect(consoleError).not.toHaveBeenCalled();
   });
 
+  it("reconciles the currently active panel after a shared PATCH succeeds", async () => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+    const pendingPatch = deferred<unknown>();
+    let getCount = 0;
+    const fetchMock = vi.fn(async (_url: string, options?: RequestInit) => {
+      if (options?.method === "PATCH") return pendingPatch.promise;
+      getCount += 1;
+      return getResponse(
+        getCount >= 4
+          ? { notifications: [], unreadCount: 0 }
+          : { notifications: [notification], unreadCount: 1 },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<NotificationBell />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "1 unread notifications" }),
+    );
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(([, options]) => options?.method === "PATCH"),
+      ).toBe(true);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Close notifications" }));
+    fireEvent.click(screen.getByRole("button", { name: "1 unread notifications" }));
+
+    await act(async () => {
+      pendingPatch.resolve(getResponse({}));
+      await pendingPatch.promise;
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Notifications" })).toBeTruthy();
+      expect(screen.getByText("0 new")).toBeTruthy();
+    });
+    expect(
+      fetchMock.mock.calls.filter(([, options]) => !options?.method),
+    ).toHaveLength(4);
+  });
+
+  it("shows a shared PATCH failure in the currently active panel", async () => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+    const pendingPatch = deferred<unknown>();
+    const fetchMock = vi.fn(async (_url: string, options?: RequestInit) => {
+      if (options?.method === "PATCH") return pendingPatch.promise;
+      return getResponse({ notifications: [notification], unreadCount: 1 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<NotificationBell />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "1 unread notifications" }),
+    );
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(([, options]) => options?.method === "PATCH"),
+      ).toBe(true);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Close notifications" }));
+    fireEvent.click(screen.getByRole("button", { name: "1 unread notifications" }));
+
+    await act(async () => {
+      pendingPatch.resolve(getResponse({}, false));
+      await pendingPatch.promise;
+    });
+
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+    expect(screen.getByText("1 new")).toBeTruthy();
+  });
+
   it("keeps a notification created during PATCH unread after authoritative reconciliation", async () => {
     Object.defineProperty(document, "visibilityState", {
       configurable: true,
