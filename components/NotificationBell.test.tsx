@@ -524,7 +524,9 @@ describe("NotificationBell polling and read state", () => {
         fetchMock.mock.calls.some(([, options]) => options?.method === "PATCH"),
       ).toBe(true);
     });
-    act(() => window.dispatchEvent(new Event("focus")));
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
     await waitFor(() => expect(getCount).toBe(3));
 
     await act(async () => {
