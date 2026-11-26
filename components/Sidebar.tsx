@@ -200,7 +200,7 @@ export function Sidebar({
       <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-60 border-r border-hairline bg-white">
         <div className="flex items-center justify-between gap-2 px-5 py-5 border-b border-hairline">
           <Logo className="text-navy" />
-          <NotificationBell />
+          
         </div>
         {profileBlock}
         <div className="flex-1 px-3 py-4">{navList}</div>
@@ -211,8 +211,12 @@ export function Sidebar({
           <MenuIcon />
         </button>
         <Logo className="text-navy" />
-        <div className="ml-auto"><NotificationBell /></div>
+        <div className="ml-auto"></div>
       </header>
+      {/* One responsive instance prevents duplicate polling. */}
+      <div className="fixed right-4 top-3 z-50 md:left-[184px] md:right-auto md:top-4">
+        <NotificationBell />
+      </div>
       <div
         className="student-menu-overlay md:hidden fixed inset-0 z-50"
         data-open={mobileOpen}
