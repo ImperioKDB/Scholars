@@ -1,12 +1,14 @@
 name: Scheduled deadline and push check
 
-# Runs the push-only deadline check daily at 08:00 UTC (09:00 in Nigeria).
+# Runs the push-only deadline check daily at 08:17 UTC (09:17 in Nigeria).
 # The endpoint does not send automated email; it flags expired opportunities
 # and runs the push-notification campaign.
 on:
   schedule:
     - cron: "17 8 * * *"
   workflow_dispatch: {}
+
+permissions: {}
 
 concurrency:
   group: manual-deadline-push-check
@@ -23,11 +25,16 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           APP_URL: ${{ vars.APP_URL || 'https://www.scholars.com.ng' }}
         run: |
+          if [[ ! "$APP_URL" =~ ^https://([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(:[0-9]{1,5})?(/[^[:space:]]*)?$ ]]; then
+            echo "::error::APP_URL must be a valid HTTPS URL beginning with https://."
+            exit 1
+          fi
           if [ -z "$CRON_SECRET" ]; then
             echo "::error::CRON_SECRET repo secret is not set. Add it in Settings -> Secrets and variables -> Actions."
             exit 1
           fi
           code=$(curl --location -s -o /tmp/digest.json -w "%{http_code}" \
+            --proto '=https' --proto-redir '=https' \
             --max-time 300 \
             -H "Authorization: Bearer $CRON_SECRET" \
             "$APP_URL/api/cron/deadline-check")
