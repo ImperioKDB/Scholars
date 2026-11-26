@@ -58,7 +58,13 @@ jobs:
               if port is not None and not 1 <= port <= 65535:
                   raise ValueError("port is outside the valid range")
 
-              hostname = parsed.hostname.rstrip(".")
+              hostname = parsed.hostname
+              if hostname.endswith(".."):
+                  raise ValueError("hostname must not have multiple trailing dots")
+              if hostname.endswith("."):
+                  hostname = hostname[:-1]
+              if not hostname:
+                  raise ValueError("hostname is required")
               try:
                   ipaddress.ip_address(hostname)
               except ValueError:
