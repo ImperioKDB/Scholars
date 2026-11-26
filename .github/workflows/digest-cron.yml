@@ -1,9 +1,14 @@
-name: Manual deadline and push check
+name: Scheduled deadline and push check
 
-# This endpoint is push-only. Keep it manually dispatchable, but never run it
-# on a timer: all non-authentication email must require a human action.
+# Runs the push-only deadline check daily at 08:17 UTC (09:17 in Nigeria).
+# The endpoint does not send automated email; it flags expired opportunities
+# and runs the push-notification campaign.
 on:
+  schedule:
+    - cron: "17 8 * * *"
   workflow_dispatch: {}
+
+permissions: {}
 
 concurrency:
   group: manual-deadline-push-check
@@ -15,15 +20,84 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Trigger the push-only Scholars deadline check
+        # Automated email remains disabled; this endpoint sends push notifications only.
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           APP_URL: ${{ vars.APP_URL || 'https://www.scholars.com.ng' }}
         run: |
+          if ! python3 - <<'PY'
+          import ipaddress
+          import os
+          import re
+          import sys
+          from urllib.parse import urlsplit
+
+          value = os.environ.get("APP_URL", "")
+
+          try:
+              if not value.startswith("https://"):
+                  raise ValueError("scheme must be exactly https")
+              if any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in value):
+                  raise ValueError("whitespace or control characters are not allowed")
+              if "\\" in value:
+                  raise ValueError("backslashes are not allowed")
+              if "?" in value or "#" in value:
+                  raise ValueError("query strings and fragments are not allowed")
+
+              parsed = urlsplit(value)
+              if parsed.scheme != "https":
+                  raise ValueError("scheme must be exactly https")
+              if parsed.username is not None or parsed.password is not None:
+                  raise ValueError("embedded credentials are not allowed")
+              if not parsed.hostname:
+                  raise ValueError("hostname is required")
+              if parsed.netloc.endswith(":"):
+                  raise ValueError("port must be numeric")
+
+              port = parsed.port
+              if port is not None and not 1 <= port <= 65535:
+                  raise ValueError("port is outside the valid range")
+
+              hostname = parsed.hostname
+              if hostname.endswith(".."):
+                  raise ValueError("hostname must not have multiple trailing dots")
+              if hostname.endswith("."):
+                  hostname = hostname[:-1]
+              if not hostname:
+                  raise ValueError("hostname is required")
+              try:
+                  ipaddress.ip_address(hostname)
+              except ValueError:
+                  try:
+                      ascii_hostname = hostname.encode("idna").decode("ascii")
+                  except UnicodeError as exc:
+                      raise ValueError("hostname is not valid DNS syntax") from exc
+                  if len(ascii_hostname) > 253:
+                      raise ValueError("hostname is too long")
+                  labels = ascii_hostname.split(".")
+                  if any(
+                      not label
+                      or len(label) > 63
+                      or label[0] == "-"
+                      or label[-1] == "-"
+                      or re.fullmatch(r"[A-Za-z0-9-]+", label) is None
+                      for label in labels
+                  ):
+                      raise ValueError("hostname is not valid DNS syntax")
+          except ValueError as exc:
+              print(f"APP_URL validation failed: {exc}", file=sys.stderr)
+              raise SystemExit(1)
+          PY
+          then
+            echo "::error::APP_URL must be a valid HTTPS URL without credentials, query strings, fragments, or invalid host syntax."
+            exit 1
+          fi
           if [ -z "$CRON_SECRET" ]; then
             echo "::error::CRON_SECRET repo secret is not set. Add it in Settings -> Secrets and variables -> Actions."
             exit 1
           fi
           code=$(curl --location -s -o /tmp/digest.json -w "%{http_code}" \
+            --proto '=https' --proto-redir '=https' \
             --max-time 300 \
             -H "Authorization: Bearer $CRON_SECRET" \
             "$APP_URL/api/cron/deadline-check")
