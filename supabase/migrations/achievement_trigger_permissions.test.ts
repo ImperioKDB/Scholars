@@ -13,7 +13,7 @@ const triggerMigrationPath = resolve(
 
 describe("achievement trigger permission hardening", () => {
   it("revokes direct RPC execution without removing trigger execution", () => {
-    const migration = readFileSync(migrationPath, "utf8");
+    const migration = readFileSync(migrationPath, "utf8").replace(/\r\n/g, "\n");
     const triggerMigration = readFileSync(triggerMigrationPath, "utf8");
 
     for (const signature of [
