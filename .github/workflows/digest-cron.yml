@@ -25,8 +25,65 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           APP_URL: ${{ vars.APP_URL || 'https://www.scholars.com.ng' }}
         run: |
-          if [[ ! "$APP_URL" =~ ^https://([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(:[0-9]{1,5})?(/[^[:space:]]*)?$ ]]; then
-            echo "::error::APP_URL must be a valid HTTPS URL beginning with https://."
+          if ! python3 - <<'PY'
+          import ipaddress
+          import os
+          import re
+          import sys
+          from urllib.parse import urlsplit
+
+          value = os.environ.get("APP_URL", "")
+
+          try:
+              if not value.startswith("https://"):
+                  raise ValueError("scheme must be exactly https")
+              if any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in value):
+                  raise ValueError("whitespace or control characters are not allowed")
+              if "\\" in value:
+                  raise ValueError("backslashes are not allowed")
+              if "?" in value or "#" in value:
+                  raise ValueError("query strings and fragments are not allowed")
+
+              parsed = urlsplit(value)
+              if parsed.scheme != "https":
+                  raise ValueError("scheme must be exactly https")
+              if parsed.username is not None or parsed.password is not None:
+                  raise ValueError("embedded credentials are not allowed")
+              if not parsed.hostname:
+                  raise ValueError("hostname is required")
+              if parsed.netloc.endswith(":"):
+                  raise ValueError("port must be numeric")
+
+              port = parsed.port
+              if port is not None and not 1 <= port <= 65535:
+                  raise ValueError("port is outside the valid range")
+
+              hostname = parsed.hostname.rstrip(".")
+              try:
+                  ipaddress.ip_address(hostname)
+              except ValueError:
+                  try:
+                      ascii_hostname = hostname.encode("idna").decode("ascii")
+                  except UnicodeError as exc:
+                      raise ValueError("hostname is not valid DNS syntax") from exc
+                  if len(ascii_hostname) > 253:
+                      raise ValueError("hostname is too long")
+                  labels = ascii_hostname.split(".")
+                  if any(
+                      not label
+                      or len(label) > 63
+                      or label[0] == "-"
+                      or label[-1] == "-"
+                      or re.fullmatch(r"[A-Za-z0-9-]+", label) is None
+                      for label in labels
+                  ):
+                      raise ValueError("hostname is not valid DNS syntax")
+          except ValueError as exc:
+              print(f"APP_URL validation failed: {exc}", file=sys.stderr)
+              raise SystemExit(1)
+          PY
+          then
+            echo "::error::APP_URL must be a valid HTTPS URL without credentials, query strings, fragments, or invalid host syntax."
             exit 1
           fi
           if [ -z "$CRON_SECRET" ]; then
