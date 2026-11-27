@@ -79,12 +79,17 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
 const NMSS_APPLICATION_URL = "https://csr-ngscholarship.totalenergies.com/scholarships/nmss";
 const NMSS_GOVERNMENT_FORM_URL =
   "https://dragnet-solutions.com/wp-content/uploads/2025/06/NNPC-SNEPCo-NATIONAL-UNIVERSITY-SCHOLARSHIP-GOVERNMENT-OFFICIAL-INFORMATION-FORM-1.pdf";
+const KPMG_UNIVERSITY_SCHOLARSHIP_SLUG = "2026-kpmg-university-scholarship-programme";
 
 function hasNmssGovernmentForm(scholarship: ScholarshipDetail): boolean {
   return (
     scholarship.application_url === NMSS_APPLICATION_URL &&
     scholarship.title.toLowerCase().includes("national merit scholarship")
   );
+}
+
+function hasKpmgPublicSchoolNotice(scholarship: ScholarshipDetail): boolean {
+  return scholarship.slug === KPMG_UNIVERSITY_SCHOLARSHIP_SLUG;
 }
 
 export function ScholarshipDetailClient({
@@ -280,6 +285,20 @@ export function ScholarshipDetailClient({
 
         {scholarship.description && (
           <p className="text-sm text-ink leading-relaxed mb-6 mt-4">{scholarship.description}</p>
+        )}
+
+        {hasKpmgPublicSchoolNotice(scholarship) && (
+          <div
+            className="mb-6 rounded-xl border border-amber/25 bg-amber-light px-4 py-3"
+            role="note"
+            aria-label="Additional KPMG eligibility requirement"
+          >
+            <p className="text-sm font-semibold text-amber">Additional eligibility requirement</p>
+            <p className="mt-1 text-xs leading-relaxed text-ink">
+              Applicants must have completed their secondary education at a public school. KPMG may verify this
+              requirement during the application process.
+            </p>
+          </div>
         )}
 
       {actionError && <StatusMessage tone="error" className="mb-4">{actionError}</StatusMessage>}
