@@ -96,7 +96,6 @@ describe('POST /api/admin/brevo-test', () => {
       to: ADMIN_EMAIL,
       subject: 'Scholars — Brevo Integration Test',
       text: expect.stringContaining('sent directly through Brevo'),
-      idempotencyKey: expect.stringMatching(/^brevo-test\//),
     })
     expect(mocks.sendWithBrevo.mock.calls[0][0].text).toContain('Test timestamp:')
     expect(mocks.sendWithBrevo.mock.calls[0][0].html).toContain('Brevo dashboard')
@@ -111,9 +110,6 @@ describe('POST /api/admin/brevo-test', () => {
       expect(input.subject).toBe('Scholars — Brevo Integration Test')
       expect(input.html).not.toContain('bad')
     }
-    const firstKey = mocks.sendWithBrevo.mock.calls[0][0].idempotencyKey
-    const secondKey = mocks.sendWithBrevo.mock.calls[1][0].idempotencyKey
-    expect(firstKey).not.toBe(secondKey)
   })
 
   it('returns safe diagnostics when Brevo rejects without leaking provider body or credentials', async () => {
@@ -136,7 +132,7 @@ describe('POST /api/admin/brevo-test', () => {
     })
   })
 
-  it('handles uncertain network outcomes safely', async () => {
+  it('does not claim non-acceptance for uncertain outcomes', async () => {
     mocks.sendWithBrevo.mockRejectedValue(new EmailProviderError({
       provider: 'brevo', status: null, code: 'network_error', classification: 'uncertain_outcome',
       networkError: new TypeError('fetch failed'),
@@ -145,5 +141,7 @@ describe('POST /api/admin/brevo-test', () => {
     expect(response.status).toBe(502)
     const body = await response.json()
     expect(body.diagnostic.classification).toBe('uncertain_outcome')
+    expect(body.error).not.toContain('did not accept')
+    expect(body.error).toContain('could not be determined')
   })
 })

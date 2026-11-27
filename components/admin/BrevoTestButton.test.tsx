@@ -53,4 +53,44 @@ describe('BrevoTestButton', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send Test Email via Brevo' }))
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('configure BREVO_API_KEY'))
   })
+
+  it('displays sanitized diagnostic details for definitive rejections', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      success: false,
+      error: 'Brevo did not accept the test email.',
+      diagnostic: {
+        provider: 'brevo',
+        classification: 'definitive_rejection',
+        status: 401,
+        code: 'invalid_api_key',
+        networkErrorName: null,
+        networkErrorCode: null,
+      },
+    }), { status: 502, headers: { 'Content-Type': 'application/json' } })))
+    render(<BrevoTestButton />)
+    fireEvent.click(screen.getByRole('button', { name: 'Send Test Email via Brevo' }))
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('definitive_rejection'))
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('status: 401'))
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('code: invalid_api_key'))
+  })
+
+  it('advises checking Brevo logs for uncertain outcomes', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      success: false,
+      error: 'Brevo test outcome could not be determined.',
+      diagnostic: {
+        provider: 'brevo',
+        classification: 'uncertain_outcome',
+        status: null,
+        code: 'network_error',
+        networkErrorName: 'TypeError',
+        networkErrorCode: null,
+      },
+    }), { status: 502, headers: { 'Content-Type': 'application/json' } })))
+    render(<BrevoTestButton />)
+    fireEvent.click(screen.getByRole('button', { name: 'Send Test Email via Brevo' }))
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('uncertain_outcome'))
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('code: network_error'))
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Check Brevo logs before retrying'))
+  })
 })

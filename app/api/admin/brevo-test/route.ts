@@ -51,7 +51,6 @@ export async function POST(request: Request) {
       to: user.email,
       subject: SUBJECT,
       ...testEmailContent(timestamp),
-      idempotencyKey: `brevo-test/${crypto.randomUUID()}`,
     })
     return NextResponse.json({
       success: true,
@@ -63,9 +62,12 @@ export async function POST(request: Request) {
   } catch (error) {
     const diagnostic = safeEmailErrorDiagnostic(error)
     logError('admin/brevo-test', 'brevo_test_send_failed', diagnostic)
+    const isUncertain = diagnostic.classification === 'uncertain_outcome'
     return NextResponse.json({
       success: false,
-      error: 'Brevo did not accept the test email.',
+      error: isUncertain
+        ? 'Brevo test outcome could not be determined.'
+        : 'Brevo did not accept the test email.',
       diagnostic,
     }, { status: 502 })
   }

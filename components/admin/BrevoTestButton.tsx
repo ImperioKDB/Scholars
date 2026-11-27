@@ -8,6 +8,14 @@ type BrevoTestResponse = {
   recipient?: string
   messageId?: string | null
   error?: string
+  diagnostic?: {
+    provider?: string | null
+    classification?: string | null
+    status?: number | null
+    code?: string | null
+    networkErrorName?: string | null
+    networkErrorCode?: string | null
+  }
 }
 
 export function BrevoTestButton() {
@@ -26,7 +34,19 @@ export function BrevoTestButton() {
       const response = await fetch('/api/admin/brevo-test', { method: 'POST' })
       const body = await response.json().catch(() => ({})) as BrevoTestResponse
       if (!response.ok || !body.success || !body.recipient) {
-        setError(body.error ?? 'Could not send the Brevo test email.')
+        let msg = body.error ?? 'Could not send the Brevo test email.'
+        const diag = body.diagnostic
+        if (diag) {
+          const parts: string[] = []
+          if (diag.classification) parts.push(`outcome: ${diag.classification}`)
+          if (diag.status !== null && diag.status !== undefined) parts.push(`status: ${diag.status}`)
+          if (diag.code) parts.push(`code: ${diag.code}`)
+          if (parts.length > 0) msg += ` · ${parts.join(' · ')}`
+        }
+        if (diag?.classification === 'uncertain_outcome') {
+          msg += ' · Check Brevo logs before retrying.'
+        }
+        setError(msg)
         return
       }
       setSuccess(`Brevo accepted the test email for ${body.recipient}.${body.messageId ? ` Message ID: ${body.messageId}` : ''} Acceptance does not confirm inbox delivery.`)
