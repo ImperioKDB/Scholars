@@ -3,6 +3,18 @@ import { classifyResendStatus, EmailProviderError, readProviderErrorCode } from 
 
 export const RESEND_EMAIL_ENDPOINT = 'https://api.resend.com/emails'
 
+export function resendRequest(input: ProviderSendInput, apiKey: string, from: string): RequestInit {
+  return {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      ...(input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : {}),
+    },
+    body: JSON.stringify({ from, to: [input.to], subject: input.subject, html: input.html, text: input.text }),
+  }
+}
+
 export async function sendWithResend(input: ProviderSendInput): Promise<ProviderSendResult> {
   const apiKey = process.env.RESEND_API_KEY
   const from = process.env.RESEND_FROM_EMAIL
@@ -12,15 +24,7 @@ export async function sendWithResend(input: ProviderSendInput): Promise<Provider
 
   let response: Response
   try {
-    response = await fetch(RESEND_EMAIL_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        ...(input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : {}),
-      },
-      body: JSON.stringify({ from, to: [input.to], subject: input.subject, html: input.html, text: input.text }),
-    })
+    response = await fetch(RESEND_EMAIL_ENDPOINT, resendRequest(input, apiKey, from))
   } catch (error) {
     throw new EmailProviderError({
       provider: 'resend',

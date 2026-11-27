@@ -19,15 +19,17 @@ describe('email failover caller safety', () => {
     expect(nudges).toContain('markNotificationAccepted(supabase, delivery.id, res.messageId)')
   })
 
-  it('broadcast and campaign routes use recipient-scoped keys and no automatic attempt loop', () => {
-    const broadcast = source('app/api/admin/broadcast/route.ts')
+  it('broadcast workers and the Independence Day route retain recipient-scoped keys', () => {
+    const broadcast = source('lib/broadcast/providers.ts')
+    const worker = source('lib/broadcast/worker.ts')
     const independence = source('app/api/admin/independence-day/route.ts')
-    expect(broadcast).toContain('`broadcast/${broadcastId}/${r.id}`')
+    expect(broadcast).toContain("const idempotencyKey = 'broadcast/' + campaign + '/' + target.id")
+    expect(worker).toContain('p_provider_id: outcome.messageId ?? null')
     expect(independence).toContain('`independence-day/${campaignId}/${recipient.id}`')
-    for (const text of [broadcast, independence]) {
+    expect(independence).toContain('provider_message')
+    for (const text of [broadcast, worker, independence]) {
       expect(text).not.toContain('MAX_ATTEMPTS')
       expect(text).not.toContain('sendWithRetry')
-      expect(text).toContain('provider_message')
     }
   })
 })

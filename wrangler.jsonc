@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "scholars",
-  "main": ".open-next/worker.js",
+  "main": "worker.ts",
   "compatibility_date": "2026-11-21",
   "compatibility_flags": [
     "nodejs_compat"
@@ -12,6 +12,19 @@
   },
   "observability": {
     "enabled": true
+  },
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
+  "queues": {
+    "producers": [
+      { "binding": "BROADCAST_EMAIL_QUEUE", "queue": "scholars-broadcast-email" },
+      { "binding": "BROADCAST_PUSH_QUEUE", "queue": "scholars-broadcast-push" }
+    ],
+    "consumers": [
+      { "queue": "scholars-broadcast-email", "max_batch_size": 1, "max_batch_timeout": 1, "max_retries": 2 },
+      { "queue": "scholars-broadcast-push", "max_batch_size": 1, "max_batch_timeout": 1, "max_retries": 2 }
+    ]
   },
   "keep_vars": true,
   "previews": {},
