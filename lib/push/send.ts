@@ -1,9 +1,12 @@
+import { fetchWithTimeout } from '@/lib/fetch';
+
 type PushMessage = {
   to: string;
   title: string;
   body: string;
   data?: Record<string, string>;
   channelId?: string;
+  ttl?: number;
 };
 
 type ExpoTicket = {
@@ -15,12 +18,13 @@ type ExpoTicket = {
 
 export async function sendExpoPushMessages(messages: PushMessage[]): Promise<{ tickets: ExpoTicket[]; invalidTokens: string[] }> {
   if (messages.length === 0) return { tickets: [], invalidTokens: [] };
-  const response = await fetch("https://exp.host/--/api/v2/push/send", {
+  const response = await fetchWithTimeout("https://exp.host/--/api/v2/push/send", {
     method: "POST",
+    timeoutMs: 10_000,
     headers: { Accept: "application/json", "Accept-Encoding": "gzip, deflate", "Content-Type": "application/json" },
     body: JSON.stringify(messages.map((message) => ({ ...message, sound: "default", priority: "high" }))),
   });
-  if (!response.ok) throw new Error(`Expo Push API returned HTTP ${response.status}`);
+  if (!response.ok) throw Object.assign(new Error("Expo Push API rejected the request"), { statusCode: response.status });
   const payload = (await response.json()) as { data?: ExpoTicket[]; errors?: Array<{ message?: string }> };
   if (payload.errors?.length) throw new Error(payload.errors.map((error) => error.message ?? "Expo Push API error").join("; "));
   const tickets = payload.data ?? [];

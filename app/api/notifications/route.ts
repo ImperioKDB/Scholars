@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { dbErrorResponse } from "@/lib/errors";
+import { deadlineMessage } from "@/lib/deadlines/policy";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,10 @@ function messageFor(type: string, metadata: Record<string, unknown> | null | und
   }
   if (type === "deadline_reminder") {
     const title = typeof metadata?.title === "string" ? metadata.title : "your saved scholarship";
+    if (typeof metadata?.deadline_stage === "string") {
+      const message = deadlineMessage(metadata.deadline_stage, title);
+      if (message) return message;
+    }
     const days = typeof metadata?.days_until === "number" ? metadata.days_until : null;
     const when = days === 0 ? "today" : days === 1 ? "tomorrow" : days !== null && days > 1 ? `in ${days} days` : "soon";
     return `Your saved scholarship deadline is ${when}: ${title}.`;
@@ -37,7 +42,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("notifications")
-    .select("id, type, created_at, read_at, scholarship_id, discussion_id, actor_profile_id, metadata")
+    .select("id, type, created_at, read_at, scholarship_id, opportunity_id, discussion_id, actor_profile_id, metadata")
     .eq("profile_id", user.id)
     .order("created_at", { ascending: false })
     .limit(30);
