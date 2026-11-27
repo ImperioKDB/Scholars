@@ -203,7 +203,7 @@ export function Sidebar({
           
         </div>
         {profileBlock}
-        <div className="flex-1 px-3 py-4">{navList}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">{navList}</div>
         {accountBlock}
       </aside>
       <header className="md:hidden fixed top-0 inset-x-0 z-40 h-16 bg-white/95 backdrop-blur-sm border-b border-hairline flex items-center gap-3 px-4">
@@ -239,7 +239,7 @@ export function Sidebar({
             </button>
           </div>
           {profileBlock}
-          <div className="flex-1 px-3 py-4">{navList}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">{navList}</div>
           {accountBlock}
         </div>
       </div>
