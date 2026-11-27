@@ -197,7 +197,7 @@ export function Sidebar({
       >
         Skip to content
       </a>
-      <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-60 border-r border-hairline bg-white">
+      <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-60 border-r border-hairline bg-white overflow-y-auto">
         <div className="flex items-center justify-between gap-2 px-5 py-5 border-b border-hairline">
           <Logo className="text-navy" />
           

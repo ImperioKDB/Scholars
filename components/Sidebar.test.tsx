@@ -20,23 +20,38 @@ describe("student sidebar vertical scrolling", () => {
     "utf8",
   );
 
+  const navContainerPattern = /<div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">\{navList\}<\/div>/g;
+
   it("makes the desktop nav region independently scrollable", () => {
-    // The desktop navigation region needs min-h-0 so it can shrink below
-    // its content's minimum height, and overflow-y-auto so links remain
-    // reachable when content exceeds the viewport.
-    expect(source).toContain('className="min-h-0 flex-1 overflow-y-auto px-3 py-4">{navList}</div>');
+    // min-h-0 lets the nav region shrink below its content minimum height;
+    // overflow-y-auto lets links scroll when content exceeds the viewport.
+    expect(navContainerPattern.test(source)).toBe(true);
   });
 
   it("makes the mobile drawer nav region independently scrollable", () => {
-    // The mobile drawer navigation region shares the same navList
-    // container class pattern as the desktop region. Both must carry
-    // min-h-0 and overflow-y-auto so links remain reachable on short
-    // displays and at increased browser zoom.
-    const scrollableNavRegions = source.match(/<div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">\{navList\}<\/div>/g);
+    const scrollableNavRegions = source.match(navContainerPattern);
     expect(scrollableNavRegions).toHaveLength(2);
   });
 
+  it("provides a scrolling fallback for extremely short viewports", () => {
+    // overflow-y-auto on the aside keeps profile, navigation and account
+    // controls reachable when the viewport is shorter than the full sidebar.
+    expect(source).toMatch(
+      /className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-60 border-r border-hairline bg-white overflow-y-auto"/,
+    );
+  });
+
   it("keeps the desktop sidebar fixed while content scrolls independently", () => {
-    expect(source).toContain('className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-60 border-r border-hairline bg-white"');
+    expect(source).toMatch(
+      /className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-60 border-r border-hairline bg-white overflow-y-auto"/,
+    );
+  });
+
+  it("preserves the mobile header controls", () => {
+    expect(source).toContain('className="md:hidden fixed top-0 inset-x-0 z-40 h-16 bg-white/95 backdrop-blur-sm border-b border-hairline flex items-center gap-3 px-4"');
+  });
+
+  it("preserves the account controls block", () => {
+    expect(source).toContain('className="px-3 py-4 border-t border-hairline"');
   });
 });
