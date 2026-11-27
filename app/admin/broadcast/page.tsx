@@ -4,6 +4,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { StatusMessage } from "@/components/StatusMessage";
 import { DeadlineBadge } from "@/components/DeadlineBadge";
 import { ResendTestButton } from "@/components/admin/ResendTestButton";
+import { BrevoTestButton } from "@/components/admin/BrevoTestButton";
 import { SendIndependenceDayButton } from "@/components/admin/SendIndependenceDayButton";
 import { EmailBatchButtons } from "@/components/admin/EmailBatchButtons";
 import type { EmailBatch } from "@/lib/email/batches";
@@ -202,6 +203,8 @@ export default function AdminBroadcastPage() {
       </div>
 
       <ResendTestButton />
+
+      <BrevoTestButton />
 
       <SendIndependenceDayButton />
 
