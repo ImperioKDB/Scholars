@@ -93,4 +93,20 @@ describe('BrevoTestButton', () => {
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('code: network_error'))
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Check Brevo logs before retrying'))
   })
+
+  it('treats a rejected fetch request as an uncertain outcome', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')))
+    render(<BrevoTestButton />)
+    fireEvent.click(screen.getByRole('button', { name: 'Send Test Email via Brevo' }))
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('uncertain_outcome'))
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Check Brevo logs before retrying'))
+  })
+
+  it('treats an unreadable response body as an uncertain outcome', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('not json', { status: 502 })))
+    render(<BrevoTestButton />)
+    fireEvent.click(screen.getByRole('button', { name: 'Send Test Email via Brevo' }))
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('uncertain_outcome'))
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Check Brevo logs before retrying'))
+  })
 })

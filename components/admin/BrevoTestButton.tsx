@@ -32,7 +32,14 @@ export function BrevoTestButton() {
     setError(null)
     try {
       const response = await fetch('/api/admin/brevo-test', { method: 'POST' })
-      const body = await response.json().catch(() => ({})) as BrevoTestResponse
+      let body: BrevoTestResponse
+      try {
+        body = (await response.json()) as BrevoTestResponse
+      } catch {
+        // Unreadable or malformed response body — treat as uncertain outcome.
+        setError('Could not read the Brevo test response. · outcome: uncertain_outcome · Check Brevo logs before retrying.')
+        return
+      }
       if (!response.ok || !body.success || !body.recipient) {
         let msg = body.error ?? 'Could not send the Brevo test email.'
         const diag = body.diagnostic
@@ -51,7 +58,8 @@ export function BrevoTestButton() {
       }
       setSuccess(`Brevo accepted the test email for ${body.recipient}.${body.messageId ? ` Message ID: ${body.messageId}` : ''} Acceptance does not confirm inbox delivery.`)
     } catch {
-      setError('Could not reach the server. Check your connection and try again.')
+      // Rejected fetch request — treat as uncertain outcome.
+      setError('Could not reach the Brevo test endpoint. · outcome: uncertain_outcome · Check Brevo logs before retrying.')
     } finally {
       sendingRef.current = false
       setSending(false)
@@ -70,7 +78,7 @@ export function BrevoTestButton() {
         </div>
         <button
           type="button"
-          onClick={sendTest}
+          onClick={() => void sendTest()}
           disabled={sending}
           className="shrink-0 rounded-lg bg-navy px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-60"
         >
