@@ -150,3 +150,96 @@ Requalify if observed p99 active CPU exceeds 8 ms, startup reaches one second, t
 Use [broadcast_allocate.sql](../supabase/operations/broadcast_allocate.sql) through an approved psql session on the intended database. Specify `-v provider=brevo -v period=daily -v starts_at="$START" -v ends_at="$END" -v additional="$SAFE_AVAILABLE"` and pass that file with `-f`. For Resend run the operation once for `daily` and once for `monthly`. Verify Brevo's actual plan, remaining sends, reset time and any queued mail. Use Resend's UTC daily reset and verify the current monthly boundary and usage. Set `SAFE_AVAILABLE` to the lower of verified remaining provider credits and the approved remaining broadcast allocation after reserving capacity for other account traffic. For renewal, add the next non-overlapping window before the previous one ends. A refresh of the same window must use identical boundaries and only capacity remaining from that verification. The SQL serializes against dispatch and preserves `reserved` on refresh. An additional amount of zero closes the current allowance. Non-overlapping future windows permit automatic resumption when due. Check available capacity and deferred counts after every change. A zero or absent allowance is a hold.
 
 Only after separate approval and successful hosted staging qualification, confirm branch and migration order and correct PR #50 before combining its rollout. Provision production queue names from `wrangler.jsonc` and confirm one Cron slot. Apply the reviewed additive broadcast migration via the approved migration runner in one transaction. Deploy the matching Worker with `BROADCAST_CONSUMERS_ENABLED=false`. Smoke-test the authenticated admin and inspect the two queues. Initialize verified allocations, then activate with a separately approved setting change. Preserve the production provider credentials. For rollback, set the flag false first, wait for in-flight attempts and at least one 45-second lease window, and preserve the additive schema and job state. Keep the current paused entry when possible. If reverting to an older Worker, block the old synchronous broadcast POST before routing to it. Do not reset attempts or remove the historical campaign protection.
+
+## Shared staging qualification after merging main
+
+The qualification merge is `22a41ae99d46f5d9fad010858a6b577fe7b7eb49`. Its parents are the
+reviewed broadcast head `bf27021d7a35f5fc032f78463e6bee6a22c2f37c` and main
+`765d8b750be6642689dfd7adc89060d5eb6872b0`, which includes PR #50 and the
+new-match changes from PR #52. The old head passed GitHub CI run 46101019507.
+GitHub showed the PR open and in draft with no inline review threads. Codacy
+reported 12 high alerts on the previous head. The classifications earlier in
+this report are source-review observations. Current-head analyzer results and
+independent review are required before release.
+
+### Hosted PostgreSQL evidence
+
+The Session Pooler connected to project `aqhktriwaglvvrchxmtd` on port 5432
+with TLS 1.3 and `sslmode=verify-full`. Native PostgreSQL 17 used the
+configured private passfile and CA. Every invocation used
+`psql -X -w -v ON_ERROR_STOP=1`, a 120-second statement timeout and a
+5-second lock timeout. The packet preflight returned `DO` with exit 0.
+The final sequential run returned the following sanitized output:
+
+```text
+shared_staging_fixture_state.sql exit 0
+BEGIN
+CREATE FUNCTION
+DO
+DO
+DO
+ROLLBACK
+deadline_reminders_hosted.sql exit 0
+Zero rows across public tables and Auth users/identities; pg_cron job table absent
+shared_staging_fixture_state.sql exit 0
+Both deadline channels claimed due work without changing any broadcast records
+Broadcast scheduling, claim and release preserved active deadline deliveries
+ROLLBACK
+admin_broadcast_hosted.sql exit 0
+Zero rows across public tables and Auth users/identities; pg_cron job table absent
+shared_staging_fixture_state.sql exit 0
+```
+
+The broadcast suite restored one historical email log row and exactly 599
+announcement rows, verified 300 email targets in batch A including an Auth
+user without a profile, and observed five deferred targets in batch B.
+It asserted 78 push profiles and 129 devices, one accepted attempt per email,
+submission deduplication, shared allocation enforcement and resumption,
+lease fencing and recovery, uncertain acceptance and late reconciliation,
+definitive rejection, and retention of the provider receipt after an injected
+announcement write error. Deadline assertions covered Lagos boundaries,
+preference and tracking rules, claim isolation and replay, retries, quota and
+the 500-row cap. The compatibility scenario exercised both directions with
+populated broadcast records and actively leased deadline deliveries.
+
+Initial broadcast attempts exited 3 while adapting the profileless assertion
+to the actual target schema, isolating rejection from the original shared
+quota window, and accounting for the hosted Auth trigger and broadcast job
+selection in compatibility fixtures. Clean-state checks after those runs
+exited 0. The final scripts completed with their original exact assertions.
+The hosted database was already initialized. Execution used only rollback
+transactions. Identity sequences may advance under PostgreSQL rollback rules.
+
+### Application qualification
+
+| Command | Exit | Result |
+| --- | --- | --- |
+| `npm ci --no-audit --no-fund` | 0 | Lockfile install, Node 22.20.0 |
+| `npm test -- lib/broadcast lib/deadlines app/api/admin/broadcast app/api/cron/deadline-check app/admin/broadcast components/admin/BroadcastProgress lib/email/failoverCallers.test.ts lib/push/campaigns.test.ts lib/push/campaigns.integration.test.ts` | 0 | 51 passed and 9 skipped |
+| `npm test` | 0 | 350 passed across 54 files, 9 skipped in one file |
+| `node_modules/.bin/tsc --noEmit` | 0 | TypeScript passed |
+| `node scripts/test-broadcast-worker.mjs` | 0 | Local workerd completed 300 synthetic emails and 78 Web Push targets, injected failure cases, and native queue tests. Peak was 7 counted operations. |
+| `npm run build` | 0 | Standalone retry with CI placeholders built all 92 static pages |
+| `node_modules/.bin/opennextjs-cloudflare build --config wrangler.broadcast-staging.jsonc` | 0 | Next.js completed its production build and OpenNext emitted the Worker bundle |
+| `node_modules/.bin/wrangler deploy --config wrangler.broadcast-staging.jsonc --dry-run` | 0 | 16,306.72 KiB uncompressed, 2,995.71 KiB gzip, 386 assets, both staging queues, consumers disabled |
+
+The first standalone `npm run build` exited 1 at the `/_not-found` page-data invariant while the regression suite was running. The integration suite also runs Next.js in the same checkout. OpenNext and the serial standalone retry both passed after the tests finished.
+
+The first sandboxed focused test command exited 1 because esbuild could
+not traverse a parent directory. The focused rerun used the same source and
+test config with normal filesystem access. The nine PR #52 new-match
+PostgreSQL integration cases require the checked-in Docker harness.
+Docker is unavailable in this Windows environment. The hosted SQL evidence
+qualifies the deadline and broadcast contracts installed there.
+
+The hosted Worker remains a release gate. Confirm the account plan and
+remaining queue operations, provision the distinct staging queues and Worker
+under operator approval, and use synthetic provider isolation with staging-only
+bindings. Verify the dropped-wake recovery, retry and queue-drain behavior
+with platform telemetry. The runbook targets p99 active CPU at or below 8 ms,
+startup below one second, at most 32 counted operations per invocation,
+and roughly 1,134 queue operations for the 378-target run before retry overhead.
+Keep PR #51 in draft pending current-head CI, analyzer review, and independently
+approved staging Worker qualification.
+
+See [Cloudflare Workers limits](https://developers.cloudflare.com/workers/platform/limits/) and [Cloudflare Queues pricing](https://developers.cloudflare.com/queues/platform/pricing/).
