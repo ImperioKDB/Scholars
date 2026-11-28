@@ -56,11 +56,13 @@ const TYPE_TONE: Record<OpportunityDetail["type"], string> = {
 export function OpportunityDetailClient({
   opportunity,
   initialSaved,
+  closed,
   sharerId,
   similar,
 }: {
   opportunity: OpportunityDetail;
   initialSaved: boolean;
+  closed: boolean;
   sharerId: string;
   similar: SimilarOpportunity[];
 }) {
@@ -152,7 +154,7 @@ export function OpportunityDetailClient({
         {actionError && <StatusMessage tone="error" className="mb-4">{actionError}</StatusMessage>}
         {actionNotice && <div role="status" className="mb-4 rounded-xl border border-navy/10 bg-navy-50 px-4 py-3 text-sm text-navy">{actionNotice}</div>}
         <div className="flex flex-wrap items-center gap-3 mb-8 pb-8 border-b border-hairline">
-          {opportunity.application_url && (
+          {!closed && opportunity.application_url && (
             <a
               href={opportunity.application_url}
               onClick={(event) => { event.preventDefault(); interceptApply({ listingKind: "opportunity", listingId: opportunity.id, listingTitle: opportunity.title, applicationUrl: opportunity.application_url as string, applicationId: null }); }}
@@ -163,14 +165,15 @@ export function OpportunityDetailClient({
               Apply on provider&apos;s site &rarr;
             </a>
           )}
-          {opportunity.how_to_apply && !opportunity.application_url && (
+          {!closed && opportunity.how_to_apply && !opportunity.application_url && (
             <div className="bg-navy-50 rounded-xl p-4 w-full">
               <p className="text-sm text-ink leading-relaxed">
                 <span className="font-medium text-navy">How to apply:</span> {opportunity.how_to_apply}
               </p>
             </div>
           )}
-          <button
+          {closed && <p className="text-sm text-navy-light">Applications are closed.</p>}
+          {(!closed || saved) && <button
             type="button"
             onClick={toggleSave}
             disabled={savePending}
@@ -180,7 +183,7 @@ export function OpportunityDetailClient({
             ].join(" ")}
           >
             {saved ? "Saved \u2713" : "Save"}
-          </button>
+          </button>}
           <ShareButton variant="full" opportunityId={opportunity.id} opportunitySlug={opportunity.slug} title={opportunity.title} sharerId={sharerId} />
         </div>
       </div>

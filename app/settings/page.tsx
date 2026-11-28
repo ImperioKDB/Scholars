@@ -7,6 +7,7 @@ import { AvatarUploader } from "@/components/AvatarUploader";
 import { CommunityBioEditor } from "@/components/CommunityBioEditor";
 import { WhatsappCommunityInvitationConsent } from "@/components/WhatsappCommunityInvitationConsent";
 import { PushNotificationSettings } from "@/components/PushNotificationSettings";
+import { DeadlineNotificationSettings, type DeadlinePreferences } from "@/components/DeadlineNotificationSettings";
 import { DeleteAccountButton } from "@/components/DeleteAccountButton";
 
 // app/settings/page.tsx
@@ -17,7 +18,7 @@ import { DeleteAccountButton } from "@/components/DeleteAccountButton";
 // (the one self-serve edit surface, since a photo has no onboarding home)
 // and, since the privacy-transparency batch, self-serve account deletion
 // via the DeleteAccountButton client component.
-type ProfileRow = {
+type ProfileRow = DeadlinePreferences & {
   full_name: string | null;
   nationality: string | null;
   gender: string | null;
@@ -168,6 +169,13 @@ export default async function SettingsPage() {
           initialOptIn={p.whatsapp_community_invite_opt_in}
           initialNumber={p.whatsapp_number}
         />
+      </Section>
+      <Section title="Deadline reminders">
+        <DeadlineNotificationSettings initial={{
+          deadline_in_app_enabled: p.deadline_in_app_enabled ?? true,
+          deadline_push_enabled: p.deadline_push_enabled ?? true,
+          deadline_email_enabled: p.deadline_email_enabled ?? false,
+        }} />
       </Section>
       <Section title="Push notifications">
         <PushNotificationSettings publicKey={process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY ?? null} />

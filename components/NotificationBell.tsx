@@ -11,6 +11,7 @@ type NotificationItem = {
   created_at: string;
   read_at: string | null;
   scholarship_id: string | null;
+  opportunity_id?: string | null;
   discussion_id: string | null;
 };
 
@@ -304,7 +305,8 @@ export function NotificationBell() {
                   <p className="text-sm leading-relaxed text-ink">{item.message}</p>
                   <div className="mt-1 flex items-center justify-between gap-3">
                     <span className="text-[11px] text-navy-light">{relativeDate(item.created_at)}</span>
-                    {item.scholarship_id && <Link href={`/scholarships/${item.scholarship_id}`} onClick={closePanel} className="text-[11px] font-medium text-emerald hover:underline">View discussion →</Link>}
+                    {item.scholarship_id && <Link href={`/scholarships/${item.scholarship_id}`} onClick={closePanel} className="text-[11px] font-medium text-emerald hover:underline">{item.type === "deadline_reminder" ? "View scholarship →" : "View discussion →"}</Link>}
+                    {item.type === "deadline_reminder" && item.opportunity_id && <Link href={`/opportunities/${item.opportunity_id}`} onClick={closePanel} className="text-[11px] font-medium text-emerald hover:underline">View opportunity →</Link>}
                   </div>
                 </div>
               ))

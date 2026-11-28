@@ -1,10 +1,10 @@
-name: Scheduled deadline and push check
+name: Scheduled deadline reminders
 
-# Runs the push-only deadline check daily at 08:17 UTC (09:17 in Nigeria).
-# The endpoint does not send automated email; it flags expired opportunities
-# and runs the push-notification campaign.
+# Run deadline batches hourly. The 08:17 UTC run (09:17 WAT) also runs the
+# existing daily new-match push and admin opportunity flag maintenance.
 on:
   schedule:
+    - cron: "17 0-7,9-23 * * *"
     - cron: "17 8 * * *"
   workflow_dispatch: {}
 
@@ -15,16 +15,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  trigger-deadline-push-check:
+  trigger-deadline-check:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
-      - name: Trigger the push-only Scholars deadline check
-        # Automated email remains disabled; this endpoint sends push notifications only.
+      - name: Run deadline discovery and delivery batches
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          APP_URL: ${{ vars.APP_URL || 'https://www.scholars.com.ng' }}
+          APP_URL: ${{ vars.APP_URL }}
+          SCHEDULE: ${{ github.event.schedule }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
+          set -euo pipefail
           if ! python3 - <<'PY'
           import ipaddress
           import os
@@ -96,15 +98,121 @@ jobs:
             echo "::error::CRON_SECRET repo secret is not set. Add it in Settings -> Secrets and variables -> Actions."
             exit 1
           fi
-          code=$(curl --location -s -o /tmp/digest.json -w "%{http_code}" \
-            --proto '=https' --proto-redir '=https' \
-            --max-time 300 \
-            -H "Authorization: Bearer $CRON_SECRET" \
-            "$APP_URL/api/cron/deadline-check")
-          echo "HTTP status: $code"
-          cat /tmp/digest.json
-          echo
-          if [ "$code" != "200" ]; then
-            echo "::error::Digest endpoint returned HTTP $code"
-            exit 1
+          endpoint="${APP_URL%/}/api/cron/deadline-check"
+
+          call_task() {
+            local task="$1" response code timeout=75
+            if [ "$task" = maintenance ]; then timeout=300; fi
+            if [ "$task" = new_match ]; then timeout=120; fi
+            response=$(mktemp)
+            if ! code=$(curl --silent --show-error \
+              --request POST --proto '=https' --max-time "$timeout" \
+              -o "$response" -w "%{http_code}" \
+              -H "Authorization: Bearer $CRON_SECRET" "$endpoint?task=$task"); then
+              rm -f "$response"
+              return 1
+            fi
+            if [ "$code" != "200" ]; then
+              echo "::error::Deadline $task returned HTTP $code" >&2
+              rm -f "$response"
+              return 1
+            fi
+            cat "$response"
+            rm -f "$response"
+          }
+
+          drain_channel() {
+            local channel="$1" limit="$2" result
+            for ((batch=0; batch<limit && SECONDS<drain_until; batch++)); do
+              result=$(call_task "$channel") || return 1
+              echo "$channel $result"
+              if ! jq -e 'type == "object" and (.more | type == "boolean")' <<< "$result" >/dev/null; then
+                echo "::error::Unexpected deadline $channel response"
+                return 1
+              fi
+              if ! jq -e '.more' <<< "$result" >/dev/null; then
+                return 0
+              fi
+            done
+            echo "::error::Deadline $channel reached its batch or time limit. Work may remain."
+            return 1
+          }
+
+          drain_new_match() {
+            local result
+            for ((batch=0; batch<48 && SECONDS<drain_until; batch++)); do
+              result=$(call_task new_match) || return 1
+              echo "new_match $result"
+              if ! jq -e 'type == "object" and (.push_campaign.incomplete | type == "boolean")' <<< "$result" >/dev/null; then
+                echo "::error::Unexpected deadline new_match response"
+                return 1
+              fi
+              if jq -e '.push_campaign.phase == "busy"' <<< "$result" >/dev/null ||
+                ! jq -e '.push_campaign.incomplete' <<< "$result" >/dev/null; then
+                return 0
+              fi
+            done
+            echo "::notice::New-match drain reached its limit. The next hourly run will resume queued work."
+          }
+
+          run_new_match() {
+            local maintenance result=0 drain_until=$((SECONDS + 720))
+            if [ "$SCHEDULE" = '17 8 * * *' ] || [ "$EVENT_NAME" = 'workflow_dispatch' ]; then
+              if maintenance=$(call_task maintenance); then
+                echo "maintenance $maintenance"
+              else
+                result=1
+              fi
+            fi
+            drain_new_match || result=1
+            return "$result"
+          }
+
+          status=0
+          run_new_match &
+          new_match_pid=$!
+
+          if prepared=$(call_task prepare) &&
+            jq -e '(.capacityReached | type == "boolean") and (.generated | type == "number")' <<< "$prepared" >/dev/null; then
+            echo "prepare $prepared"
+            if jq -e '.capacityReached' <<< "$prepared" >/dev/null; then
+              echo "::error::Deadline discovery or inbox reached its row limit. Work may remain."
+              status=1
+            fi
+            drain_until=$((SECONDS + 720))
+            drain_channel push 16 &
+            push_pid=$!
+            drain_channel email 12 &
+            email_pid=$!
+            wait "$push_pid" || status=1
+            wait "$email_pid" || status=1
+            if receipts=$(call_task receipts); then
+              echo "receipts $receipts"
+              if jq -e '.unavailable > 0' <<< "$receipts" >/dev/null; then
+                echo "::warning::Some Mailtrap delivery logs were unavailable"
+              fi
+            else
+              status=1
+            fi
+            if backlog=$(call_task backlog) &&
+              jq -e '[.inApp, .push, .email] | all(type == "number")' <<< "$backlog" >/dev/null; then
+              echo "backlog $backlog"
+              if jq -e '.inApp + .push + .email > 0' <<< "$backlog" >/dev/null; then
+                echo "::error::Urgent deadline work remains. See backlog counts and the email quota flag above."
+                status=1
+              fi
+            else
+              echo "::error::Could not verify urgent deadline backlog"
+              status=1
+            fi
+            if jq -e '.emailEnabled and (.emailConfigured | not)' <<< "$prepared" >/dev/null; then
+              echo "::error::Deadline email is enabled but its configuration is incomplete"
+              status=1
+            fi
+          else
+            echo "::error::Could not prepare deadline reminders"
+            status=1
           fi
+
+          wait "$new_match_pid" || status=1
+          exit "$status"
