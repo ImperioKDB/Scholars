@@ -49,10 +49,14 @@ async function run(request: Request, legacy: boolean) {
       throw new Error('Daily maintenance failed')
     }
     const result = Array.isArray(flags.value.data) ? flags.value.data[0] : flags.value.data
+    const pushCampaign = matches.value ?? {}
     return NextResponse.json({
       deadline_flags: Number(result?.flagged_count ?? 0),
       admin_notifications: Number(result?.notification_count ?? 0),
-      push_campaign: matches.value,
+      push_campaign: {
+        ...pushCampaign,
+        incomplete: Boolean(pushCampaign.more || pushCampaign.budgetExhausted),
+      },
     })
   } catch {
     console.error('deadline_check_failed', { task })

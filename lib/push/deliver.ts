@@ -8,16 +8,20 @@ import {
 
 type PushMessage = { title: string; body: string; data?: Record<string, string> }
 type WebPushSubscriptionRow = { id: string; endpoint: string; p256dh: string; auth: string }
+
+/** Minimal budget tracker so delivery can count its own external subrequests. */
+type SubrequestBudget = { subrequestsUsed: number }
 export type PushDeliverySummary = {
   targets: number
   accepted: number
   failed: number
   retryable: number
   expired: number
+  subrequests?: number
 }
 
 function emptyResult(): PushDeliverySummary {
-  return { targets: 0, accepted: 0, failed: 0, retryable: 0, expired: 0 }
+  return { targets: 0, accepted: 0, failed: 0, retryable: 0, expired: 0, subrequests: 0 }
 }
 
 function isRetryable(status: number | undefined | null) {
@@ -29,7 +33,9 @@ async function sendExpoPushForProfile(
   message: PushMessage,
   deviceLimit: number,
   ttl?: number,
+  budget?: SubrequestBudget,
 ): Promise<PushDeliverySummary> {
+  if (budget) budget.subrequestsUsed += 1
   const { data: tokens, error } = await supabase
     .from('push_tokens')
     .select('id,expo_push_token')
@@ -39,6 +45,7 @@ async function sendExpoPushForProfile(
   if (error) throw error
   if (!tokens?.length) return emptyResult()
 
+  if (budget) budget.subrequestsUsed += 1
   const result = await sendExpoPushMessages(tokens.map((token) => ({
     to: token.expo_push_token as string,
     title: message.title,
@@ -49,6 +56,7 @@ async function sendExpoPushForProfile(
   })))
 
   if (result.invalidTokens.length > 0) {
+    if (budget) budget.subrequestsUsed += 1
     const { error: disableError } = await supabase
       .from('push_tokens')
       .update({ enabled: false })
@@ -63,7 +71,14 @@ async function sendExpoPushForProfile(
     const ticket = result.tickets[index]
     return ticket?.status !== 'ok' && !permanent.has(ticket?.details?.error ?? '')
   }).length
-  return { targets: tokens.length, accepted, failed: tokens.length - accepted, retryable, expired: result.invalidTokens.length }
+  return {
+    targets: tokens.length,
+    accepted,
+    failed: tokens.length - accepted,
+    retryable,
+    expired: result.invalidTokens.length,
+    subrequests: tokens.length ? 3 : 0,
+  }
 }
 
 async function sendWebPushForProfile(
@@ -72,6 +87,7 @@ async function sendWebPushForProfile(
   message: PushMessage,
   deviceLimit: number,
   ttl?: number,
+  budget?: SubrequestBudget,
 ): Promise<PushDeliverySummary> {
   const publicKey = process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY
   const privateKey = process.env.WEB_PUSH_VAPID_PRIVATE_KEY
@@ -83,6 +99,7 @@ async function sendWebPushForProfile(
     privateKey,
   )
 
+  if (budget) budget.subrequestsUsed += 1
   const { data, error } = await supabase
     .from('web_push_subscriptions')
     .select('id,endpoint,p256dh,auth')
@@ -102,8 +119,12 @@ async function sendWebPushForProfile(
   let failed = 0
   let retryable = 0
   const expired: string[] = []
+  let subrequests = 1
   await Promise.all(subscriptions.map(async (row) => {
     try {
+      if (budget && budget.subrequestsUsed >= 50) return
+      if (budget) budget.subrequestsUsed += 1
+      subrequests += 1
       await webpush.sendNotification(
         { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
         payload,
@@ -126,10 +147,12 @@ async function sendWebPushForProfile(
     }
   }))
   if (expired.length > 0) {
+    if (budget) budget.subrequestsUsed += 1
+    subrequests += 1
     const { error } = await supabase.from('web_push_subscriptions').delete().in('id', expired)
     if (error) console.warn('[Push] Failed to remove expired web subscriptions')
   }
-  return { targets: subscriptions.length, accepted, failed, retryable, expired: expired.length }
+  return { targets: subscriptions.length, accepted, failed, retryable, expired: expired.length, subrequests }
 }
 
 /** Deliver to both opt-in browser subscriptions and Expo native devices. */
@@ -138,12 +161,14 @@ export async function sendPushForProfile(
   profileId: string,
   message: PushMessage,
   { deviceLimit = 100, ttl }: { deviceLimit?: number; ttl?: number } = {},
+  budget?: SubrequestBudget,
 ): Promise<PushDeliverySummary> {
   const channels = await Promise.allSettled([
-    sendExpoPushForProfile(supabase, profileId, message, deviceLimit, ttl),
-    sendWebPushForProfile(supabase, profileId, message, deviceLimit, ttl),
+    sendExpoPushForProfile(supabase, profileId, message, deviceLimit, ttl, budget),
+    sendWebPushForProfile(supabase, profileId, message, deviceLimit, ttl, budget),
   ])
   const summary = emptyResult()
+  let subrequests = 0
   channels.forEach((result, index) => {
     if (result.status === 'rejected') {
       summary.failed += 1
@@ -159,6 +184,8 @@ export async function sendPushForProfile(
     summary.failed += result.value.failed
     summary.retryable += result.value.retryable
     summary.expired += result.value.expired
+    subrequests += result.value.subrequests ?? 0
   })
+  summary.subrequests = subrequests
   return summary
 }
