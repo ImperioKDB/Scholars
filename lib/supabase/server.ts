@@ -17,7 +17,7 @@ import { createTimeoutFetch } from "@/lib/fetch";
 //   - SameSite=lax against CSRF, Secure against network interception,
 //   - RLS + server-side checks on every sensitive operation, so a stolen
 //     browser token still only sees what RLS allows that user.
-export async function createClient() {
+export async function createClient(fetcher = createTimeoutFetch()) {
   const cookieStore = await cookies();
   const requestHeaders = await headers();
   const forwardedHost = (
@@ -49,7 +49,7 @@ export async function createClient() {
       cookieOptions: {
         ...(authCookieDomain ? { domain: authCookieDomain } : {}),
       },
-      global: { fetch: createTimeoutFetch() },
+      global: { fetch: fetcher },
       cookies: {
         get(name: string) {
           return cookieStore.get(name)?.value;

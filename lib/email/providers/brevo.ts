@@ -3,6 +3,26 @@ import { classifyBrevoStatus, EmailProviderError, readProviderErrorCode } from '
 
 export const BREVO_EMAIL_ENDPOINT = 'https://api.brevo.com/v3/smtp/email'
 
+export function brevoRequest(
+  input: ProviderSendInput,
+  apiKey: string,
+  from: string,
+  correlationKey?: string,
+): RequestInit {
+  return {
+    method: 'POST',
+    headers: { 'api-key': apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({
+      sender: { email: from, name: 'Scholars' },
+      to: [{ email: input.to }],
+      subject: input.subject,
+      htmlContent: input.html,
+      textContent: input.text,
+      ...(correlationKey ? { headers: { 'X-Mailin-custom': correlationKey } } : {}),
+    }),
+  }
+}
+
 export async function sendWithBrevo(input: ProviderSendInput): Promise<ProviderSendResult> {
   const apiKey = process.env.BREVO_API_KEY
   const from = process.env.REMINDER_FROM_EMAIL
@@ -12,17 +32,7 @@ export async function sendWithBrevo(input: ProviderSendInput): Promise<ProviderS
 
   let response: Response
   try {
-    response = await fetch(BREVO_EMAIL_ENDPOINT, {
-      method: 'POST',
-      headers: { 'api-key': apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        sender: { email: from, name: 'Scholars' },
-        to: [{ email: input.to }],
-        subject: input.subject,
-        htmlContent: input.html,
-        textContent: input.text,
-      }),
-    })
+    response = await fetch(BREVO_EMAIL_ENDPOINT, brevoRequest(input, apiKey, from))
   } catch (error) {
     throw new EmailProviderError({
       provider: 'brevo',

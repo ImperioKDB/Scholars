@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { BroadcastProgress } from "@/components/admin/BroadcastProgress";
+import type { BroadcastOverview, BroadcastStatus } from "@/lib/broadcast/status";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { StatusMessage } from "@/components/StatusMessage";
 import { DeadlineBadge } from "@/components/DeadlineBadge";
@@ -59,6 +61,24 @@ const TYPE_TONE: Record<OpportunityRow["type"], string> = {
   training: "bg-navy-50 text-navy",
 };
 
+const STORAGE_KEY = "scholars.admin.broadcast";
+
+function readSubmission(): { id?: string; selection?: string; campaign?: string } {
+  try {
+    return JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "{}") ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function saveSubmission(submission: ReturnType<typeof readSubmission>) {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(submission));
+  } catch {
+    // The server can still identify an active campaign by its listing selection.
+  }
+}
+
 export default function AdminBroadcastPage() {
   const [scholarships, setScholarships] = useState<ScholarshipRow[]>([]);
   const [opportunities, setOpportunities] = useState<OpportunityRow[]>([]);
@@ -68,7 +88,12 @@ export default function AdminBroadcastPage() {
   const [selectedOpportunities, setSelectedOpportunities] = useState<Set<string>>(new Set());
   const [recipientCount, setRecipientCount] = useState<number | null>(null);
   const [pushRecipientCount, setPushRecipientCount] = useState<number | null>(null);
-  const broadcastIdRef = useRef<string | null>(null);
+  const submissionRef = useRef<{ id: string; selection: string } | null>(null);
+  const submittingRef = useRef(false);
+  const [recentCampaigns, setRecentCampaigns] = useState<BroadcastOverview["recent"]>([]);
+  const [campaignId, setCampaignId] = useState("");
+  const [campaign, setCampaign] = useState<BroadcastStatus | null>(null);
+  const [progressError, setProgressError] = useState<string | null>(null);
   const [confirmBatch, setConfirmBatch] = useState<EmailBatch | null>(null);
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -90,9 +115,13 @@ export default function AdminBroadcastPage() {
         setScholarships(((sch ?? []) as ScholarshipRow[]).filter((r) => r.verified));
         setOpportunities(((opp ?? []) as OpportunityRow[]).filter((r) => r.verified));
         if (countRes.ok) {
-          const { recipientCount: n, pushRecipientCount: pushN } = await countRes.json();
-          setRecipientCount(typeof n === "number" ? n : null);
-          setPushRecipientCount(typeof pushN === "number" ? pushN : null);
+          const overview: BroadcastOverview = await countRes.json();
+          setRecipientCount(overview.recipientCount);
+          setPushRecipientCount(overview.pushRecipientCount);
+          setRecentCampaigns(overview.recent);
+          const saved = readSubmission();
+          if (saved.id && saved.selection) submissionRef.current = { id: saved.id, selection: saved.selection };
+          setCampaignId(saved.campaign || overview.recent[0]?.id || "");
         }
       } catch (e) {
         setLoadError(e instanceof Error ? e.message : "Couldn't load the broadcast page.");
@@ -101,6 +130,39 @@ export default function AdminBroadcastPage() {
     }
     load();
   }, []);
+
+  useEffect(() => {
+    if (!campaignId) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    async function refresh() {
+      try {
+        const response = await fetch("/api/admin/broadcast?id=" + encodeURIComponent(campaignId), {
+          cache: "no-store", signal: controller.signal,
+        });
+        if (!response.ok) throw new Error("Status unavailable");
+        const status: BroadcastStatus = await response.json();
+        if (controller.signal.aborted) return;
+        setCampaign(status);
+        setProgressError(null);
+        setRecentCampaigns((previous) => {
+          const recent = [status, ...previous.filter((entry) => entry.id !== status.id)]
+            .sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 10);
+          return recent.some((entry) => entry.id === status.id) ? recent : [...recent, status];
+        });
+        if (!status.completed_at) timer = setTimeout(refresh, 4000);
+      } catch {
+        if (controller.signal.aborted) return;
+        setProgressError("Broadcast status is temporarily unavailable.");
+        timer = setTimeout(refresh, 10000);
+      }
+    }
+    void refresh();
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [campaignId]);
 
   const totalSelected = selectedScholarships.size + selectedOpportunities.size;
   const selectedPushItems = [
@@ -116,7 +178,6 @@ export default function AdminBroadcastPage() {
   const pushPreview = buildListingBroadcastPushMessage(selectedPushItems);
 
   function toggleScholarship(id: string) {
-    broadcastIdRef.current = null;
     setSelectedScholarships((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -126,7 +187,6 @@ export default function AdminBroadcastPage() {
   }
 
   function toggleOpportunity(id: string) {
-    broadcastIdRef.current = null;
     setSelectedOpportunities((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -136,48 +196,50 @@ export default function AdminBroadcastPage() {
   }
 
   function chooseBatch(batch: EmailBatch) {
-    broadcastIdRef.current = null;
     setConfirmBatch(batch);
   }
   async function send() {
-    if (!confirmBatch) return;
+    if (!confirmBatch || submittingRef.current) return;
     const batch = confirmBatch;
+    const scholarship_ids = [...selectedScholarships];
+    const opportunity_ids = [...selectedOpportunities];
+    const selection = JSON.stringify({ batch, scholarship_ids, opportunity_ids });
+    const previous = submissionRef.current;
+    const id = previous?.selection === selection ? previous.id : window.crypto.randomUUID();
+    submissionRef.current = { id, selection };
+    saveSubmission({ id, selection, campaign: campaignId || undefined });
+    submittingRef.current = true;
     setSending(true);
     setError(null);
     setNotice(null);
     try {
-      const broadcastId = broadcastIdRef.current ?? window.crypto.randomUUID();
-      broadcastIdRef.current = broadcastId;
       const res = await fetch("/api/admin/broadcast", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          scholarship_ids: [...selectedScholarships],
-          opportunity_ids: [...selectedOpportunities],
-          broadcast_id: broadcastId,
-          batch,
-        }),
+        body: JSON.stringify({ scholarship_ids, opportunity_ids, broadcast_id: id, batch }),
       });
-      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(body.error ?? "Couldn't send the broadcast. Try again.");
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? "Couldn't queue the broadcast. Retry to check the same submission.");
         return;
       }
-      const push = body.push ?? {};
-      setNotice(
-        `Sent ${body.sent} of ${body.recipients} email${body.recipients === 1 ? "" : "s"} about ${body.listings} listing${body.listings === 1 ? "" : "s"}; push was accepted for ${push.acceptedProfiles ?? 0} of ${push.recipients ?? 0} opted-in profile${push.recipients === 1 ? "" : "s"}.` +
-          (body.failed > 0 ? ` ${body.failed} email${body.failed === 1 ? "" : "s"} failed.` : "") +
-          ((push.failedProfiles ?? 0) > 0 ? ` ${push.failedProfiles} push profile${push.failedProfiles === 1 ? "" : "s"} failed.` : "") +
-          ((push.failedDevices ?? 0) > 0 ? ` ${push.failedDevices} push device${push.failedDevices === 1 ? "" : "s"} failed.` : "") +
-          ((push.suppressedProfiles ?? 0) > 0 ? ` ${push.suppressedProfiles} profile${push.suppressedProfiles === 1 ? "" : "s"} had no active device at send time.` : "")
-      );
-      broadcastIdRef.current = null;
+      const status: BroadcastStatus = await res.json();
+      setCampaign(status);
+      setCampaignId(status.id);
+      setProgressError(null);
+      setNotice(status.completed_at
+        ? "Broadcast progress restored."
+        : "Broadcast queued. Processing can continue when you close this page.");
+      setRecentCampaigns((previous) => [status, ...previous.filter((entry) => entry.id !== status.id)].slice(0, 10));
+      saveSubmission({ campaign: status.id });
+      submissionRef.current = null;
       setSelectedScholarships(new Set());
       setSelectedOpportunities(new Set());
       setConfirmBatch(null);
     } catch {
-      setError("Network error. Check your connection and try again.");
+      setError("Submission status is unknown. Retry to check the same broadcast.");
     } finally {
+      submittingRef.current = false;
       setSending(false);
     }
   }
@@ -186,10 +248,10 @@ export default function AdminBroadcastPage() {
     <div>
       {confirmBatch && (
         <ConfirmDialog
-          message={`Send the selected listings by email and push to Batch ${confirmBatch} only? This is up to 300 students in the stable student order. Push preview: "${pushPreview.title}" — "${pushPreview.body}" Opens ${pushPreview.url}.`}
+          message={`Queue the selected listings by email and push to Batch ${confirmBatch} only? This is up to 300 students in the stable student order. Push preview: "${pushPreview.title}" — "${pushPreview.body}" Opens ${pushPreview.url}.`}
           onConfirm={send}
           onClose={() => !sending && setConfirmBatch(null)}
-          confirmLabel={`Send Batch ${confirmBatch}`}
+          confirmLabel={`Queue Batch ${confirmBatch}`}
           cancelLabel="Cancel"
           tone="navy"
         />
@@ -301,6 +363,30 @@ export default function AdminBroadcastPage() {
             </>
           )}
 
+          {recentCampaigns.length > 0 && (
+            <div className="my-6 rounded-xl border border-hairline bg-white p-4">
+              <label htmlFor="broadcast-campaign" className="text-sm font-medium text-navy">Recent broadcasts</label>
+              <select
+                id="broadcast-campaign"
+                className="mb-3 ml-2 rounded border border-hairline p-1 text-sm"
+                value={campaignId}
+                onChange={(event) => {
+                  const id = event.target.value;
+                  setCampaignId(id);
+                  setProgressError(null);
+                  saveSubmission({ ...readSubmission(), campaign: id });
+                }}
+              >
+                {recentCampaigns.map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {entry.batch ? `Batch ${entry.batch}` : "All recipients"} · {new Date(entry.created_at).toLocaleString()}
+                  </option>
+                ))}
+              </select>
+              {campaign?.id === campaignId && <BroadcastProgress campaign={campaign} />}
+              {progressError && <StatusMessage tone="error">{progressError}</StatusMessage>}
+            </div>
+          )}
           <StatusMessage tone="success">{notice}</StatusMessage>
           <StatusMessage tone="error">{error}</StatusMessage>
 
