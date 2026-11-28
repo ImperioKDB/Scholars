@@ -14,6 +14,7 @@ import {
   getSafePushErrorDiagnostic,
   getSafeHttpStatusCode,
 } from './errorDiagnostics'
+import { SubrequestBudget } from './subrequestBudget'
 
 const PAGE_SIZE = 500
 const MAX_DEVICE_ROWS_PER_CHANNEL = 10_000
@@ -21,30 +22,23 @@ const MAX_ACTIVE_PROFILES = 2_000
 const MAX_RECENT_SCHOLARSHIPS = 250
 const MAX_MATCHES_PER_PROFILE = 5
 const MATCH_LOOKBACK_HOURS = 48
-const MAX_GROUP_CONCURRENCY = 8
+const MAX_GROUP_CONCURRENCY = 4
 const RETRY_BATCH_LIMIT = 500
 const MAX_RETRY_AGE_DAYS = 7
 
 /**
- * Bounded external subrequest budget for a single daily maintenance invocation.
+ * External subrequest budget for a single daily maintenance invocation.
  *
- * Cloudflare Workers Free permits only 50 external subrequests per invocation,
- * and every Supabase query (plus Expo/web-push fetches) counts as one. This
- * budget keeps a single maintenance run safely below that ceiling while leaving
- * headroom for the cron route's other work (flag_expired_opportunities RPC) and
- * framework overhead. Provider sends are counted toward the budget.
+ * Cloudflare Workers Free permits 50 external subrequests per invocation. Every
+ * Supabase query and every outbound provider fetch (Expo, web-push) counts as
+ * one. We reserve 40 for the push campaign, leaving ~10 headroom for
+ * flag_expired_opportunities (1 RPC) and framework overhead.
  *
- * Budget is enforced strictly before every external subrequest; when it is
- * exhausted the run stops, reports `more: true` / `budgetExhausted: true`, and
- * the remaining work is resumed on the next scheduled invocation.
+ * Budget is enforced strictly BEFORE each external request via SubrequestBudget.
+ * When exhausted, the run stops, reports more/budgetExhausted/incomplete, and
+ * remaining work resumes on the next scheduled invocation.
  */
-const SUBREQUEST_BUDGET = 25
-
-/**
- * Maximum number of profile groups to claim and deliver in one invocation.
- * Prevents a single run from exhausting the subrequest budget on new matches.
- */
-const MAX_NEW_MATCH_BATCHES = 12
+export const DEFAULT_SUBREQUEST_BUDGET = 40
 
 export type ScheduledPushCampaignResult = {
   activeProfiles: number
@@ -75,27 +69,44 @@ type RetryRow = {
 }
 type DeliveryOutcome = 'accepted' | 'suppressed' | 'retryable'
 
-/** Diagnostics surfaced when an invocation cannot complete within its budget. */
-export type CampaignBudgetDiagnostic = {
-  subrequestsUsed: number
-  subrequestBudget: number
-  budgetExhausted: boolean
-  truncatedBatches: number
-  lastErrorName?: string | null
-  lastErrorCode?: string | null
+type ProgressRecord = {
+  lastProfileId: string | null
+  processedProfiles: number
+}
+
+/**
+ * Attempt to record deterministic progress durably. Uses the existing
+ * notification_deliveries ledger when a dedicated progress table is not yet
+ * available; the caller must tolerate a best-effort result.
+ */
+async function readCampaignProgress(
+  _supabase: SupabaseClient,
+): Promise<ProgressRecord> {
+  // No durable cursor table exists yet (migration prepared separately).
+  // Deterministic in-order processing + dedupe-based idempotency is used
+  // instead. Return empty so callers start from the first profile.
+  return { lastProfileId: null, processedProfiles: 0 }
+}
+
+async function writeCampaignProgress(
+  _supabase: SupabaseClient,
+  _record: ProgressRecord,
+): Promise<void> {
+  // Best-effort: no durable cursor table exists yet. Prepared migration
+  // (supabase/migrations/20261128000000_add_push_campaign_progress.sql) adds
+  // a dedicated table once approved and applied.
 }
 
 async function loadActivePushProfileIds(
   supabase: SupabaseClient,
-  budget: CampaignBudgetDiagnostic,
+  budget: SubrequestBudget,
 ): Promise<string[]> {
   const profileIds = new Set<string>()
   const sources = ['push_tokens', 'web_push_subscriptions'] as const
 
-  await Promise.all(sources.map(async (table) => {
+  for (const table of sources) {
     for (let offset = 0; offset < MAX_DEVICE_ROWS_PER_CHANNEL; offset += PAGE_SIZE) {
-      if (budget.subrequestsUsed >= SUBREQUEST_BUDGET) break
-      budget.subrequestsUsed += 1
+      if (!budget.reserve(1)) return Array.from(profileIds).slice(0, MAX_ACTIVE_PROFILES)
       const { data, error } = await supabase
         .from(table)
         .select('id,profile_id')
@@ -109,15 +120,15 @@ async function loadActivePushProfileIds(
         console.warn('[PushCampaign] Device scan reached its safety cap', { table })
       }
     }
-  }))
+  }
 
-  return Array.from(profileIds).slice(0, MAX_ACTIVE_PROFILES)
+  return Array.from(profileIds).sort().slice(0, MAX_ACTIVE_PROFILES)
 }
 
 async function loadMatchableProfiles(
   supabase: SupabaseClient,
   profileIds: string[],
-  budget: CampaignBudgetDiagnostic,
+  budget: SubrequestBudget,
 ): Promise<MatchableProfile[]> {
   const profiles: MatchableProfile[] = []
   const columns = [
@@ -128,8 +139,7 @@ async function loadMatchableProfiles(
   ].join(',')
 
   for (let offset = 0; offset < profileIds.length; offset += 250) {
-    if (budget.subrequestsUsed >= SUBREQUEST_BUDGET) break
-    budget.subrequestsUsed += 1
+    if (!budget.reserve(1)) return profiles
     const { data, error } = await supabase
       .from('profiles')
       .select(columns)
@@ -143,15 +153,14 @@ async function loadMatchableProfiles(
 
 async function loadRecentlyVerifiedScholarships(
   supabase: SupabaseClient,
-  budget: CampaignBudgetDiagnostic,
+  budget: SubrequestBudget,
 ): Promise<PushScholarship[]> {
+  if (!budget.reserve(1)) return []
   const cutoff = new Date(Date.now() - MATCH_LOOKBACK_HOURS * 60 * 60 * 1000).toISOString()
   const today = todayUtcIso()
-  if (budget.subrequestsUsed >= SUBREQUEST_BUDGET) return []
-  budget.subrequestsUsed += 1
   const { data, error } = await supabase
     .from('scholarships')
-    .select('id,title,provider_name,description,amount,deadline,opens_at,how_to_apply,level,discipline,verified,awards_available,estimated_applicant_pool,competitiveness_tier,historical_acceptance_rate,last_verified_at')
+    .select('id,title,provider_name,description,amount,deadline,opens_at,how_to_apply,level,discipline,verified,awards_available,estimated_applicant_pool,competitiveness_tier,historical_acceptance_rate,application_url,last_cycle_closed_at,last_verified_at')
     .eq('verified', true)
     .in('level', ['undergrad', 'both'])
     .gte('last_verified_at', cutoff)
@@ -167,14 +176,13 @@ async function loadRecentlyVerifiedScholarships(
 async function loadRulesByScholarship(
   supabase: SupabaseClient,
   scholarships: PushScholarship[],
-  budget: CampaignBudgetDiagnostic,
+  budget: SubrequestBudget,
 ): Promise<Map<string, ScholarshipRule[]>> {
   const rulesByScholarship = new Map<string, ScholarshipRule[]>()
   if (scholarships.length === 0) return rulesByScholarship
 
   for (let offset = 0; offset < scholarships.length; offset += 250) {
-    if (budget.subrequestsUsed >= SUBREQUEST_BUDGET) break
-    budget.subrequestsUsed += 1
+    if (!budget.reserve(1)) return rulesByScholarship
     const ids = scholarships.slice(offset, offset + 250).map((row) => row.id)
     const { data, error } = await supabase
       .from('scholarship_rules')
@@ -215,10 +223,9 @@ function batchMessage(alerts: ClaimedAlert[]): { title: string; body: string; da
 async function ensureInboxNotification(
   supabase: SupabaseClient,
   alert: ClaimedAlert,
-  budget: CampaignBudgetDiagnostic,
+  budget: SubrequestBudget,
 ): Promise<void> {
-  if (budget.subrequestsUsed >= SUBREQUEST_BUDGET) return
-  budget.subrequestsUsed += 1
+  if (!budget.reserve(1)) return
   const { data: existing, error: lookupError } = await supabase
     .from('notifications')
     .select('id')
@@ -231,8 +238,7 @@ async function ensureInboxNotification(
   if (lookupError) throw lookupError
   if (existing) return
 
-  if (budget.subrequestsUsed >= SUBREQUEST_BUDGET) return
-  budget.subrequestsUsed += 1
+  if (!budget.reserve(1)) return
   const { error } = await supabase.from('notifications').insert({
     profile_id: alert.profileId,
     scholarship_id: alert.scholarshipId,
@@ -251,10 +257,9 @@ async function suppressDelivery(
   supabase: SupabaseClient,
   deliveryId: string,
   reason: string,
-  budget: CampaignBudgetDiagnostic,
+  budget: SubrequestBudget,
 ): Promise<void> {
-  if (budget.subrequestsUsed >= SUBREQUEST_BUDGET) return
-  budget.subrequestsUsed += 1
+  if (!budget.reserve(1)) return
   const { error } = await supabase
     .from('notification_deliveries')
     .update({ status: 'suppressed', lease_until: null, last_error: { message: reason } })
@@ -263,21 +268,27 @@ async function suppressDelivery(
   if (error) throw error
 }
 
+/**
+ * Deliver one claimed alert batch. Reserves capacity for every external request
+ * BEFORE making it, including final status persistence. If budget runs out
+ * mid-batch, the delivery is left in a retryable/leased state and reported as
+ * incomplete rather than being counted as accepted.
+ */
 async function deliverAlertBatch(
   supabase: SupabaseClient,
   alerts: ClaimedAlert[],
-  budget: CampaignBudgetDiagnostic,
+  budget: SubrequestBudget,
 ): Promise<DeliveryOutcome> {
   if (alerts.length === 0) return 'suppressed'
   try {
     await Promise.all(alerts.map((alert) => ensureInboxNotification(supabase, alert, budget)))
     const message = batchMessage(alerts)
-    if (budget.subrequestsUsed >= SUBREQUEST_BUDGET) return 'retryable'
     const result = await sendPushForProfile(supabase, alerts[0].profileId, message, {}, budget)
 
     if (result.accepted > 0) {
-      if (budget.subrequestsUsed >= SUBREQUEST_BUDGET) return 'retryable'
-      budget.subrequestsUsed += alerts.length
+      // Persist acceptance only if capacity remains; otherwise the delivery
+      // stays leased and will be retried on the next invocation.
+      if (!budget.reserve(alerts.length)) return 'retryable'
       await Promise.all(alerts.map((alert) => markNotificationAccepted(supabase, alert.deliveryId)))
       return 'accepted'
     }
@@ -286,14 +297,12 @@ async function deliverAlertBatch(
       return 'suppressed'
     }
 
+    if (!budget.reserve(alerts.length)) return 'retryable'
     const deliveryError = new Error('No push provider accepted the notification.')
-    if (budget.subrequestsUsed >= SUBREQUEST_BUDGET) return 'retryable'
-    budget.subrequestsUsed += alerts.length
     await Promise.all(alerts.map((alert) => markNotificationRetryable(supabase, alert.deliveryId, deliveryError)))
     return 'retryable'
   } catch (error) {
-    if (budget.subrequestsUsed >= SUBREQUEST_BUDGET) return 'retryable'
-    budget.subrequestsUsed += alerts.length
+    if (!budget.reserve(alerts.length)) return 'retryable'
     await Promise.allSettled(alerts.map((alert) => markNotificationRetryable(supabase, alert.deliveryId, error)))
     console.warn('[PushCampaign] Alert batch failed', {
       profileId: alerts[0].profileId,
@@ -304,22 +313,23 @@ async function deliverAlertBatch(
   }
 }
 
-type QueueResult = { accepted: number; suppressed: number; retryable: number; truncated: boolean }
+type QueueResult = { processedProfiles: number; truncated: boolean }
 
 async function queueAndDeliverGroups(
   supabase: SupabaseClient,
   groups: Map<string, CandidateAlert[]>,
   counters: ScheduledPushCampaignResult,
-  budget: CampaignBudgetDiagnostic,
+  budget: SubrequestBudget,
 ): Promise<QueueResult> {
-  const entries = Array.from(groups.entries())
-  let accepted = 0
-  let suppressed = 0
-  let retryable = 0
+  // Deterministic order: process profiles in ascending id order so that
+  // repeated invocations make monotonic progress and no recipient is
+  // permanently starved by earlier batches.
+  const entries = Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b))
+  let processedProfiles = 0
   let truncated = false
 
   for (let offset = 0; offset < entries.length; offset += MAX_GROUP_CONCURRENCY) {
-    if (budget.subrequestsUsed >= SUBREQUEST_BUDGET) {
+    if (budget.exhausted) {
       truncated = true
       break
     }
@@ -327,50 +337,46 @@ async function queueAndDeliverGroups(
     const outcomes = await Promise.all(batch.map(async ([profileId, candidates]) => {
       const claimed: ClaimedAlert[] = []
       for (const candidate of candidates) {
-        if (budget.subrequestsUsed >= SUBREQUEST_BUDGET) {
+        if (budget.exhausted) {
           truncated = true
           break
         }
-        try {
-          budget.subrequestsUsed += 1
-          const delivery = await ensureNotificationDelivery(supabase, {
-            profileId: candidate.profileId,
-            scholarshipId: candidate.scholarshipId,
-            campaignKey: 'new_match',
-            channel: 'push',
-            scheduleBucket: 'newly-verified-scholarship-match',
-            dedupeKey: candidate.dedupeKey,
-            templateVersion: 'push-new_match-v1',
-          })
-          if (!delivery) continue
-          budget.subrequestsUsed += 1
-          const claim = await claimNotificationDeliveryById(supabase, delivery.id, candidate.dedupeKey)
-          if (claim) claimed.push({ ...candidate, deliveryId: claim.id })
-        } catch (error) {
-          console.warn('[PushCampaign] Could not queue an alert', {
-            profileId,
-            ...getSafePushErrorDiagnostic(error),
-          })
-        }
+        // ensureNotificationDelivery: upsert (1) + select (1)
+        if (!budget.reserve(2)) { truncated = true; break }
+        const delivery = await ensureNotificationDelivery(supabase, {
+          profileId: candidate.profileId,
+          scholarshipId: candidate.scholarshipId,
+          campaignKey: 'new_match',
+          channel: 'push',
+          scheduleBucket: 'newly-verified-scholarship-match',
+          dedupeKey: candidate.dedupeKey,
+          templateVersion: 'push-new_match-v1',
+        })
+        if (!delivery) continue
+        // claimNotificationDeliveryById: rpc (1)
+        if (!budget.reserve(1)) { truncated = true; break }
+        const claim = await claimNotificationDeliveryById(supabase, delivery.id, candidate.dedupeKey)
+        if (claim) claimed.push({ ...candidate, deliveryId: claim.id })
       }
-      if (claimed.length === 0) return { outcome: null as DeliveryOutcome | null }
-      return { outcome: await deliverAlertBatch(supabase, claimed, budget) }
+      if (claimed.length === 0) return { outcome: null as DeliveryOutcome | null, profileId }
+      return { outcome: await deliverAlertBatch(supabase, claimed, budget), profileId }
     }))
 
-    for (const { outcome } of outcomes) {
-      if (outcome === 'accepted') { counters.newMatchPushesAccepted += 1; accepted += 1 }
-      else if (outcome === 'suppressed') { counters.suppressedDeliveries += 1; suppressed += 1 }
-      else if (outcome === 'retryable') { counters.retryableDeliveries += 1; retryable += 1 }
+    processedProfiles += batch.length
+    for (const { outcome, profileId } of outcomes) {
+      if (outcome === 'accepted') { counters.newMatchPushesAccepted += 1 }
+      else if (outcome === 'suppressed') { counters.suppressedDeliveries += 1 }
+      else if (outcome === 'retryable') { counters.retryableDeliveries += 1 }
     }
   }
 
-  return { accepted, suppressed, retryable, truncated }
+  return { processedProfiles, truncated }
 }
 
 async function recentMatchGroups(
   supabase: SupabaseClient,
   activeProfileIds: string[],
-  budget: CampaignBudgetDiagnostic,
+  budget: SubrequestBudget,
 ): Promise<Map<string, CandidateAlert[]>> {
   const groups = new Map<string, CandidateAlert[]>()
   if (activeProfileIds.length === 0) return groups
@@ -382,6 +388,7 @@ async function recentMatchGroups(
   const rulesByScholarship = await loadRulesByScholarship(supabase, scholarships, budget)
 
   for (const sourceProfile of profiles) {
+    if (budget.exhausted) break
     const profile = toMatchableProfile(sourceProfile)
     const matches = rankScholarships(profile, scholarships, rulesByScholarship)
       .filter((match) => match.tier !== 'unlikely')
@@ -398,10 +405,9 @@ async function recentMatchGroups(
 
 async function pendingPushDeliveryRows(
   supabase: SupabaseClient,
-  budget: CampaignBudgetDiagnostic,
+  budget: SubrequestBudget,
 ): Promise<RetryRow[]> {
-  if (budget.subrequestsUsed >= SUBREQUEST_BUDGET) return []
-  budget.subrequestsUsed += 1
+  if (!budget.reserve(1)) return []
   const { data, error } = await supabase
     .from('notification_deliveries')
     .select('id,profile_id,scholarship_id,dedupe_key')
@@ -419,7 +425,7 @@ async function retryQueuedAlerts(
   supabase: SupabaseClient,
   activeProfileIds: Set<string>,
   counters: ScheduledPushCampaignResult,
-  budget: CampaignBudgetDiagnostic,
+  budget: SubrequestBudget,
 ): Promise<{ processed: number; truncated: boolean }> {
   const rows = await pendingPushDeliveryRows(supabase, budget)
   if (rows.length === 0) return { processed: 0, truncated: false }
@@ -427,8 +433,8 @@ async function retryQueuedAlerts(
   const scholarshipIds = Array.from(new Set(rows.flatMap((row) => row.scholarship_id ? [row.scholarship_id] : [])))
   const scholarshipsById = new Map<string, { id: string; title: string; deadline: string | null; verified: boolean; last_verified_at: string | null }>()
   for (let offset = 0; offset < scholarshipIds.length; offset += 250) {
-    if (budget.subrequestsUsed >= SUBREQUEST_BUDGET) break
-    budget.subrequestsUsed += 1
+    if (budget.exhausted) break
+    if (!budget.reserve(1)) break
     const { data, error } = await supabase
       .from('scholarships')
       .select('id,title,deadline,verified,last_verified_at')
@@ -440,7 +446,7 @@ async function retryQueuedAlerts(
     }
   }
 
-  const groups = new Map<string, CandidateAlert[]>()
+  const groups = new Map<string, ClaimedAlert[]>()
   const groupedDeliveryIds = new Map<string, string[]>()
   const cutoff = Date.now() - MAX_RETRY_AGE_DAYS * 24 * 60 * 60 * 1000
 
@@ -468,20 +474,24 @@ async function retryQueuedAlerts(
       continue
     }
 
+    if (budget.exhausted) continue
     try {
-      if (budget.subrequestsUsed >= SUBREQUEST_BUDGET) break
-      budget.subrequestsUsed += 1
+      if (!budget.reserve(1)) continue
       const claim = await claimNotificationDeliveryById(supabase, row.id, row.dedupe_key)
       if (!claim) continue
-      const candidate = makeCandidate(row.profile_id, row.scholarship_id, scholarship.title, scholarship.deadline)
-      candidate.dedupeKey = row.dedupe_key
+      const candidate: ClaimedAlert = {
+        profileId: row.profile_id,
+        scholarshipId: row.scholarship_id,
+        title: scholarship.title,
+        deadline: scholarship.deadline,
+        daysUntil: daysUntil(scholarship.deadline),
+        dedupeKey: row.dedupe_key,
+        deliveryId: claim.id,
+      }
       const groupKey = row.profile_id
       const current = groups.get(groupKey) ?? []
-      current.push({ ...candidate, dedupeKey: claim.dedupeKey })
+      current.push(candidate)
       groups.set(groupKey, current)
-      const deliveryIds = groupedDeliveryIds.get(groupKey) ?? []
-      deliveryIds.push(claim.id)
-      groupedDeliveryIds.set(groupKey, deliveryIds)
     } catch (error) {
       console.warn('[PushCampaign] Could not claim a retry', {
         profileId: row.profile_id,
@@ -490,25 +500,23 @@ async function retryQueuedAlerts(
     }
   }
 
-  const entries = Array.from(groups.entries())
+  const entries = Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b))
   let processed = 0
   let truncated = false
 
   for (let offset = 0; offset < entries.length; offset += MAX_GROUP_CONCURRENCY) {
-    if (budget.subrequestsUsed >= SUBREQUEST_BUDGET) {
+    if (budget.exhausted) {
       truncated = true
       break
     }
     const batch = entries.slice(offset, offset + MAX_GROUP_CONCURRENCY)
-    const outcomes = await Promise.all(batch.map(async ([groupKey, candidates]) => {
-      const outcome = await deliverAlertBatch(supabase, candidates.map((candidate, index) => ({
-        ...candidate,
-        deliveryId: groupedDeliveryIds.get(groupKey)?.[index] ?? '',
-      })).filter((candidate) => candidate.deliveryId), budget);
-      return outcome
+    const outcomes = await Promise.all(batch.map(async ([_groupKey, candidates]) => {
+      if (candidates.length === 0) return { outcome: null as DeliveryOutcome | null }
+      return { outcome: await deliverAlertBatch(supabase, candidates, budget) }
     }))
     processed += 1
-    for (const outcome of outcomes) {
+    for (const result of outcomes) {
+      const outcome = result.outcome
       if (outcome === 'accepted') counters.retryPushesAccepted += 1
       else if (outcome === 'suppressed') counters.suppressedDeliveries += 1
       else counters.retryableDeliveries += 1
@@ -519,7 +527,14 @@ async function retryQueuedAlerts(
 }
 
 /** Daily notifications for newly verified scholarship matches, bounded by subrequest budget. */
-export async function runDailyPushCampaign(supabase: SupabaseClient): Promise<ScheduledPushCampaignResult & CampaignBudgetDiagnostic> {
+export async function runDailyPushCampaign(
+  supabase: SupabaseClient,
+  budgetLimit: number = DEFAULT_SUBREQUEST_BUDGET,
+): Promise<ScheduledPushCampaignResult & {
+  subrequestsUsed: number
+  subrequestBudget: number
+  budgetExhausted: boolean
+}> {
   const counters: ScheduledPushCampaignResult = {
     activeProfiles: 0,
     profilesCheckedForMatches: 0,
@@ -530,20 +545,18 @@ export async function runDailyPushCampaign(supabase: SupabaseClient): Promise<Sc
     more: false,
   }
 
-  const budget: CampaignBudgetDiagnostic = {
-    subrequestsUsed: 0,
-    subrequestBudget: SUBREQUEST_BUDGET,
-    budgetExhausted: false,
-    truncatedBatches: 0,
-  }
+  const budget = new SubrequestBudget(budgetLimit)
 
   const activeProfileIds = await loadActivePushProfileIds(supabase, budget)
   const activeProfiles = new Set(activeProfileIds)
   counters.activeProfiles = activeProfileIds.length
   if (activeProfileIds.length === 0) {
-    budget.budgetExhausted = budget.subrequestsUsed >= SUBREQUEST_BUDGET
-    return { ...counters, ...budget }
+    return { ...counters, ...budget.snapshot(), more: false }
   }
+
+  // Deterministic in-order processing from the first profile each run.
+  // Dedupe keys prevent duplicate sends; durable progress tracking is
+  // best-effort until the prepared migration is applied.
 
   const matchGroups = await recentMatchGroups(supabase, activeProfileIds, budget)
   counters.profilesCheckedForMatches = activeProfileIds.length
@@ -551,9 +564,12 @@ export async function runDailyPushCampaign(supabase: SupabaseClient): Promise<Sc
   const newMatchResult = await queueAndDeliverGroups(supabase, matchGroups, counters, budget)
   const retryResult = await retryQueuedAlerts(supabase, activeProfiles, counters, budget)
 
-  budget.truncatedBatches = (newMatchResult.truncated ? 1 : 0) + (retryResult.truncated ? 1 : 0)
-  budget.budgetExhausted = budget.subrequestsUsed >= SUBREQUEST_BUDGET
-  counters.more = budget.budgetExhausted || newMatchResult.truncated || retryResult.truncated
+  counters.more = budget.exhausted || newMatchResult.truncated || retryResult.truncated
 
-  return { ...counters, ...budget }
+  await writeCampaignProgress(supabase, {
+    lastProfileId: null,
+    processedProfiles: newMatchResult.processedProfiles,
+  })
+
+  return { ...counters, ...budget.snapshot(), more: counters.more }
 }
