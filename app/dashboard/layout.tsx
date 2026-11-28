@@ -1,9 +1,11 @@
 import { AdeShell } from "@/components/ade/AdeShell";
 import { getCurrentUserAndProfile } from "@/lib/supabase/currentUser";
+import { PushRepairNotice } from "@/components/PushRepairNotice";
 import { Sidebar } from "@/components/Sidebar";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, profile } = await getCurrentUserAndProfile();
+  const publicKey = process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY;
   const userId = user?.id ?? "";
   const fullName = profile?.full_name ?? null;
   const isAdmin = Boolean(profile?.is_admin);
@@ -16,7 +18,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <div className="min-h-screen bg-parchment md:h-screen md:overflow-hidden">
       <Sidebar userId={userId} fullName={fullName} isAdmin={isAdmin} profileCompleteness={profileCompleteness} xpTotal={xpTotal} avatarUrl={avatarUrl} />
       <main id="main" className="md:pl-60 md:h-screen md:overflow-y-auto md:overscroll-contain">
-        <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-20 pb-24 md:pt-10 md:pb-10">{children}</div>
+        <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-20 pb-24 md:pt-10 md:pb-10">
+          {userId && publicKey && <PushRepairNotice key={userId + ":" + publicKey} profileId={userId} publicKey={publicKey} />}
+          {children}
+        </div>
       </main>
       </div>
     </AdeShell>

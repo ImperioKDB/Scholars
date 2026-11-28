@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { enableBrowserPush, initializeBrowserPush, subscriptionCompatibility } from "./browser";
+import { enableBrowserPush, hasIncompatibleBrowserPush, initializeBrowserPush, subscriptionCompatibility } from "./browser";
 
 const key = Uint8Array.from({ length: 65 }, (_, index) => index === 0 ? 4 : index);
 const profileId = "alice";
@@ -100,6 +100,39 @@ describe("browser push compatibility", () => {
       endpoint: newEndpoint, replacedEndpoint: oldEndpoint,
     });
   });
+
+  it.each(["fresh", "replacement"] as const)(
+    "saves a %s subscription with unavailable metadata as unverifiable",
+    async (kind) => {
+      const previous = subscription(oldEndpoint, mismatch.buffer);
+      getSubscription.mockResolvedValue(kind === "replacement" ? previous : null);
+      subscribe.mockResolvedValue(subscription(newEndpoint, null));
+      await expect(enableBrowserPush(publicKey, profileId)).resolves.toBe("unverifiable");
+      expect(previous.unsubscribe).toHaveBeenCalledTimes(kind === "replacement" ? 1 : 0);
+      const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+      expect(body.endpoint).toBe(newEndpoint);
+      expect(body.replacedEndpoint).toBe(kind === "replacement" ? oldEndpoint : undefined);
+    },
+  );
+
+  it.each(["incompatible", "unverifiable", "compatible"] as const)(
+    "checks a %s subscription locally and shares the check",
+    async (state) => {
+      const configured = key.slice();
+      configured[1] = ["incompatible", "unverifiable", "compatible"].indexOf(state) + 10;
+      const noticeKey = Buffer.from(configured).toString("base64url");
+      const bytes = state === "unverifiable" ? null : state === "compatible" ? configured.buffer : mismatch.buffer;
+      const existing = subscription(oldEndpoint, bytes);
+      getSubscription.mockResolvedValue(existing);
+      const first = hasIncompatibleBrowserPush(noticeKey);
+      expect(hasIncompatibleBrowserPush(noticeKey)).toBe(first);
+      await expect(first).resolves.toBe(state === "incompatible");
+      expect(getSubscription).toHaveBeenCalledOnce();
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(existing.unsubscribe).not.toHaveBeenCalled();
+      expect(requestPermission).not.toHaveBeenCalled();
+    },
+  );
 
   it("keeps the old server record if unsubscribe fails", async () => {
     const existing = subscription(oldEndpoint, mismatch.buffer);

@@ -101,6 +101,25 @@ async function withSubscriptionLock<T>(action: () => Promise<T>): Promise<T> {
 }
 
 type ExistingPushState = "missing" | "compatible" | "incompatible" | "unverifiable";
+let repairCheck: { publicKey: string; result: Promise<boolean> } | undefined;
+
+/** Inspect the current endpoint locally for the returning-user notice. */
+export function hasIncompatibleBrowserPush(publicKey: string): Promise<boolean> {
+  if (!supportsBrowserPush() || Notification.permission !== "granted") return Promise.resolve(false);
+  if (repairCheck?.publicKey === publicKey) return repairCheck.result;
+
+  const result = (async () => {
+    const key = decodeApplicationServerKey(publicKey);
+    const registration = await navigator.serviceWorker.getRegistration("/");
+    const subscription = await registration?.pushManager.getSubscription();
+    return Notification.permission === "granted" && Boolean(
+      subscription && subscriptionCompatibility(subscription, key) === "incompatible",
+    );
+  })();
+  repairCheck = { publicKey, result };
+  return result;
+}
+
 let initialization: { publicKey: string; profileId: string; result: Promise<ExistingPushState> } | undefined;
 
 /** Check and sync an existing subscription. A page load never prompts or replaces it. */
@@ -164,6 +183,7 @@ export async function enableBrowserPush(publicKey: string, profileId: string): P
       }
 
       requireSubscriptionGesture();
+      repairCheck = undefined;
       rememberReplacement(profileId, existing.endpoint);
       try {
         if (!await existing.unsubscribe()) throw new Error("Unsubscribe returned false");
@@ -181,12 +201,15 @@ export async function enableBrowserPush(publicKey: string, profileId: string): P
       // Some browsers require a fresh gesture after the asynchronous unsubscribe.
       throw new Error("Could not create a push subscription. Tap again to finish setting up notifications.");
     }
-    if (subscriptionCompatibility(subscription, key) === "incompatible") {
+    repairCheck = undefined;
+    const compatibility = subscriptionCompatibility(subscription, key);
+    if (compatibility === "incompatible") {
       throw new Error("This device still has an incompatible push subscription. Tap again to retry.");
     }
     if (Notification.permission !== "granted") return Notification.permission;
     await syncSubscription(subscription, profileId);
-    return Notification.permission;
+    if (Notification.permission !== "granted") return Notification.permission;
+    return compatibility === "compatible" ? "granted" : "unverifiable";
   });
 }
 
@@ -208,6 +231,7 @@ async function removeBrowserPush(profileId: string): Promise<void> {
     });
     if (!response.ok) throw new Error("Could not update your notification settings. Please try again.");
   }
+  repairCheck = undefined;
   if (!await subscription.unsubscribe()) {
     throw new Error("Could not remove this device’s push subscription. Please try again.");
   }
