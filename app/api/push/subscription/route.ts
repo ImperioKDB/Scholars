@@ -6,15 +6,19 @@ import { checkRateLimit } from "@/lib/ratelimit";
 
 export const dynamic = "force-dynamic";
 
+const endpoint = z.string().url().max(2048);
+const profileId = z.string().uuid().optional();
 const subscriptionSchema = z.object({
-  endpoint: z.string().url().max(2048),
+  endpoint,
+  profileId,
+  replacedEndpoint: endpoint.optional(),
   keys: z.object({
     p256dh: z.string().min(40).max(200),
     auth: z.string().min(10).max(100),
   }),
 });
 
-const endpointSchema = z.object({ endpoint: z.string().url().max(2048) });
+const endpointSchema = z.object({ endpoint, profileId });
 
 function isAllowedPushEndpoint(value: string): boolean {
   try {
@@ -51,11 +55,16 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid push subscription" }, { status: 400 });
   }
-  if (!isAllowedPushEndpoint(parsed.data.endpoint)) {
+  // Older clients omit the account hint. Authenticated ownership is always checked.
+  if ((parsed.data.profileId || parsed.data.replacedEndpoint) && parsed.data.profileId !== user.id) {
+    return NextResponse.json({ error: "Notification account changed" }, { status: 403 });
+  }
+  if (!isAllowedPushEndpoint(parsed.data.endpoint) ||
+    (parsed.data.replacedEndpoint && !isAllowedPushEndpoint(parsed.data.replacedEndpoint))) {
     return NextResponse.json({ error: "Invalid push subscription" }, { status: 400 });
   }
 
-  const { endpoint, keys } = parsed.data;
+  const { endpoint, keys, replacedEndpoint } = parsed.data;
   const { error } = await supabase.from("web_push_subscriptions").upsert(
     {
       profile_id: user.id,
@@ -69,6 +78,13 @@ export async function POST(request: Request) {
     { onConflict: "profile_id,endpoint" },
   );
   if (error) return dbErrorResponse("web_push_subscription_save", error);
+  if (replacedEndpoint && replacedEndpoint !== endpoint) {
+    const { error: retirementError } = await supabase.from("web_push_subscriptions")
+      .delete()
+      .eq("profile_id", user.id)
+      .eq("endpoint", replacedEndpoint);
+    if (retirementError) return dbErrorResponse("web_push_subscription_retire", retirementError);
+  }
   return NextResponse.json({ enabled: true });
 }
 
@@ -81,6 +97,10 @@ export async function DELETE(request: Request) {
   const parsed = endpointSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid push subscription" }, { status: 400 });
+  }
+  // Older clients omit the account hint. Authenticated ownership is always checked.
+  if (parsed.data.profileId && parsed.data.profileId !== user.id) {
+    return NextResponse.json({ error: "Notification account changed" }, { status: 403 });
   }
   if (!isAllowedPushEndpoint(parsed.data.endpoint)) {
     return NextResponse.json({ error: "Invalid push subscription" }, { status: 400 });

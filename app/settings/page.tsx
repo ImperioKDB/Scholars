@@ -178,7 +178,7 @@ export default async function SettingsPage() {
         }} />
       </Section>
       <Section title="Push notifications">
-        <PushNotificationSettings publicKey={process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY ?? null} />
+        <PushNotificationSettings profileId={user.id} publicKey={process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY ?? null} />
       </Section>
       <Section title="Personal">
         <dl>

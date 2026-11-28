@@ -1,17 +1,39 @@
 "use client";
 import { useEffect, useState } from "react";
-import { enableBrowserPush } from "@/lib/push/browser";
+import { enableBrowserPush, supportsBrowserPush } from "@/lib/push/browser";
 import { getPromptState, recordPromptAction } from "@/lib/onboarding-prompt-client";
 import { useOverlayAccessibility } from "@/lib/useOverlayAccessibility";
 import { SpinnerIcon } from "@/components/icons";
-type Props = { publicKey: string | null; isAdmin: boolean; requestId: number };
+type Props = { publicKey: string | null; profileId: string; isAdmin: boolean; requestId: number };
 type StandaloneNavigator = Navigator & { standalone?: boolean };
-export function canUsePushHere(): boolean { if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) return false; const isIos = /iPhone|iPad|iPod/i.test(window.navigator.userAgent); const standalone = window.matchMedia("(display-mode: standalone)").matches || Boolean((window.navigator as StandaloneNavigator).standalone); return !isIos || standalone; }
-export function PushNotificationPrompt({ publicKey, isAdmin, requestId }: Props) {
+export function canUsePushHere(): boolean { if (!supportsBrowserPush()) return false; const isIos = /iPhone|iPad|iPod/i.test(window.navigator.userAgent); const standalone = window.matchMedia("(display-mode: standalone)").matches || Boolean((window.navigator as StandaloneNavigator).standalone); return !isIos || standalone; }
+export function PushNotificationPrompt({ publicKey, profileId, isAdmin, requestId }: Props) {
   const [open, setOpen] = useState(false); const [busy, setBusy] = useState(false); const [blocked, setBlocked] = useState(false); const [message, setMessage] = useState("");
   const close = () => { if (!busy) setOpen(false); }; const dialogRef = useOverlayAccessibility(open, close);
   useEffect(() => { if (!requestId || isAdmin || !publicKey || !canUsePushHere() || Notification.permission !== "default") return; let active = true; let timer: number | undefined; async function consider() { try { const state = await getPromptState(); if (!active || !state || state.pushEnableClickedAt || Notification.permission !== "default") return; const registration = await navigator.serviceWorker.getRegistration("/"); const existingSubscription = await registration?.pushManager.getSubscription(); if (!active || existingSubscription) return; if (document.getElementById("cookie-title")) { timer = window.setTimeout(consider, 500); return; } setOpen(true); } catch { /* optional enhancement */ } } timer = window.setTimeout(consider, 0); return () => { active = false; if (timer) window.clearTimeout(timer); }; }, [isAdmin, publicKey, requestId]);
-  async function enableNotifications() { if (!publicKey || busy) return; setBusy(true); setMessage(""); setBlocked(false); void recordPromptAction("push_enable_clicked"); try { const permission = await enableBrowserPush(publicKey); if (permission === "granted") setOpen(false); else if (permission === "denied") { setBlocked(true); setMessage("Notifications are blocked in your browser. Allow them in site settings, then enable them from Profile."); } else setMessage("No permission change yet. You can try again or choose “Maybe later”."); } catch (error) { setMessage(error instanceof Error ? error.message : "Could not enable notifications. Please try again."); } finally { setBusy(false); } }
+  async function enableNotifications() {
+    if (!publicKey || busy) return;
+    setBusy(true);
+    setMessage("");
+    setBlocked(false);
+    void recordPromptAction("push_enable_clicked");
+    try {
+      const permission = await enableBrowserPush(publicKey, profileId);
+      if (permission === "granted") setOpen(false);
+      else if (permission === "unverifiable") {
+        setMessage("This browser does not report the subscription key. Scholars cannot verify that this device can receive alerts.");
+      } else if (permission === "denied") {
+        setBlocked(true);
+        setMessage("Notifications are blocked in your browser. Allow them in site settings, then enable them from Profile.");
+      } else {
+        setMessage("No permission change yet. You can try again or choose “Maybe later”.");
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not enable notifications. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
   if (!open) return null;
   return (
     <div

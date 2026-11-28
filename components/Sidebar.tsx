@@ -281,6 +281,7 @@ export function Sidebar({
       </nav>
       {!isAdmin && (
         <PushNotificationPrompt
+          profileId={userId}
           isAdmin={isAdmin}
           publicKey={process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY ?? null}
           requestId={pushPromptRequest}
