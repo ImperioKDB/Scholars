@@ -103,6 +103,7 @@ jobs:
           call_task() {
             local task="$1" response code timeout=75
             if [ "$task" = maintenance ]; then timeout=300; fi
+            if [ "$task" = new_match ]; then timeout=120; fi
             response=$(mktemp)
             if ! code=$(curl --silent --show-error \
               --request POST --proto '=https' --max-time "$timeout" \
@@ -137,18 +138,39 @@ jobs:
             return 1
           }
 
-          run_maintenance() {
-            local maintenance
-            maintenance=$(call_task maintenance) || return 1
-            echo "maintenance $maintenance"
+          drain_new_match() {
+            local result
+            for ((batch=0; batch<48 && SECONDS<drain_until; batch++)); do
+              result=$(call_task new_match) || return 1
+              echo "new_match $result"
+              if ! jq -e 'type == "object" and (.push_campaign.incomplete | type == "boolean")' <<< "$result" >/dev/null; then
+                echo "::error::Unexpected deadline new_match response"
+                return 1
+              fi
+              if jq -e '.push_campaign.phase == "busy"' <<< "$result" >/dev/null ||
+                ! jq -e '.push_campaign.incomplete' <<< "$result" >/dev/null; then
+                return 0
+              fi
+            done
+            echo "::notice::New-match drain reached its limit. The next hourly run will resume queued work."
+          }
+
+          run_new_match() {
+            local maintenance result=0 drain_until=$((SECONDS + 720))
+            if [ "$SCHEDULE" = '17 8 * * *' ] || [ "$EVENT_NAME" = 'workflow_dispatch' ]; then
+              if maintenance=$(call_task maintenance); then
+                echo "maintenance $maintenance"
+              else
+                result=1
+              fi
+            fi
+            drain_new_match || result=1
+            return "$result"
           }
 
           status=0
-          maintenance_pid=
-          if [ "$SCHEDULE" = '17 8 * * *' ] || [ "$EVENT_NAME" = 'workflow_dispatch' ]; then
-            run_maintenance &
-            maintenance_pid=$!
-          fi
+          run_new_match &
+          new_match_pid=$!
 
           if prepared=$(call_task prepare) &&
             jq -e '(.capacityReached | type == "boolean") and (.generated | type == "number")' <<< "$prepared" >/dev/null; then
@@ -192,7 +214,5 @@ jobs:
             status=1
           fi
 
-          if [ -n "$maintenance_pid" ]; then
-            wait "$maintenance_pid" || status=1
-          fi
+          wait "$new_match_pid" || status=1
           exit "$status"

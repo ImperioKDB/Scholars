@@ -26,7 +26,7 @@ async function run(request: Request, legacy: boolean) {
   // POST so a previous Worker revision responds 405 without running its cron.
   const task = legacy && requested === null ? 'maintenance' : requested
   if (!task || (legacy && requested !== null)
-    || !['prepare', 'push', 'email', 'receipts', 'backlog', 'maintenance'].includes(task)) {
+    || !['prepare', 'push', 'email', 'receipts', 'backlog', 'maintenance', 'new_match'].includes(task)) {
     return NextResponse.json({ error: 'Unknown deadline task' }, { status: 400 })
   }
 
@@ -39,20 +39,36 @@ async function run(request: Request, legacy: boolean) {
       return NextResponse.json(await deliverDeadlineReminders(service, task))
     }
 
+    if (task === 'new_match') {
+      // Standalone new-match push batch for bounded continuation.
+      // Does not perform daily opportunity flagging.
+      const matches = await runDailyPushCampaign(service)
+      return NextResponse.json({
+        push_campaign: {
+          ...matches,
+          incomplete: matches.more,
+        },
+      })
+    }
+
     // Retain PR #47's daily admin flags and new-match pushes, independently
     // of the hourly deadline delivery batches.
     const [flags, matches] = await Promise.allSettled([
       service.rpc('flag_expired_opportunities'),
-      runDailyPushCampaign(service),
+      runDailyPushCampaign(service, true),
     ])
     if (flags.status === 'rejected' || flags.value.error || matches.status === 'rejected') {
       throw new Error('Daily maintenance failed')
     }
     const result = Array.isArray(flags.value.data) ? flags.value.data[0] : flags.value.data
+    const pushCampaign = matches.value
     return NextResponse.json({
       deadline_flags: Number(result?.flagged_count ?? 0),
       admin_notifications: Number(result?.notification_count ?? 0),
-      push_campaign: matches.value,
+      push_campaign: {
+        ...pushCampaign,
+        incomplete: pushCampaign.more,
+      },
     })
   } catch {
     console.error('deadline_check_failed', { task })
