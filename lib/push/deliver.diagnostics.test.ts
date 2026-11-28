@@ -19,6 +19,8 @@ const mockedWebPush = vi.mocked(webpush)
 
 function makeSupabase(options?: {
   expoError?: unknown
+  expoTokens?: { id: string; expo_push_token: string }[]
+  cleanupError?: Error
   webSubscriptions?: Array<{
     id: string
     endpoint: string
@@ -28,18 +30,27 @@ function makeSupabase(options?: {
 }) {
   return {
     from(table: string) {
+      let limit = 100
+      let cleanup = false
       return {
         select() { return this },
         eq() { return this },
-        limit() {
+        order() { return this },
+        limit(value: number) { limit = value; return this },
+        update() { cleanup = true; return this },
+        delete() { cleanup = true; return this },
+        in() { return this },
+        retry(enabled: boolean) {
+          expect(enabled).toBe(false)
+          if (cleanup) return Promise.resolve({ error: options?.cleanupError })
           if (table === 'push_tokens') {
             return options?.expoError
               ? Promise.reject(options.expoError)
-              : Promise.resolve({ data: [], error: null })
+              : Promise.resolve({ data: options?.expoTokens?.slice(0, limit) ?? [], error: null })
           }
 
           return Promise.resolve({
-            data: options?.webSubscriptions ?? [],
+            data: options?.webSubscriptions?.slice(0, limit) ?? [],
             error: null,
           })
         },
@@ -50,6 +61,7 @@ function makeSupabase(options?: {
 
 describe('push delivery diagnostics', () => {
   afterEach(() => {
+    vi.unstubAllEnvs()
     vi.restoreAllMocks()
     vi.clearAllMocks()
   })
@@ -102,6 +114,30 @@ describe('push delivery diagnostics', () => {
     }
 
     expect(logged).toContain('"errorName":"Error"')
+  })
+
+  it('caps both provider paths and preserves acceptance when expired-device cleanup fails', async () => {
+    vi.stubEnv('NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY', 'public-test-key')
+    vi.stubEnv('WEB_PUSH_VAPID_PRIVATE_KEY', 'private-test-key')
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockedExpoSend.mockResolvedValue({
+      invalidTokens: ['expo-0'],
+      tickets: [{ status: 'error', details: { error: 'DeviceNotRegistered' } }, ...Array(3).fill({ status: 'ok' })],
+    })
+    mockedWebPush.sendNotification.mockRejectedValue({ statusCode: 410 })
+
+    const result = await sendPushForProfile(makeSupabase({
+      expoTokens: Array.from({ length: 12 }, (_, index) => ({ id: String(index), expo_push_token: `expo-${index}` })),
+      webSubscriptions: Array.from({ length: 12 }, (_, index) => ({
+        id: String(index), endpoint: 'https://example.test/push', p256dh: 'test', auth: 'test',
+      })),
+      cleanupError: new Error('cleanup unavailable'),
+    }), 'profile-test', { title: 'Test', body: 'Test body' }, { deviceLimit: 4 })
+
+    expect(mockedExpoSend).toHaveBeenCalledOnce()
+    expect(mockedExpoSend.mock.calls[0][0]).toHaveLength(4)
+    expect(mockedWebPush.sendNotification).toHaveBeenCalledTimes(4)
+    expect(result).toMatchObject({ targets: 8, accepted: 3, expired: 5 })
   })
 
   it('sanitizes Expo channel query failures', async () => {

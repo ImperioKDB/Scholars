@@ -54,6 +54,20 @@ describe('deadline cron', () => {
       deadline_flags: 2, push_campaign: { newMatchPushesAccepted: 3 },
     })
     expect(rpc).toHaveBeenCalledWith('flag_expired_opportunities')
+    expect(runDailyPushCampaign).toHaveBeenCalledWith({ rpc }, true)
     expect(prepareDeadlineReminders).not.toHaveBeenCalled()
   })
+
+  it('continues existing windows without starting maintenance or flagging opportunities', async () => {
+    vi.stubEnv('CRON_SECRET', 'test-only')
+    const rpc = vi.fn()
+    vi.mocked(createServiceClient).mockReturnValue({ rpc } as never)
+    vi.mocked(runDailyPushCampaign).mockResolvedValue({ phase: 'busy', more: true })
+    expect(await (await POST(request('test-only', 'new_match'))).json()).toEqual({
+      push_campaign: { phase: 'busy', more: true, incomplete: true },
+    })
+    expect(runDailyPushCampaign).toHaveBeenCalledWith({ rpc })
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
 })

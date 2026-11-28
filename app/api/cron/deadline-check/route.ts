@@ -46,7 +46,7 @@ async function run(request: Request, legacy: boolean) {
       return NextResponse.json({
         push_campaign: {
           ...matches,
-          incomplete: Boolean(matches.more || matches.budgetExhausted),
+          incomplete: matches.more,
         },
       })
     }
@@ -55,19 +55,19 @@ async function run(request: Request, legacy: boolean) {
     // of the hourly deadline delivery batches.
     const [flags, matches] = await Promise.allSettled([
       service.rpc('flag_expired_opportunities'),
-      runDailyPushCampaign(service),
+      runDailyPushCampaign(service, true),
     ])
     if (flags.status === 'rejected' || flags.value.error || matches.status === 'rejected') {
       throw new Error('Daily maintenance failed')
     }
     const result = Array.isArray(flags.value.data) ? flags.value.data[0] : flags.value.data
-    const pushCampaign = matches.value ?? {}
+    const pushCampaign = matches.value
     return NextResponse.json({
       deadline_flags: Number(result?.flagged_count ?? 0),
       admin_notifications: Number(result?.notification_count ?? 0),
       push_campaign: {
         ...pushCampaign,
-        incomplete: Boolean(pushCampaign.more || pushCampaign.budgetExhausted),
+        incomplete: pushCampaign.more,
       },
     })
   } catch {

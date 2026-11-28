@@ -20,6 +20,7 @@ export async function sendExpoPushMessages(messages: PushMessage[]): Promise<{ t
   if (messages.length === 0) return { tickets: [], invalidTokens: [] };
   const response = await fetchWithTimeout("https://exp.host/--/api/v2/push/send", {
     method: "POST",
+    redirect: "error",
     timeoutMs: 10_000,
     headers: { Accept: "application/json", "Accept-Encoding": "gzip, deflate", "Content-Type": "application/json" },
     body: JSON.stringify(messages.map((message) => ({ ...message, sound: "default", priority: "high" }))),
