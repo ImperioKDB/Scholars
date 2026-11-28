@@ -26,7 +26,7 @@ async function run(request: Request, legacy: boolean) {
   // POST so a previous Worker revision responds 405 without running its cron.
   const task = legacy && requested === null ? 'maintenance' : requested
   if (!task || (legacy && requested !== null)
-    || !['prepare', 'push', 'email', 'receipts', 'backlog', 'maintenance'].includes(task)) {
+    || !['prepare', 'push', 'email', 'receipts', 'backlog', 'maintenance', 'new_match'].includes(task)) {
     return NextResponse.json({ error: 'Unknown deadline task' }, { status: 400 })
   }
 
@@ -37,6 +37,18 @@ async function run(request: Request, legacy: boolean) {
     if (task === 'receipts') return NextResponse.json(await reconcileDeadlineEmails(service))
     if (task === 'push' || task === 'email') {
       return NextResponse.json(await deliverDeadlineReminders(service, task))
+    }
+
+    if (task === 'new_match') {
+      // Standalone new-match push batch for bounded continuation.
+      // Does not perform daily opportunity flagging.
+      const matches = await runDailyPushCampaign(service)
+      return NextResponse.json({
+        push_campaign: {
+          ...matches,
+          incomplete: Boolean(matches.more || matches.budgetExhausted),
+        },
+      })
     }
 
     // Retain PR #47's daily admin flags and new-match pushes, independently

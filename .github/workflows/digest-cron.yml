@@ -137,6 +137,23 @@ jobs:
             return 1
           }
 
+          drain_new_match() {
+            local result
+            for ((batch=0; batch<16 && SECONDS<drain_until; batch++)); do
+              result=$(call_task new_match) || return 1
+              echo "new_match $result"
+              if ! jq -e 'type == "object" and (.push_campaign.incomplete | type == "boolean")' <<< "$result" >/dev/null; then
+                echo "::error::Unexpected deadline new_match response"
+                return 1
+              fi
+              if ! jq -e '.push_campaign.incomplete' <<< "$result" >/dev/null; then
+                return 0
+              fi
+            done
+            echo "::error::Deadline new_match reached its batch or time limit. Work may remain."
+            return 1
+          }
+
           run_maintenance() {
             local maintenance
             maintenance=$(call_task maintenance) || return 1
@@ -162,8 +179,11 @@ jobs:
             push_pid=$!
             drain_channel email 12 &
             email_pid=$!
+            drain_new_match 16 &
+            new_match_pid=$!
             wait "$push_pid" || status=1
             wait "$email_pid" || status=1
+            wait "$new_match_pid" || status=1
             if receipts=$(call_task receipts); then
               echo "receipts $receipts"
               if jq -e '.unavailable > 0' <<< "$receipts" >/dev/null; then

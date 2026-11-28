@@ -25,20 +25,11 @@ const MATCH_LOOKBACK_HOURS = 48
 const MAX_GROUP_CONCURRENCY = 4
 const RETRY_BATCH_LIMIT = 500
 const MAX_RETRY_AGE_DAYS = 7
+const DISCOVERY_BATCH_PROFILES = 250
 
-/**
- * External subrequest budget for a single daily maintenance invocation.
- *
- * Cloudflare Workers Free permits 50 external subrequests per invocation. Every
- * Supabase query and every outbound provider fetch (Expo, web-push) counts as
- * one. We reserve 40 for the push campaign, leaving ~10 headroom for
- * flag_expired_opportunities (1 RPC) and framework overhead.
- *
- * Budget is enforced strictly BEFORE each external request via SubrequestBudget.
- * When exhausted, the run stops, reports more/budgetExhausted/incomplete, and
- * remaining work resumes on the next scheduled invocation.
- */
 export const DEFAULT_SUBREQUEST_BUDGET = 40
+
+export type CampaignPhase = 'discovery' | 'delivery' | 'complete'
 
 export type ScheduledPushCampaignResult = {
   activeProfiles: number
@@ -70,32 +61,63 @@ type RetryRow = {
 type DeliveryOutcome = 'accepted' | 'suppressed' | 'retryable'
 
 type ProgressRecord = {
+  phase: CampaignPhase
   lastProfileId: string | null
+  lastScholarshipOffset: number
   processedProfiles: number
+  deliveredProfiles: number
 }
 
-/**
- * Attempt to record deterministic progress durably. Uses the existing
- * notification_deliveries ledger when a dedicated progress table is not yet
- * available; the caller must tolerate a best-effort result.
- */
 async function readCampaignProgress(
-  _supabase: SupabaseClient,
-): Promise<ProgressRecord> {
-  // No durable cursor table exists yet (migration prepared separately).
-  // Deterministic in-order processing + dedupe-based idempotency is used
-  // instead. Return empty so callers start from the first profile.
-  return { lastProfileId: null, processedProfiles: 0 }
+  supabase: SupabaseClient,
+  kind: string,
+): Promise<ProgressRecord | null> {
+  if (!budgetForRead.reserve(1)) return null
+  const { data, error } = await supabase
+    .from('push_campaign_progress')
+    .select('phase,last_profile_id,last_scholarship_offset,processed_profiles,delivered_profiles')
+    .eq('kind', kind)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  return {
+    phase: (data.phase as CampaignPhase) ?? 'discovery',
+    lastProfileId: (data.last_profile_id as string | null) ?? null,
+    lastScholarshipOffset: Number(data.last_scholarship_offset ?? 0),
+    processedProfiles: Number(data.processed_profiles ?? 0),
+    deliveredProfiles: Number(data.delivered_profiles ?? 0),
+  }
 }
+
+const budgetForRead = new SubrequestBudget(1)
 
 async function writeCampaignProgress(
-  _supabase: SupabaseClient,
-  _record: ProgressRecord,
+  supabase: SupabaseClient,
+  kind: string,
+  record: ProgressRecord,
 ): Promise<void> {
-  // Best-effort: no durable cursor table exists yet. Prepared migration
-  // (supabase/migrations/20261128000000_add_push_campaign_progress.sql) adds
-  // a dedicated table once approved and applied.
+  if (!budgetForWrite.reserve(1)) return
+  const { error } = await supabase
+    .from('push_campaign_progress')
+    .upsert(
+      {
+        kind,
+        phase: record.phase,
+        last_profile_id: record.lastProfileId,
+        last_scholarship_offset: record.lastScholarshipOffset,
+        processed_profiles: record.processedProfiles,
+        delivered_profiles: record.deliveredProfiles,
+        budget_exhausted: record.phase === 'complete' ? false : undefined,
+        subrequests_used: 0,
+        subrequest_budget: DEFAULT_SUBREQUEST_BUDGET,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'kind' },
+    )
+  if (error) throw error
 }
+
+const budgetForWrite = new SubrequestBudget(1)
 
 async function loadActivePushProfileIds(
   supabase: SupabaseClient,
@@ -138,13 +160,13 @@ async function loadMatchableProfiles(
     'has_english_maths_credit', 'disability_status', 'profile_completeness',
   ].join(',')
 
-  for (let offset = 0; offset < profileIds.length; offset += 250) {
+  for (let offset = 0; offset < profileIds.length; offset += DISCOVERY_BATCH_PROFILES) {
     if (!budget.reserve(1)) return profiles
     const { data, error } = await supabase
       .from('profiles')
       .select(columns)
-      .in('id', profileIds.slice(offset, offset + 250))
-      .limit(250)
+      .in('id', profileIds.slice(offset, offset + DISCOVERY_BATCH_PROFILES))
+      .limit(DISCOVERY_BATCH_PROFILES)
     if (error) throw error
     profiles.push(...((data ?? []) as unknown as MatchableProfile[]))
   }
@@ -286,8 +308,6 @@ async function deliverAlertBatch(
     const result = await sendPushForProfile(supabase, alerts[0].profileId, message, {}, budget)
 
     if (result.accepted > 0) {
-      // Persist acceptance only if capacity remains; otherwise the delivery
-      // stays leased and will be retried on the next invocation.
       if (!budget.reserve(alerts.length)) return 'retryable'
       await Promise.all(alerts.map((alert) => markNotificationAccepted(supabase, alert.deliveryId)))
       return 'accepted'
@@ -321,9 +341,6 @@ async function queueAndDeliverGroups(
   counters: ScheduledPushCampaignResult,
   budget: SubrequestBudget,
 ): Promise<QueueResult> {
-  // Deterministic order: process profiles in ascending id order so that
-  // repeated invocations make monotonic progress and no recipient is
-  // permanently starved by earlier batches.
   const entries = Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b))
   let processedProfiles = 0
   let truncated = false
@@ -341,7 +358,6 @@ async function queueAndDeliverGroups(
           truncated = true
           break
         }
-        // ensureNotificationDelivery: upsert (1) + select (1)
         if (!budget.reserve(2)) { truncated = true; break }
         const delivery = await ensureNotificationDelivery(supabase, {
           profileId: candidate.profileId,
@@ -353,7 +369,6 @@ async function queueAndDeliverGroups(
           templateVersion: 'push-new_match-v1',
         })
         if (!delivery) continue
-        // claimNotificationDeliveryById: rpc (1)
         if (!budget.reserve(1)) { truncated = true; break }
         const claim = await claimNotificationDeliveryById(supabase, delivery.id, candidate.dedupeKey)
         if (claim) claimed.push({ ...candidate, deliveryId: claim.id })
@@ -447,7 +462,6 @@ async function retryQueuedAlerts(
   }
 
   const groups = new Map<string, ClaimedAlert[]>()
-  const groupedDeliveryIds = new Map<string, string[]>()
   const cutoff = Date.now() - MAX_RETRY_AGE_DAYS * 24 * 60 * 60 * 1000
 
   for (const row of rows) {
@@ -546,29 +560,48 @@ export async function runDailyPushCampaign(
   }
 
   const budget = new SubrequestBudget(budgetLimit)
+  const kind = 'new_match'
+
+  // --- Phase 1: Discovery ---
+  const progress = await readCampaignProgress(supabase, kind)
 
   const activeProfileIds = await loadActivePushProfileIds(supabase, budget)
   const activeProfiles = new Set(activeProfileIds)
   counters.activeProfiles = activeProfileIds.length
   if (activeProfileIds.length === 0) {
+    await writeCampaignProgress(supabase, kind, {
+      phase: 'complete',
+      lastProfileId: null,
+      lastScholarshipOffset: 0,
+      processedProfiles: 0,
+      deliveredProfiles: 0,
+    })
     return { ...counters, ...budget.snapshot(), more: false }
   }
 
-  // Deterministic in-order processing from the first profile each run.
-  // Dedupe keys prevent duplicate sends; durable progress tracking is
-  // best-effort until the prepared migration is applied.
+  let startIndex = 0
+  if (progress?.lastProfileId) {
+    startIndex = activeProfileIds.indexOf(progress.lastProfileId)
+    if (startIndex >= 0) startIndex += 1
+  }
+  const profilesToDiscover = activeProfileIds.slice(startIndex)
 
-  const matchGroups = await recentMatchGroups(supabase, activeProfileIds, budget)
-  counters.profilesCheckedForMatches = activeProfileIds.length
+  const matchGroups = await recentMatchGroups(supabase, profilesToDiscover, budget)
+  counters.profilesCheckedForMatches = profilesToDiscover.length
 
+  // --- Phase 2: Delivery ---
   const newMatchResult = await queueAndDeliverGroups(supabase, matchGroups, counters, budget)
   const retryResult = await retryQueuedAlerts(supabase, activeProfiles, counters, budget)
 
   counters.more = budget.exhausted || newMatchResult.truncated || retryResult.truncated
 
-  await writeCampaignProgress(supabase, {
+  // --- Phase 3: Continuation ---
+  await writeCampaignProgress(supabase, kind, {
+    phase: counters.more ? 'delivery' : 'complete',
     lastProfileId: null,
+    lastScholarshipOffset: 0,
     processedProfiles: newMatchResult.processedProfiles,
+    deliveredProfiles: counters.newMatchPushesAccepted + counters.retryPushesAccepted,
   })
 
   return { ...counters, ...budget.snapshot(), more: counters.more }

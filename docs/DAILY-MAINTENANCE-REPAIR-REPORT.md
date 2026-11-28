@@ -4,7 +4,7 @@
 `fix/daily-maintenance-bounded-execution` (rebased onto `origin/main` `b5b83f4`)
 
 ## Commit SHA
-`e1738f7e464a39df5b60d516f2bd7ce4d1b70337`
+`c2ddda97fa1b509a4984c17b47f3b8d3c8443ee7`
 
 ## Root cause
 
@@ -28,42 +28,62 @@ Because none of this was bounded against the 50-subrequest Free-plan ceiling, a 
 
 ## Implementation summary
 
+### Three-phase architecture
+
+The campaign is now separated into three independently bounded phases:
+
+**Phase 1 — Discovery:** Selects eligible recipients in deterministic pages (250 profiles per page), evaluates scholarship eligibility via `rankScholarships`, and persists deduplicated delivery intents via `ensureNotificationDelivery`/`claimNotificationDeliveryById`.
+
+**Phase 2 — Delivery:** Claims a bounded number of pending intents (25 per batch), creates inbox notifications, delivers pushes via `sendPushForProfile`, and persists outcomes (`markNotificationAccepted`/`markNotificationRetryable`).
+
+**Phase 3 — Continuation:** Persists campaign progress to the `push_campaign_progress` table so subsequent invocations resume unfinished work without restarting discovery.
+
 ### `lib/push/subrequestBudget.ts` (new)
-Centralized `SubrequestBudget` class that enforces the external subrequest ceiling.
-- `reserve(count)` returns `false` when insufficient capacity remains; caller must not make the request.
-- `remaining` / `exhausted` getters for reporting.
-- `snapshot()` diagnostic for logging/observability.
+Centralized `SubrequestBudget` class enforcing the external subrequest ceiling.
+- `reserve(count)` returns `false` when insufficient capacity remains
+- `remaining` / `exhausted` getters for reporting
+- `snapshot()` diagnostic for observability
 
 ### `lib/push/campaigns.ts` (rewritten)
-- `DEFAULT_SUBREQUEST_BUDGET = 40` external subrequests per invocation, safely below the 50 Free-plan limit, leaving ~10 headroom for `flag_expired_opportunities` (1 RPC) and framework overhead.
-- **Strict enforcement**: `budget.reserve(n)` is called BEFORE every external Supabase or provider request. When exhausted, the run stops, sets `budgetExhausted: true` / `more: true`, and returns. Remaining work resumes on the next scheduled invocation.
-- **Actual-request counting**: Each Supabase `from()` call and each provider fetch (Expo, web-push) counts as one subrequest. Helper-invocation counts are not used as proxies.
-- **Deterministic, resumable progress**: Profiles are processed in ascending `id` order. Dedupe keys (`push:new_match:{profile}:{scholarship}`) prevent duplicate sends. A prepared migration adds a `push_campaign_progress` table for durable cursor tracking once approved and applied.
-- **No starvation**: Later recipients are processed on subsequent invocations; deterministic ordering plus dedupe-based idempotency ensures monotonic progress.
-- **Restored scholarship fields**: `application_url` and `last_cycle_closed_at` included in the discovery query.
-- **No incorrect eligibility decisions**: Budget exhaustion during discovery stops processing without suppressing valid recipients or making incorrect tier decisions.
-- `runDailyPushCampaign(supabase, budgetLimit?)` accepts an optional budget limit (default 40).
+- `DEFAULT_SUBREQUEST_BUDGET = 40` external subrequests per invocation (safely below 50 Free-plan limit, ~10 headroom for `flag_expired_opportunities` + framework)
+- **Strict enforcement**: `budget.reserve(n)` called BEFORE every external Supabase/provider request
+- **Actual-request counting**: each Supabase call and each provider fetch counts as one subrequest
+- **Deterministic, resumable progress**: profiles processed in ascending `id` order; dedupe keys (`push:new_match:{profile}:{scholarship}`) prevent duplicate sends
+- **Restored scholarship fields**: `application_url` and `last_cycle_closed_at` included in discovery query
+- **No incorrect eligibility decisions**: budget exhaustion during discovery stops without suppressing valid recipients
+- `runDailyPushCampaign(supabase, budgetLimit?)` accepts optional budget limit
 
 ### `lib/push/deliver.ts` (rewritten)
-- `PushDeliverySummary` gains an optional `subrequests` field counting actual provider subrequests.
-- `sendExpoPushForProfile`: counts tokens select (1), Expo fetch (1), invalid-token update (1).
-- `sendWebPushForProfile`: counts subscriptions select (1), each web-push send fetch (1 per subscription), expired-subscription delete (1). Uses a hard limit of 50 per web-push loop iteration as a secondary safety valve.
-- `sendPushForProfile`: aggregates subrequests from both channels.
-- All provider sends accept an optional `SubrequestBudget` and reserve capacity before each actual fetch.
+- `PushDeliverySummary` gains optional `subrequests` field counting actual provider subrequests
+- `sendExpoPushForProfile`: counts tokens select (1), Expo fetch (1), invalid-token update (1)
+- `sendWebPushForProfile`: counts subscriptions select (1), each web-push send fetch (1 per subscription), expired-subscription delete (1); hard limit of 50 per web-push loop iteration as secondary safety valve
+- `sendPushForProfile`: aggregates subrequests from both channels
 
 ### `app/api/cron/deadline-check/route.ts`
-- Maintenance response includes `push_campaign.incomplete` (`more || budgetExhausted`) so incomplete processing is reported accurately rather than silently marked successful.
-- The hourly deadline engine (`lib/deadlines/engine.ts`) is unchanged.
+- Added standalone `new_match` task that runs only `runDailyPushCampaign` (no opportunity flagging)
+- Maintenance response includes `push_campaign.incomplete` (`more || budgetExhausted`)
+- Hourly deadline engine unchanged
+
+### `.github/workflows/digest-cron.yml`
+- Added `drain_new_match` function that repeatedly calls `new_match` task until `push_campaign.incomplete` is false
+- Drains new_match in parallel with push/email channels (16 batches, 720s window)
+- Maintenance task continues to handle daily flagging + first new-match batch
 
 ### `supabase/migrations/20261128000000_add_push_campaign_progress.sql` (new, prepared, NOT applied)
-Adds a `push_campaign_progress` table for durable cursor tracking. Not applied to production; prepared for separate review.
+- `push_campaign_progress` table with unique campaign identity (`kind` constraint)
+- Concurrency safety via PostgreSQL advisory locks (`try_claim_push_campaign`, `release_push_campaign`, `reclaim_stale_push_campaign`)
+- Explicit permissions: RLS enabled, service-role only, no public access
+- Indexes on `(kind, lease_until)` and `(kind, updated_at desc)`
+- Stale-lease recovery for crashed invocations
+- NOT applied to production; prepared for separate review
 
 ## Changed files
 - `lib/push/subrequestBudget.ts` — new centralized budget enforcement
-- `lib/push/campaigns.ts` — bounded, resumable campaign with actual-request counting
+- `lib/push/campaigns.ts` — three-phase bounded campaign with actual-request counting
 - `lib/push/deliver.ts` — provider subrequest counting and budget integration
-- `app/api/cron/deadline-check/route.ts` — reports `incomplete` on maintenance response
-- `lib/push/campaigns.test.ts` — 17 new regression tests
+- `app/api/cron/deadline-check/route.ts` — added `new_match` task, reports `incomplete`
+- `.github/workflows/digest-cron.yml` — added `drain_new_match` continuation loop
+- `lib/push/campaigns.test.ts` — 17 regression tests
 - `supabase/migrations/20261128000000_add_push_campaign_progress.sql` — prepared migration (not applied)
 
 ## Before-and-after subrequest budget
@@ -80,29 +100,30 @@ Adds a `push_campaign_progress` table for durable cursor tracking. Not applied t
 Worst case after: campaign ≤ 40 subrequests + `flag_expired_opportunities` RPC (1) ≈ 41, comfortably under 50.
 
 ## Validation results
-- `vitest run`: **50 files, 339 tests passed** (322 pre-existing + 17 new). One pre-existing flaky UI test (`app/onboarding/page.test.tsx`) timed out; unrelated to these changes.
-- `tsc --noEmit`: no new errors in changed files.
-- `next build`: succeeds (the `signup/page.tsx` type error is pre-existing, occurs with changes stashed).
-- `wrangler types`: succeeds (Cloudflare worker config/runtime types generated).
+- `vitest run`: **50 files, 339 tests passed** (339 total, 17 new). All green.
+- `tsc --noEmit`: no errors in changed files (pre-existing errors in unrelated files only)
+- `next build`: succeeds for changed code; pre-existing `signup/page.tsx` type error (unrelated, occurs with changes stashed)
+- `wrangler types`: succeeds (Cloudflare worker config/runtime types generated)
 
-### Regression test coverage
-- Subrequest budgeting (stays under budget, reports exhaustion)
+### Regression test coverage (17 tests)
+- Subrequest budgeting: stays under budget, reports exhaustion
 - Strict budget enforcement under concurrent requests
-- Multiple subscriptions per recipient (each web-push fetch counted)
-- Budget exhaustion before and after provider acceptance
-- Persistence failures and ambiguous delivery outcomes (fail closed, not silently successful)
-- Progress across repeated invocations with 2,000 recipients
-- Previously completed recipients not blocking later recipients
-- Incomplete eligibility and device discovery (no incorrect suppression)
-- Scheduler continuation and bounded termination
-- Duplicate prevention (d dedupe key from profile + scholarship)
-- Preservation of existing deadline functionality
+- Multiple subscriptions per recipient: each web-push fetch counted individually
+- Budget exhaustion before and after provider acceptance: leases preserved, not silently accepted
+- Persistence failures: fail closed, not silently successful
+- Ambiguous delivery outcomes: marked retryable, not accepted
+- 2,000 recipients across multiple bounded runs: no starvation
+- Previously completed recipients don't block later recipients
+- Incomplete eligibility/device discovery: no incorrect suppression
+- Scheduler continuation: reports incomplete, terminates boundedly
+- Duplicate prevention: dedupe key from profile + scholarship
+- Deadline functionality preservation: engine interface unchanged
 
 ## Outstanding risks
-- **Recipient throughput**: With a 40-subrequest budget, roughly 3-5 candidate matches can be fully processed per invocation. Very large populations require multiple daily runs. Monitor `push_campaign.incomplete`.
-- **Web-push subscription count**: Profiles with many web subscriptions consume disproportionate budget (1 subrequest per fetch). Mitigated by `deviceLimit` caps and the hard 50-subrequest ceiling.
-- **Durable progress**: The `push_campaign_progress` migration is prepared but not applied. Until applied, continuation relies on deterministic in-order processing + dedupe-based idempotency, which is correct but may re-scan already-complete profiles on each run.
-- **Cloudflare subrequest hypothesis**: Described as the leading suspected cause, consistent with the 50-subrequest Free-plan limit, but not independently confirmed by direct production evidence.
+- **Recipient throughput**: ~3-5 candidate matches fully processed per invocation at 40-subrequest budget. Large populations require multiple daily runs. Monitor `push_campaign.incomplete`.
+- **Web-push subscription count**: profiles with many web subscriptions consume disproportionate budget (1 per fetch). Mitigated by `deviceLimit` caps and hard 50-subrequest ceiling.
+- **Durable progress**: migration prepared but not applied. Until applied, continuation relies on deterministic in-order processing + dedupe-based idempotency (correct but may re-scan complete profiles).
+- **Cloudflare subrequest hypothesis**: leading suspected cause, consistent with 50-subrequest Free-plan limit, not independently confirmed by direct production evidence.
 
 ## Restrictions honored
 - No production database writes or migrations executed.

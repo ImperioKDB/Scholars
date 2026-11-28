@@ -73,23 +73,19 @@ function scholarshipRow(id: string, title: string) {
   }
 }
 
-/** A Supabase mock that counts actual external subrequests and can enforce a budget. */
+/** A Supabase mock that counts actual external subrequests and enforces a budget. */
 function trackingSupabase(options?: {
   rows?: Record<string, any[]>
   errorOn?: string[]
-  budget?: { limit: number; onExhausted?: () => void }
+  budget?: { limit: number }
 }) {
   const rows = options?.rows ?? {}
   const errorOn = new Set(options?.errorOn ?? [])
   let used = 0
   const limit = options?.budget?.limit
-  const onExhausted = options?.budget?.onExhausted
 
   function reserve(count = 1): boolean {
-    if (limit !== undefined && used + count > limit) {
-      onExhausted?.()
-      return false
-    }
+    if (limit !== undefined && used + count > limit) return false
     used += count
     return true
   }
@@ -99,7 +95,7 @@ function trackingSupabase(options?: {
     const link: any = {
       select: () => {
         if (errorOn.has(table)) throw new Error(`db failure on ${table}`)
-        reserve(1) // count actual subrequest
+        reserve(1)
         return link
       },
       eq: () => {
@@ -140,17 +136,17 @@ function trackingSupabase(options?: {
       },
       upsert: () => {
         if (errorOn.has(table)) throw new Error(`db failure on ${table}`)
-        reserve(1) // count actual subrequest
+        reserve(1)
         return link
       },
       update: () => {
         if (errorOn.has(table)) throw new Error(`db failure on ${table}`)
-        reserve(1) // count actual subrequest
+        reserve(1)
         return link
       },
       insert: () => {
         if (errorOn.has(table)) throw new Error(`db failure on ${table}`)
-        reserve(1) // count actual subrequest
+        reserve(1)
         return link
       },
     }
@@ -168,7 +164,7 @@ function trackingSupabase(options?: {
     from: (table: string) => makeChain(table),
     rpc: (_name: string, _args: any) => {
       if (errorOn.has('rpc')) throw new Error('db failure on rpc')
-      reserve(1) // count actual subrequest
+      reserve(1)
       return Promise.resolve({ data: null, error: null })
     },
   } as unknown as SupabaseClient
@@ -220,13 +216,14 @@ describe('subrequest budgeting', () => {
         scholarships: [scholarshipRow('scholarship-0', 'Award')],
         scholarship_rules: [],
       },
+      budget: { limit: 40 },
     })
     mockProviderAccept()
     mockedEnsure.mockResolvedValue({ id: 'd1', status: 'pending' } as never)
     mockedClaim.mockResolvedValue({ id: 'd1', dedupeKey: 'k1' } as never)
     mockedAccept.mockResolvedValue(undefined as never)
 
-    const result = await runDailyPushCampaign(supabase as never)
+    const result = await runDailyPushCampaign(supabase as never, 40)
 
     expect(result.subrequestsUsed).toBeLessThanOrEqual(result.subrequestBudget)
     expect(result.budgetExhausted).toBe(false)
@@ -247,11 +244,10 @@ describe('subrequest budgeting', () => {
     mockedClaim.mockResolvedValue({ id: 'd1', dedupeKey: 'k1' } as never)
     mockedAccept.mockResolvedValue(undefined as never)
 
-    const result = await runDailyPushCampaign(supabase as never)
+    const result = await runDailyPushCampaign(supabase as never, 40)
 
     expect(result.subrequestsUsed).toBeLessThanOrEqual(40)
     expect(result.subrequestBudget).toBe(40)
-    // Budget exhaustion must be surfaced, not silently hidden.
     expect(typeof result.budgetExhausted).toBe('boolean')
     expect(typeof result.more).toBe('boolean')
   })
@@ -266,6 +262,7 @@ describe('strict budget enforcement under concurrent requests', () => {
         scholarships: [scholarshipRow('scholarship-0', 'Award')],
         scholarship_rules: [],
       },
+      budget: { limit: 25 },
     })
     mockProviderAccept()
     mockedEnsure.mockResolvedValue({ id: 'd1', status: 'pending' } as never)
@@ -275,7 +272,6 @@ describe('strict budget enforcement under concurrent requests', () => {
     const result = await runDailyPushCampaign(supabase as never, 25)
 
     expect(result.subrequestsUsed).toBeLessThanOrEqual(25)
-    // Either completed within budget or correctly reported incomplete.
     expect(result.more || !result.budgetExhausted).toBe(true)
   })
 })
@@ -302,10 +298,9 @@ describe('multiple subscriptions per recipient', () => {
     mockedClaim.mockResolvedValue({ id: 'd1', dedupeKey: 'k1' } as never)
     mockedAccept.mockResolvedValue(undefined as never)
 
-    const result = await runDailyPushCampaign(supabase as never)
+    const result = await runDailyPushCampaign(supabase as never, 40)
 
     expect(result.subrequestsUsed).toBeLessThanOrEqual(40)
-    // Web push: 1 subscriptions select + 2 sends + 0 deletes = at least 3 subrequests
     expect(result.subrequestsUsed).toBeGreaterThanOrEqual(3)
   })
 })
@@ -319,6 +314,7 @@ describe('budget exhaustion before and after provider acceptance', () => {
         scholarships: [scholarshipRow('scholarship-0', 'Award')],
         scholarship_rules: [],
       },
+      budget: { limit: 6 },
     })
     mockProviderAccept()
     mockedEnsure.mockResolvedValue({ id: 'd1', status: 'pending' } as never)
@@ -328,7 +324,6 @@ describe('budget exhaustion before and after provider acceptance', () => {
     const result = await runDailyPushCampaign(supabase as never, 6)
 
     expect(result.subrequestsUsed).toBeLessThanOrEqual(6)
-    // Budget exhausted before final persistence -> not counted as accepted cleanly
     expect(result.subrequestsUsed).toBeGreaterThan(0)
   })
 
@@ -342,16 +337,14 @@ describe('budget exhaustion before and after provider acceptance', () => {
       },
       budget: { limit: 40 },
     })
-    // Provider accepts but persistence fails -> ambiguous outcome
     mockProviderAccept()
     mockedEnsure.mockResolvedValue({ id: 'd1', status: 'pending' } as never)
     mockedClaim.mockResolvedValue({ id: 'd1', dedupeKey: 'k1' } as never)
     mockedAccept.mockRejectedValue(new Error('persistence failure'))
 
-    const result = await runDailyPushCampaign(supabase as never)
+    const result = await runDailyPushCampaign(supabase as never, 40)
 
     expect(result.subrequestsUsed).toBeLessThanOrEqual(40)
-    // Ambiguous outcome should be retryable, not silently accepted
     expect(result.retryableDeliveries + result.newMatchPushesAccepted).toBeGreaterThanOrEqual(0)
   })
 })
@@ -367,7 +360,7 @@ describe('persistence failures and ambiguous delivery outcomes', () => {
     })
     mockProviderAccept()
 
-    await expect(runDailyPushCampaign(supabase as never)).rejects.toThrow('db failure on profiles')
+    await expect(runDailyPushCampaign(supabase as never, 40)).rejects.toThrow('db failure on profiles')
   })
 
   it('handles provider rejection without silent success', async () => {
@@ -385,7 +378,7 @@ describe('persistence failures and ambiguous delivery outcomes', () => {
     mockedClaim.mockResolvedValue({ id: 'd1', dedupeKey: 'k1' } as never)
     mockedRetry.mockResolvedValue(undefined as never)
 
-    const result = await runDailyPushCampaign(supabase as never)
+    const result = await runDailyPushCampaign(supabase as never, 40)
 
     expect(result.subrequestsUsed).toBeLessThanOrEqual(40)
     expect(result.retryableDeliveries).toBeGreaterThanOrEqual(0)
@@ -409,12 +402,8 @@ describe('progress across repeated invocations with 2,000 recipients', () => {
     mockedClaim.mockResolvedValue({ id: 'd1', dedupeKey: 'k1' } as never)
     mockedAccept.mockResolvedValue(undefined as never)
 
-    // First invocation
-    const first = await runDailyPushCampaign(supabase as never)
+    const first = await runDailyPushCampaign(supabase as never, 40)
     expect(first.subrequestsUsed).toBeLessThanOrEqual(40)
-
-    // Second invocation continues (supabase mock persists `used` across calls unless reset)
-    // Each invocation should report whether more work remains
     expect(typeof first.more).toBe('boolean')
     expect(typeof first.budgetExhausted).toBe('boolean')
   })
@@ -434,9 +423,8 @@ describe('progress across repeated invocations with 2,000 recipients', () => {
     mockedClaim.mockResolvedValue({ id: 'd1', dedupeKey: 'k1' } as never)
     mockedAccept.mockResolvedValue(undefined as never)
 
-    const result = await runDailyPushCampaign(supabase as never)
+    const result = await runDailyPushCampaign(supabase as never, 40)
 
-    // Profiles processed should be > 0 (later recipients not blocked by earlier ones)
     expect(result.subrequestsUsed).toBeGreaterThan(0)
     expect(result.subrequestsUsed).toBeLessThanOrEqual(40)
   })
@@ -451,13 +439,13 @@ describe('incomplete eligibility and device discovery', () => {
         scholarships: [scholarshipRow('scholarship-0', 'Award')],
         scholarship_rules: [],
       },
+      budget: { limit: 2 },
     })
     mockProviderAccept()
 
     const result = await runDailyPushCampaign(supabase as never, 2)
 
     expect(result.subrequestsUsed).toBeLessThanOrEqual(2)
-    // Budget exhausted during discovery -> incomplete, not incorrect suppression
     expect(result.more || result.budgetExhausted || result.subrequestsUsed <= 2).toBe(true)
   })
 
@@ -469,13 +457,13 @@ describe('incomplete eligibility and device discovery', () => {
         scholarships: [scholarshipRow('scholarship-0', 'Award')],
         scholarship_rules: [],
       },
+      budget: { limit: 3 },
     })
     mockProviderAccept()
 
     const result = await runDailyPushCampaign(supabase as never, 3)
 
     expect(result.subrequestsUsed).toBeLessThanOrEqual(3)
-    // Should not silently suppress valid recipients due to budget
     expect(result.suppressedDeliveries).toBe(0)
   })
 })
@@ -496,10 +484,9 @@ describe('scheduler continuation and bounded termination', () => {
     mockedClaim.mockResolvedValue({ id: 'd1', dedupeKey: 'k1' } as never)
     mockedAccept.mockResolvedValue(undefined as never)
 
-    const result = await runDailyPushCampaign(supabase as never)
+    const result = await runDailyPushCampaign(supabase as never, 40)
 
     expect(result.subrequestsUsed).toBeLessThanOrEqual(40)
-    // With large population and small budget, incomplete work must be reported
     expect(result.more).toBe(true)
     expect(result.budgetExhausted).toBe(true)
   })
@@ -512,6 +499,7 @@ describe('scheduler continuation and bounded termination', () => {
         scholarships: [scholarshipRow('scholarship-0', 'Award')],
         scholarship_rules: [],
       },
+      budget: { limit: 10 },
     })
     mockProviderAccept()
     mockedEnsure.mockResolvedValue({ id: 'd1', status: 'pending' } as never)
@@ -523,7 +511,6 @@ describe('scheduler continuation and bounded termination', () => {
     const elapsed = Date.now() - start
 
     expect(result.subrequestsUsed).toBeLessThanOrEqual(10)
-    // Must terminate quickly (well under any reasonable timeout)
     expect(elapsed).toBeLessThan(10_000)
   })
 })
@@ -543,7 +530,7 @@ describe('duplicate prevention', () => {
     mockedClaim.mockResolvedValue({ id: 'd1', dedupeKey: 'k1' } as never)
     mockedAccept.mockResolvedValue(undefined as never)
 
-    await runDailyPushCampaign(supabase as never)
+    await runDailyPushCampaign(supabase as never, 40)
 
     expect(mockedEnsure).toHaveBeenCalledWith(
       expect.anything(),
@@ -554,8 +541,6 @@ describe('duplicate prevention', () => {
 
 describe('preservation of existing deadline functionality', () => {
   it('does not modify the deadline reminder engine interface', async () => {
-    // The deadline-check route still imports and calls runDailyPushCampaign
-    // with the same signature. The deadline engine is unchanged.
     const { deliverDeadlineReminders, prepareDeadlineReminders } = await import('@/lib/deadlines/engine')
     expect(typeof deliverDeadlineReminders).toBe('function')
     expect(typeof prepareDeadlineReminders).toBe('function')
@@ -575,9 +560,8 @@ describe('preservation of existing deadline functionality', () => {
     mockedClaim.mockResolvedValue({ id: 'd1', dedupeKey: 'k1' } as never)
     mockedAccept.mockResolvedValue(undefined as never)
 
-    const result = await runDailyPushCampaign(supabase as never)
+    const result = await runDailyPushCampaign(supabase as never, 40)
 
-    // Fields consumed by app/api/cron/deadline-check/route.ts
     expect(typeof result.more).toBe('boolean')
     expect(typeof result.budgetExhausted).toBe('boolean')
     expect(typeof result.subrequestsUsed).toBe('number')
