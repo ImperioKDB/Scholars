@@ -1,10 +1,9 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { getCurrentUserAndProfile } from "@/lib/supabase/currentUser";
 import { createClient } from "@/lib/supabase/server";
 import { OpportunityDetailClient, type SimilarOpportunity } from "./OpportunityDetailClient";
 import type { CardOpportunity } from "@/components/OpportunityCard";
-import { todayUtcIso } from "@/lib/dates";
+import { todayLagosIso } from "@/lib/dates";
 
 // app/opportunities/[id]/page.tsx
 // GET /opportunities/[id]
@@ -29,13 +28,13 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
     return null;
   }
   const supabase = await createClient();
-  const [opportunityResult, savedResult] = await Promise.all([
+  const today = todayLagosIso();
+  const [opportunityResult, savedResult, applicationResult] = await Promise.all([
     supabase
       .from("opportunities")
       .select(PUBLIC_COLUMNS)
       .eq("id", id)
       .eq("verified", true)
-      .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
       .maybeSingle(),
     supabase
       .from("saved_opportunities")
@@ -43,11 +42,17 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
       .eq("profile_id", user.id)
       .eq("opportunity_id", id)
       .maybeSingle(),
+    supabase
+      .from("applications")
+      .select("id")
+      .eq("profile_id", user.id)
+      .eq("opportunity_id", id)
+      .maybeSingle(),
   ]);
   const opportunity = opportunityResult.data as CardOpportunity | null;
-  if (!opportunity) {
-    notFound();
-  }
+  if (!opportunity) notFound();
+  const closed = Boolean(opportunity.deadline && opportunity.deadline < today);
+  if (closed && !savedResult.data && !applicationResult.data) notFound();
   // SIMILAR OPPORTUNITIES: same type first, fall back to same discipline,
   // so the detail page never ends as a dead end. Ordered by soonest
   // deadline so the rail surfaces the most time-relevant alternatives.
@@ -57,7 +62,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
     .select(SIMILAR_COLUMNS)
     .eq("verified", true)
     .eq("type", opportunity.type)
-    .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
+    .or(`deadline.is.null,deadline.gte.${today}`)
     .neq("id", id)
     .order("deadline", { ascending: true, nullsFirst: false })
     .limit(3);
@@ -67,7 +72,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
       .from("opportunities")
       .select(SIMILAR_COLUMNS)
       .eq("verified", true)
-      .or(`deadline.is.null,deadline.gte.${todayUtcIso()}`)
+      .or(`deadline.is.null,deadline.gte.${today}`)
       .neq("id", id)
       .eq("discipline", opportunity.discipline)
       .order("deadline", { ascending: true, nullsFirst: false })
@@ -78,6 +83,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
     <OpportunityDetailClient
       opportunity={opportunity}
       initialSaved={Boolean(savedResult.data)}
+      closed={closed}
       sharerId={user.id}
       similar={similar}
     />

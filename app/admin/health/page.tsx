@@ -1,3 +1,5 @@
+import { createServiceClient } from "@/lib/supabase/service";
+import { deadlineEmailLimits } from "@/lib/deadlines/engine";
 import { StatusMessage } from "@/components/StatusMessage";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/admin/access";
@@ -140,6 +142,56 @@ function HealthRow({ row, right }: { row: Row; right?: React.ReactNode }) {
 function AllClear() {
   return <p className="text-sm text-emerald">Nothing here -- all clear.</p>;
 }
+type DeadlineStats = {
+  last_run: { started_at: string; generated: number } | null;
+  deliveries: Record<string, Record<string, number>>;
+  daily_email_attempts: number;
+  monthly_email_attempts: number;
+};
+
+async function DeadlineDeliveryHealth() {
+  let stats: DeadlineStats | null = null;
+  try {
+    const { data, error } = await createServiceClient().rpc("deadline_reminder_stats");
+    if (!error) stats = data as DeadlineStats;
+  } catch {
+    // Other health checks remain available when the deadline ledger is unavailable.
+  }
+
+  if (!stats) return <p className="mb-6 text-sm text-navy-light">Deadline delivery statistics are unavailable.</p>;
+
+  const lastRun = stats.last_run;
+  const quota = deadlineEmailLimits();
+  const channels = [["in_app", "In-app"], ["push", "Push"], ["email", "Email"]] as const;
+  return (
+    <section className="mb-6 rounded-xl border border-hairline bg-white p-4">
+      <h2 className="font-semibold text-navy">Deadline reminders</h2>
+      <p className="mt-1 text-sm text-navy-light">
+        {lastRun
+          ? `Last discovery ${new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Lagos" }).format(new Date(lastRun.started_at))} WAT · ${lastRun.generated} channel deliveries queued`
+          : "The scheduler has yet to complete a discovery run."}
+      </p>
+      <p className="mt-1 text-sm text-navy-light">
+        Email attempts (UTC) {stats.daily_email_attempts}/{quota.daily} today · {stats.monthly_email_attempts}/{quota.monthly} this month
+      </p>
+      <p className="mt-3 text-xs text-navy-light">Delivery outcomes over the last 30 days and all open deliveries</p>
+      <div className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
+        {channels.map(([channel, label]) => {
+          const counts = stats.deliveries[channel] ?? {};
+          const failed = (counts.failed ?? 0) + (counts.dead_letter ?? 0) + (counts.bounced ?? 0);
+          return (
+            <div key={channel}>
+              <p className="font-medium text-navy">{label}</p>
+              <p>{counts.accepted ?? 0} provider accepted · {counts.delivered ?? 0} delivered</p>
+              <p>{failed} failed · {counts.retryable ?? 0} retrying · {counts.unknown ?? 0} unknown</p>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export default async function AdminHealthPage() {
   await requireAdmin();
   const supabase = await createClient();
@@ -182,6 +234,7 @@ export default async function AdminHealthPage() {
           Open scholarships table
         </Link>
       </div>
+      <DeadlineDeliveryHealth />
       {capped && (
         <p className="text-xs text-amber bg-amber-light rounded-lg px-3.5 py-2.5 mb-6">
           Showing the first {ROW_CAP} scholarships by deadline. The catalog is larger than this

@@ -8,21 +8,36 @@ import {
 
 type PushMessage = { title: string; body: string; data?: Record<string, string> }
 type WebPushSubscriptionRow = { id: string; endpoint: string; p256dh: string; auth: string }
-type ChannelResult = { targets: number; accepted: number; failed: number }
-export type PushDeliverySummary = { targets: number; accepted: number; failed: number }
+export type PushDeliverySummary = {
+  targets: number
+  accepted: number
+  failed: number
+  retryable: number
+  expired: number
+}
+
+function emptyResult(): PushDeliverySummary {
+  return { targets: 0, accepted: 0, failed: 0, retryable: 0, expired: 0 }
+}
+
+function isRetryable(status: number | undefined | null) {
+  return !status || [408, 425, 429].includes(status) || status >= 500
+}
 async function sendExpoPushForProfile(
   supabase: SupabaseClient,
   profileId: string,
   message: PushMessage,
-): Promise<ChannelResult> {
+  deviceLimit: number,
+  ttl?: number,
+): Promise<PushDeliverySummary> {
   const { data: tokens, error } = await supabase
     .from('push_tokens')
     .select('id,expo_push_token')
     .eq('profile_id', profileId)
     .eq('enabled', true)
-    .limit(100)
+    .limit(deviceLimit)
   if (error) throw error
-  if (!tokens?.length) return { targets: 0, accepted: 0, failed: 0 }
+  if (!tokens?.length) return emptyResult()
 
   const result = await sendExpoPushMessages(tokens.map((token) => ({
     to: token.expo_push_token as string,
@@ -30,6 +45,7 @@ async function sendExpoPushForProfile(
     body: message.body,
     data: message.data,
     channelId: 'scholarships',
+    ttl,
   })))
 
   if (result.invalidTokens.length > 0) {
@@ -38,21 +54,28 @@ async function sendExpoPushForProfile(
       .update({ enabled: false })
       .eq('profile_id', profileId)
       .in('expo_push_token', result.invalidTokens)
-    if (disableError) throw disableError
+    if (disableError) console.warn('[Push] Failed to disable expired Expo devices')
   }
 
   const accepted = result.tickets.filter((ticket) => ticket.status === 'ok').length
-  return { targets: tokens.length, accepted, failed: Math.max(0, tokens.length - accepted) }
+  const permanent = new Set(['DeviceNotRegistered', 'MessageTooBig', 'InvalidCredentials', 'MismatchSenderId'])
+  const retryable = tokens.filter((_, index) => {
+    const ticket = result.tickets[index]
+    return ticket?.status !== 'ok' && !permanent.has(ticket?.details?.error ?? '')
+  }).length
+  return { targets: tokens.length, accepted, failed: tokens.length - accepted, retryable, expired: result.invalidTokens.length }
 }
 
 async function sendWebPushForProfile(
   supabase: SupabaseClient,
   profileId: string,
   message: PushMessage,
-): Promise<ChannelResult> {
+  deviceLimit: number,
+  ttl?: number,
+): Promise<PushDeliverySummary> {
   const publicKey = process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY
   const privateKey = process.env.WEB_PUSH_VAPID_PRIVATE_KEY
-  if (!publicKey || !privateKey) return { targets: 0, accepted: 0, failed: 0 }
+  if (!publicKey || !privateKey) return emptyResult()
 
   webpush.setVapidDetails(
     process.env.WEB_PUSH_SUBJECT || 'mailto:support.scholarsteam@gmail.com',
@@ -65,11 +88,11 @@ async function sendWebPushForProfile(
     .select('id,endpoint,p256dh,auth')
     .eq('profile_id', profileId)
     .eq('enabled', true)
-    .limit(100)
+    .limit(deviceLimit)
   if (error) throw error
 
   const subscriptions = (data ?? []) as WebPushSubscriptionRow[]
-  if (subscriptions.length === 0) return { targets: 0, accepted: 0, failed: 0 }
+  if (subscriptions.length === 0) return emptyResult()
   const payload = JSON.stringify({
     title: message.title,
     body: message.body,
@@ -77,31 +100,36 @@ async function sendWebPushForProfile(
   })
   let accepted = 0
   let failed = 0
+  let retryable = 0
+  const expired: string[] = []
   await Promise.all(subscriptions.map(async (row) => {
     try {
       await webpush.sendNotification(
         { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
         payload,
-        { TTL: 60 * 60 },
+        { TTL: ttl ?? 3600, timeout: 10_000 },
       )
       accepted += 1
     } catch (error) {
       failed += 1
       const statusCode = getSafeHttpStatusCode(error)
       if (statusCode === 404 || statusCode === 410) {
-        const { error: removeError } = await supabase.from('web_push_subscriptions').delete().eq('id', row.id)
-        if (removeError) throw removeError
+        expired.push(row.id)
         return
       }
+      if (isRetryable(statusCode)) retryable += 1
       // Push endpoints are private bearer URLs; never log the URL or keys.
       console.warn('[Push] Web Push delivery failed', {
-        profileId,
         statusCode,
         ...getSafePushErrorDiagnostic(error),
       })
     }
   }))
-  return { targets: subscriptions.length, accepted, failed }
+  if (expired.length > 0) {
+    const { error } = await supabase.from('web_push_subscriptions').delete().in('id', expired)
+    if (error) console.warn('[Push] Failed to remove expired web subscriptions')
+  }
+  return { targets: subscriptions.length, accepted, failed, retryable, expired: expired.length }
 }
 
 /** Deliver to both opt-in browser subscriptions and Expo native devices. */
@@ -109,27 +137,28 @@ export async function sendPushForProfile(
   supabase: SupabaseClient,
   profileId: string,
   message: PushMessage,
+  { deviceLimit = 100, ttl }: { deviceLimit?: number; ttl?: number } = {},
 ): Promise<PushDeliverySummary> {
   const channels = await Promise.allSettled([
-    sendExpoPushForProfile(supabase, profileId, message),
-    sendWebPushForProfile(supabase, profileId, message),
+    sendExpoPushForProfile(supabase, profileId, message, deviceLimit, ttl),
+    sendWebPushForProfile(supabase, profileId, message, deviceLimit, ttl),
   ])
-  let targets = 0
-  let accepted = 0
-  let failed = 0
+  const summary = emptyResult()
   channels.forEach((result, index) => {
     if (result.status === 'rejected') {
-      failed += 1
+      summary.failed += 1
+      if (isRetryable(getSafeHttpStatusCode(result.reason))) summary.retryable += 1
       console.warn('[Push] Delivery channel failed', {
         channel: index === 0 ? 'expo' : 'web',
-        profileId,
         ...getSafePushErrorDiagnostic(result.reason),
       })
       return
     }
-    targets += result.value.targets
-    accepted += result.value.accepted
-    failed += result.value.failed
+    summary.targets += result.value.targets
+    summary.accepted += result.value.accepted
+    summary.failed += result.value.failed
+    summary.retryable += result.value.retryable
+    summary.expired += result.value.expired
   })
-  return { targets, accepted, failed }
+  return summary
 }

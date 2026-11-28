@@ -34,6 +34,9 @@ import { authFailureResponse } from '@/lib/auth/request-errors'
 import { invalidateMatchesCache } from '@/lib/matching/matchCache'
 import { isOwnStorageUrl } from '@/lib/validate'
 const profileSchema = z.object({
+  deadline_in_app_enabled: z.boolean().optional(),
+  deadline_push_enabled: z.boolean().optional(),
+  deadline_email_enabled: z.boolean().optional(),
   full_name: z.string().trim().min(1).max(200).nullable().optional(),
   discipline: z.string().trim().min(1).max(200).nullable().optional(),
   gpa: z.number().min(0).max(5.0).nullable().optional(), // Nigerian CGPA is commonly /5.0

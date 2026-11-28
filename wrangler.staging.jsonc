@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "scholars-deadline-staging",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-11-21",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": true },
+  "keep_vars": false,
+  "vars": {
+    "DEADLINE_EMAIL_ENABLED": "false",
+    "DEADLINE_PASSED_EMAIL_ENABLED": "false"
+  },
+  "secrets": {
+    "required": ["SUPABASE_SERVICE_ROLE_KEY", "CRON_SECRET"]
+  }
+}

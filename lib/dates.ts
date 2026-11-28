@@ -1,16 +1,22 @@
 // lib/dates.ts
-// Small shared helpers for deadline math, used by the dashboard page and
-// ScholarshipCard. Kept UTC-based so "today" doesn't shift depending on the
-// server's local timezone vs. the student's.
+// Shared date-only deadline helpers for listings and the dashboard.
 export function todayUtcIso(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+const lagosDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos", year: "numeric", month: "2-digit", day: "2-digit" });
+
+// Listing deadlines are calendar dates in Nigeria, inclusive of that day.
+export function todayLagosIso(now = new Date()): string {
+  const parts = lagosDate.formatToParts(now);
+  return ["year", "month", "day"].map((type) => parts.find((part) => part.type === type)?.value).join("-");
 }
 
 export function isClosedListing(listing: {
   deadline?: string | null;
   last_cycle_closed_at?: string | null;
 }): boolean {
-  const today = todayUtcIso();
+  const today = todayLagosIso();
   return Boolean(
     (listing.deadline && listing.deadline < today) ||
       (listing.last_cycle_closed_at && listing.last_cycle_closed_at <= today),
@@ -21,9 +27,8 @@ export function daysUntil(deadline: string | null | undefined): number | null {
   if (!deadline) return null;
   const target = new Date(`${deadline}T00:00:00Z`).getTime();
   if (Number.isNaN(target)) return null;
-  const now = new Date();
-  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  return Math.ceil((target - todayUtc) / (1000 * 60 * 60 * 24));
+  const today = Date.parse(`${todayLagosIso()}T00:00:00Z`);
+  return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
 }
 export function formatDeadlineLabel(days: number): string {
   if (days < 0) return "Closed";
