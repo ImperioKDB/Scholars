@@ -3,7 +3,7 @@ create role anon;
 create role authenticated;
 create role service_role bypassrls;
 create schema auth;
-create table auth.users (id uuid primary key, email text, email_confirmed_at timestamptz);
+create table auth.users (id uuid primary key, email varchar(255), email_confirmed_at timestamptz);
 create table public.profiles (id uuid primary key, full_name text);
 create table public.scholarships (
   id uuid primary key, title text not null, deadline date, opens_at date,
