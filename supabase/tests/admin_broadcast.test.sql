@@ -12,7 +12,7 @@ select pg_temp.check_result(not has_schema_privilege('authenticated','broadcast_
 -- Snapshotted push profile with more Web Push devices than an invocation can send.
 insert into public.web_push_subscriptions (id, profile_id, endpoint, p256dh, auth)
 select ('d0000000-0000-4000-8000-' || lpad(to_hex(n), 12, '0'))::uuid,
-  '00000000-0000-4000-8000-000000000001', 'https://fcm.googleapis.com/send/synthetic' || n, 'synthetic', 'synthetic'
+  '00000000-0000-4000-8000-000000000001', 'https://fcm.googleapis.com:443/send/synthetic' || n, 'synthetic', 'synthetic'
 from generate_series(1, 51) n;
 insert into public.broadcast_delivery_log (broadcast_id,recipient_email,status)
 values ('f3b105fa-8ad2-4e1f-a752-d444ed98c11b','historical@example.invalid','sent');
@@ -96,7 +96,8 @@ begin
   perform public.broadcast_release(competing_job,(v_claim ->> 'token')::uuid);
   v_status := public.broadcast_status(admin, competing);
   perform pg_temp.check_result((v_status #>> '{email,quota_deferred}')::int = 5
-    and (v_status #>> '{email,failed}')::int = 0, 'quota deferrals are visible');
+    and (v_status #>> '{email,failed}')::int = 0
+    and v_status ->> 'completed_at' is null, 'quota deferrals stay open and visible');
 
   v_claim := public.broadcast_claim(push_job,'push');
   v_target := (v_claim #>> '{target,id}')::bigint;

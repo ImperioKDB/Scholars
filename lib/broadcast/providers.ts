@@ -5,7 +5,7 @@ import { safeProviderCode } from '@/lib/email/providers/types'
 import { renderBroadcastDigest, type EmailListing } from '@/lib/email/template'
 import { buildListingBroadcastPushMessage } from '@/lib/push/broadcastContent'
 import { isAllowedPushEndpoint } from '@/lib/push/endpoint'
-import { EXPO_PUSH_ENDPOINT, expoPushRequest } from '@/lib/push/send'
+import { EXPO_PUSH_ENDPOINT, expoPushRequest } from '@/lib/push/expoRequest'
 import { readBoundedJson } from './transport'
 
 export type BroadcastProviderEnv = {

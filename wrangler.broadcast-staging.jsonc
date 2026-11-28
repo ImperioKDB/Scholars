@@ -1,0 +1,32 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "scholars-broadcast-staging",
+  "main": "worker.broadcast-staging.ts",
+  "compatibility_date": "2026-11-21",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": true, "logs": { "invocation_logs": true, "head_sampling_rate": 1 } },
+  "keep_vars": false,
+  "vars": {
+    "NEXT_PUBLIC_SUPABASE_URL": "https://aqhktriwaglvvrchxmtd.supabase.co",
+    "BROADCAST_CONSUMERS_ENABLED": "false",
+    "BROADCAST_STAGING_DROP_FIRST_EMAIL_WAKE": "true"
+  },
+  "triggers": { "crons": ["* * * * *"] },
+  "queues": {
+    "producers": [
+      { "binding": "BROADCAST_EMAIL_QUEUE", "queue": "scholars-broadcast-email-staging" },
+      { "binding": "BROADCAST_PUSH_QUEUE", "queue": "scholars-broadcast-push-staging" }
+    ],
+    "consumers": [
+      { "queue": "scholars-broadcast-email-staging", "max_batch_size": 1, "max_batch_timeout": 1, "max_retries": 2 },
+      { "queue": "scholars-broadcast-push-staging", "max_batch_size": 1, "max_batch_timeout": 1, "max_retries": 2 }
+    ]
+  },
+  "secrets": {
+    "required": ["NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY",
+      "BROADCAST_STAGING_VAPID_PUBLIC_KEY", "BROADCAST_STAGING_VAPID_PRIVATE_KEY"]
+  }
+}

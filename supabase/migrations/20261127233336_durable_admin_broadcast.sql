@@ -499,7 +499,7 @@ begin
       select 1 from public.web_push_subscriptions s
       where s.id = v_target.source_id and s.profile_id = v_target.recipient_id and s.enabled
         and broadcast_private.destination_digest(s.endpoint) = v_target.destination_digest
-        and 'web:' || lower(substring(s.endpoint from '^https://([^/?#]+)')) = p_provider
+        and 'web:' || lower(regexp_replace(substring(s.endpoint from '^https://([^/?#]+)'), ':443$', '')) = p_provider
     ) then
       v_skip := 'device_unavailable';
     end if;

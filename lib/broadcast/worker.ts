@@ -1,4 +1,5 @@
 import { dispatchBroadcast, prepareBroadcast, type BroadcastProviderEnv, type CampaignContent, type ClaimTarget } from './providers'
+import { productionBroadcastQueues, stagingBroadcastQueues } from './queueNames'
 import { BroadcastBudget, broadcastDatabase, type BroadcastDatabaseEnv } from './transport'
 
 type Channel = 'email' | 'push'
@@ -16,7 +17,12 @@ export type BroadcastWorkerEnv = BroadcastDatabaseEnv & BroadcastProviderEnv & {
 type Message = { body: unknown; ack(): void }
 type Batch = { queue: string; messages: readonly Message[] }
 
-const queueNames = { email: 'scholars-broadcast-email', push: 'scholars-broadcast-push' } as const
+export type BroadcastQualification = {
+  providerFetch: typeof fetch
+  dropEmailWake?: boolean
+}
+
+type QualificationMetrics = { stubCalls: number; droppedWake: boolean }
 const jobIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 function queueFor(env: BroadcastWorkerEnv, channel: Channel) {
@@ -32,7 +38,7 @@ async function wake(env: BroadcastWorkerEnv, budget: BroadcastBudget, channel: C
   }
 }
 
-export async function scheduleBroadcasts(env: BroadcastWorkerEnv, budget = new BroadcastBudget()) {
+export async function scheduleBroadcasts(env: BroadcastWorkerEnv, budget = new BroadcastBudget(), staging = false) {
   if (env.BROADCAST_CONSUMERS_ENABLED !== 'true') return
   try {
     const rpc = broadcastDatabase(env, budget)
@@ -42,16 +48,26 @@ export async function scheduleBroadcasts(env: BroadcastWorkerEnv, budget = new B
     }))
   } catch {
     console.error(JSON.stringify({ event: 'broadcast_schedule_failed', operations: budget.used }))
+  } finally {
+    if (staging) console.info(JSON.stringify({ event: 'broadcast_qualification_cron', operations: budget.used }))
   }
 }
 
-export async function processBroadcast(env: BroadcastWorkerEnv, channel: Channel, id: string, budget = new BroadcastBudget()) {
+export async function processBroadcast(
+  env: BroadcastWorkerEnv,
+  channel: Channel,
+  id: string,
+  budget = new BroadcastBudget(),
+  qualification?: BroadcastQualification,
+  metrics: QualificationMetrics = { stubCalls: 0, droppedWake: false },
+) {
   if (env.BROADCAST_CONSUMERS_ENABLED !== 'true') return
   const rpc = broadcastDatabase(env, budget)
   const claim = await rpc<Claim | null>('broadcast_claim', { p_job: id, p_channel: channel })
   if (!claim) return
 
   const lease = { p_job: id, p_token: claim.token }
+  let omitWake = false
   if (claim.target) {
     const target = claim.target
     const dispatch = prepareBroadcast(env, claim.campaign, claim.content, target)
@@ -64,10 +80,18 @@ export async function processBroadcast(env: BroadcastWorkerEnv, channel: Channel
       p_skip_reason: typeof dispatch === 'string' ? dispatch : null,
     })
     if (intent && typeof dispatch !== 'string') {
+      const fetcher: typeof fetch = qualification
+        ? (input, init) => budget.operation(() => {
+          metrics.stubCalls += 1
+          return qualification.providerFetch(input, init)
+        })
+        : budget.fetch
       const outcome = Date.parse(intent.lease_until) - Date.now() < 5_000
         ? { state: 'uncertain' as const, reason: 'dispatch_authority_expiring' }
-        : await dispatchBroadcast(dispatch, budget.fetch)
+        : await dispatchBroadcast(dispatch, fetcher)
       if (outcome.state === 'accepted') {
+        omitWake = qualification?.dropEmailWake === true
+          && channel === 'email' && target.address === 'broadcast-qualification-001@broadcast.example.invalid'
         console.info(JSON.stringify({
           event: 'broadcast_provider_accepted', channel, campaign: claim.campaign,
           target: target.id, attempt: intent.attempt, provider: dispatch.provider, messageId: outcome.messageId ?? null,
@@ -92,11 +116,15 @@ export async function processBroadcast(env: BroadcastWorkerEnv, channel: Channel
   const released = await rpc<{ next_at: string | null } | null>('broadcast_release', lease)
   if (released?.next_at) {
     const delay = Math.max(1, Math.ceil((Date.parse(released.next_at) - Date.now()) / 1000))
-    if (delay <= 60) await wake(env, budget, channel, id, delay)
+    if (delay <= 60) {
+      if (omitWake) metrics.droppedWake = true
+      else await wake(env, budget, channel, id, delay)
+    }
   }
 }
 
-export async function consumeBroadcasts(batch: Batch, env: BroadcastWorkerEnv) {
+export async function consumeBroadcasts(batch: Batch, env: BroadcastWorkerEnv, qualification?: BroadcastQualification) {
+  const queueNames = qualification ? stagingBroadcastQueues : productionBroadcastQueues
   // Wrangler delivers one wake per invocation. Discard unexpected events and
   // let Cron recover the durable database jobs.
   const channel = batch.queue === queueNames.email ? 'email' : batch.queue === queueNames.push ? 'push' : null
@@ -104,13 +132,19 @@ export async function consumeBroadcasts(batch: Batch, env: BroadcastWorkerEnv) {
   if (channel && message && typeof message.body === 'object' && message.body !== null
     && 'id' in message.body && typeof message.body.id === 'string' && jobIdPattern.test(message.body.id)) {
     const budget = new BroadcastBudget()
+    const metrics = { stubCalls: 0, droppedWake: false }
     try {
-      await processBroadcast(env, channel, message.body.id, budget)
+      await processBroadcast(env, channel, message.body.id, budget, qualification, metrics)
     } catch {
       // A database or runtime error must leave the lease and attempt intact.
       // Cron will recover it even if this message is lost.
       console.error(JSON.stringify({
         event: 'broadcast_slice_failed', channel, job: message.body.id, operations: budget.used,
+      }))
+    } finally {
+      if (qualification) console.info(JSON.stringify({
+        event: 'broadcast_qualification_slice', channel, job: message.body.id, operations: budget.used,
+        externalOperations: budget.used - metrics.stubCalls, ...metrics,
       }))
     }
   }

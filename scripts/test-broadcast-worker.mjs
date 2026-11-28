@@ -104,7 +104,7 @@ async function outbound(request) {
   requests++;
   if (requests > 50) throw new Error('Simulated workerd subrequest ceiling');
   const url = new URL(request.url);
-  if (url.hostname === 'database.example.invalid') {
+  if (['database.example.invalid', 'aqhktriwaglvvrchxmtd.supabase.co'].includes(url.hostname)) {
     const result = rpc(url.pathname.split('/').pop(), await request.json());
     return result instanceof Response ? result : Response.json(result);
   }
@@ -117,7 +117,7 @@ async function outbound(request) {
     if (failure === 'network') throw new Error('Synthetic network failure');
     if (failure === 'redirect') return new Response(null, { status: 307, headers: { Location: 'https://redirect.example.invalid' } });
     if (failure === 'fallback') return Response.json({}, { status: 401 });
-    return Response.json({ messageId: '<synthetic@example.invalid>' }, { status: 201 });
+    return Response.json({ messageId: 'synthetic-brevo-receipt' }, { status: 201 });
   }
   if (url.hostname === 'api.resend.com') {
     assert.match(request.headers.get('Idempotency-Key'), /^broadcast\//);
@@ -156,8 +156,14 @@ try {
   await writeFile(entry, `
     import { consumeBroadcasts, processBroadcast, scheduleBroadcasts } from ${JSON.stringify(join(root, 'lib/broadcast/worker.ts'))};
     import { BroadcastBudget } from ${JSON.stringify(join(root, 'lib/broadcast/transport.ts'))};
+    import { isBroadcastStagingDatabase, stagingBroadcastExecution } from ${JSON.stringify(join(root, 'lib/broadcast/qualification.ts'))};
     export default {
-      queue: consumeBroadcasts,
+      queue(batch, env) {
+        if (!env.TEST_STAGING_RUNTIME) return consumeBroadcasts(batch, env);
+        if (!isBroadcastStagingDatabase(env)) throw new Error('Unpinned test staging database');
+        const { bindings, qualification } = stagingBroadcastExecution(env);
+        return consumeBroadcasts(batch, bindings, qualification);
+      },
       scheduled(_event, env) { return scheduleBroadcasts(env); },
       async fetch(request, env) {
         const { id, channel, level } = await request.json();
@@ -186,7 +192,7 @@ try {
     env: { ...process.env, WRANGLER_SEND_METRICS: 'false', XDG_CONFIG_HOME: configHome }, stdio: 'inherit',
   });
   const script = await readFile(join(bundle, 'entry.js'), 'utf8');
-  const startWorker = () => new Miniflare({ ...convertV4MiniflareOptions({
+  const startWorker = (staging = false) => new Miniflare({ ...convertV4MiniflareOptions({
     script, modules: true, compatibilityDate: '2026-11-21', compatibilityFlags: ['nodejs_compat'],
     outboundService: outbound,
     bindings: {
@@ -195,15 +201,32 @@ try {
       RESEND_API_KEY: 'synthetic', RESEND_FROM_EMAIL: 'test@example.invalid',
       NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY: vapid.getPublicKey().toString('base64url'),
       WEB_PUSH_VAPID_PRIVATE_KEY: vapid.getPrivateKey().toString('base64url'),
+      ...(staging ? {
+        TEST_STAGING_RUNTIME: true,
+        BROADCAST_STAGING_DROP_FIRST_EMAIL_WAKE: 'true',
+        NEXT_PUBLIC_SUPABASE_URL: 'https://aqhktriwaglvvrchxmtd.supabase.co',
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: stageKey('anon'),
+        SUPABASE_SERVICE_ROLE_KEY: stageKey('service_role'),
+        BROADCAST_STAGING_VAPID_PUBLIC_KEY: vapid.getPublicKey().toString('base64url'),
+        BROADCAST_STAGING_VAPID_PRIVATE_KEY: vapid.getPrivateKey().toString('base64url'),
+      } : {}),
     },
     queueProducers: {
-      BROADCAST_EMAIL_QUEUE: 'scholars-broadcast-email', BROADCAST_PUSH_QUEUE: 'scholars-broadcast-push',
+      BROADCAST_EMAIL_QUEUE: queueName('email', staging), BROADCAST_PUSH_QUEUE: queueName('push', staging),
     },
     queueConsumers: {
-      'scholars-broadcast-email': { maxBatchSize: 1, maxBatchTimeout: 1 },
-      'scholars-broadcast-push': { maxBatchSize: 1, maxBatchTimeout: 1 },
+      [queueName('email', staging)]: { maxBatchSize: 1, maxBatchTimeout: 1 },
+      [queueName('push', staging)]: { maxBatchSize: 1, maxBatchTimeout: 1 },
     },
   }), enableDevRegistry: false, resourcePersistencePath: join(temp, 'data'), logRequests: false });
+  function queueName(channel, staging) {
+    const name = 'scholars-broadcast-' + channel;
+    return staging ? name + '-staging' : name;
+  }
+  function stageKey(role) {
+    const claims = Buffer.from(JSON.stringify({ ref: 'aqhktriwaglvvrchxmtd', role })).toString('base64url');
+    return 'test.' + claims + '.test';
+  }
   worker = startWorker();
 
   insert(emailJob, 'email', 300);
@@ -321,7 +344,33 @@ try {
     await new Promise((done) => setTimeout(done, 100));
   }
   assert.ok([...jobs.values()].every((j) => j.targets[0].state === 'accepted'));
-  console.log('Workerd passed synthetic 300 email + 78 Web Push campaign, fault injection and native queue checks.');
+  await worker.dispose();
+  worker = startWorker(true);
+  insert(emailJob, 'email', 2);
+  const stagedEmail = jobs.get(emailJob);
+  stagedEmail.targets[0].address = 'broadcast-qualification-001@broadcast.example.invalid';
+  stagedEmail.targets[1].address = 'broadcast-qualification-002@broadcast.example.invalid';
+  insert(pushJob, 'push', 1, 'web');
+  jobs.get(pushJob).targets[0].device.endpoint = 'https://fcm.googleapis.com/send/broadcast-qualification-078';
+  const beforeStage = sends.length;
+  requests = 0;
+  for (const [binding, id] of [['BROADCAST_EMAIL_QUEUE', emailJob], ['BROADCAST_PUSH_QUEUE', pushJob]]) {
+    await (await worker.getQueueProducer(binding)).send({ id });
+  }
+  for (let i = 0; i < 50 && [...jobs.values()].some((j) => j.targets[0].state !== 'accepted'); i++) {
+    await new Promise((done) => setTimeout(done, 100));
+  }
+  assert.ok([...jobs.values()].every((j) => j.targets[0].state === 'accepted'));
+  assert.equal(stagedEmail.targets[1].state, 'queued', 'staging deliberately drops the first email continuation');
+  const recovery = (await event('cron')).wakes;
+  assert.deepEqual(recovery.map(({ lane }) => lane), ['email']);
+  await (await worker.getQueueProducer('BROADCAST_EMAIL_QUEUE')).send({ id: recovery[0].id });
+  for (let i = 0; i < 50 && stagedEmail.targets[1].state !== 'accepted'; i++) {
+    await new Promise((done) => setTimeout(done, 100));
+  }
+  assert.equal(stagedEmail.targets[1].state, 'accepted', 'Cron recovery completes the staged email lane');
+  assert.equal(sends.length, beforeStage, 'staging stubs never make provider subrequests');
+  console.log('Workerd passed synthetic 300 email + 78 Web Push campaign, fault injection and native production/staging queue checks.');
   console.log('Maximum counted operations in one simulated event: ' + peak);
 } finally {
   await worker?.dispose();

@@ -9,5 +9,7 @@ export default {
   async scheduled(_event: unknown, env: BroadcastWorkerEnv) {
     await scheduleBroadcasts(env)
   },
-  queue: consumeBroadcasts,
+  queue(batch: Parameters<typeof consumeBroadcasts>[0], env: BroadcastWorkerEnv) {
+    return consumeBroadcasts(batch, env)
+  },
 }
