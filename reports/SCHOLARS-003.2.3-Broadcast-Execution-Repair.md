@@ -243,3 +243,39 @@ Keep PR #51 in draft pending current-head CI, analyzer review, and independently
 approved staging Worker qualification.
 
 See [Cloudflare Workers limits](https://developers.cloudflare.com/workers/platform/limits/) and [Cloudflare Queues pricing](https://developers.cloudflare.com/queues/platform/pricing/).
+
+## Final Codacy disposition
+
+The operator independently retrieved and reviewed the 14 findings for
+`41b1bc361a971b8ba648cdcd9aedd26657fd21d7`. The disposition below records
+the reported categories and the corresponding source evidence. The
+seven client-syntax annotations were supplied as a group, so their
+source references identify the constructs reviewed rather than Codacy
+annotation IDs. File and line references are relative to the reviewed head.
+
+| Finding | Source evidence | Disposition |
+| --- | --- | --- |
+| Compatibility 1 | `supabase/tests/broadcast_staging_fixtures.sql:1`, `\getenv` for the synthetic admin password | False positive. Native psql imports the operator-provided value into a client variable. |
+| Compatibility 2 | `supabase/tests/broadcast_staging_fixtures.sql:2`, `\getenv` for the Web Push public key | False positive. Native psql reads the synthetic key from the fixture environment. |
+| Compatibility 3 | `supabase/tests/broadcast_staging_fixtures.sql:3`, `\getenv` for the Web Push auth value | False positive. Native psql reads the synthetic auth value from the fixture environment. |
+| Compatibility 4 | `supabase/tests/broadcast_staging_fixtures.sql:14`, quoted password substitution | False positive. psql renders a SQL literal for the input to `crypt`. |
+| Compatibility 5 | `supabase/tests/broadcast_staging_fixtures.sql:56`, quoted Web Push fixture substitutions | False positive. psql renders SQL literals for the two synthetic subscription values. |
+| Compatibility 6 | `supabase/operations/broadcast_allocate.sql:3,8,54`, client error handling and quoted allocation parameters | False positive. psql sets stop-on-error and quotes the operator-supplied values before sending the SQL. |
+| Compatibility 7 | `supabase/tests/admin_broadcast_hosted.sql:343`, `\ir` | False positive. Native psql resolves the fixed sibling file and runs it in the hosted suite's rollback transaction. |
+| Compatibility 8 | `supabase/tests/admin_broadcast_hosted.sql:361`, closing delimiter for `pg_temp.broadcast_snapshot()` | False positive confirmed. Native PostgreSQL 17 psql created the function and the suite called it before and after the deadline claims. It reported both deadline channels preserved all broadcast records, reached `ROLLBACK`, and exited 0. |
+| Security 1 | `scripts/test-broadcast-worker.mjs:156`, entry source write | False positive. `entry.ts` is a fixed child of the harness's freshly created private `mkdtemp` directory. |
+| Security 2 | `scripts/test-broadcast-worker.mjs:183`, Wrangler config write | False positive. `wrangler.json` is a fixed child of that directory. |
+| Security 3 | `scripts/test-broadcast-worker.mjs:189`, config directory creation | False positive. The harness creates its own fixed `config` subdirectory. |
+| Security 4 | `scripts/test-broadcast-worker.mjs:194`, built entry read | False positive. The harness reads the fixed `bundle/entry.js` output of its local Wrangler dry run. |
+| Error-prone 1 | `scripts/test-broadcast-worker.mjs:222`, `queueName()` | Corrected. The declaration moved to module scope with its name generation and callers intact. |
+| Error-prone 2 | `scripts/test-broadcast-worker.mjs:226`, `stageKey()` | Corrected. The declaration moved to module scope with its synthetic JWT construction and callers intact. |
+
+The operator independently confirmed **Cloudflare Workers Free** through
+the billing dashboard. Hosted Worker telemetry and current account usage
+remain separate release checks.
+
+After the two declaration moves, `node scripts/test-broadcast-worker.mjs`
+exited 0. Local workerd completed the synthetic 300-email and 78-Web-Push
+campaign, fault injection, and native queue checks for both runtime modes.
+Peak counted operations per simulated event remained 7. `git diff --check`
+exited 0.

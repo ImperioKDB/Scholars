@@ -150,6 +150,16 @@ async function event(path, id, channel, level) {
   return result;
 }
 
+function queueName(channel, staging) {
+  const name = 'scholars-broadcast-' + channel;
+  return staging ? name + '-staging' : name;
+}
+
+function stageKey(role) {
+  const claims = Buffer.from(JSON.stringify({ ref: 'aqhktriwaglvvrchxmtd', role })).toString('base64url');
+  return 'test.' + claims + '.test';
+}
+
 try {
   const entry = join(temp, 'entry.ts');
   const config = join(temp, 'wrangler.json');
@@ -219,14 +229,6 @@ try {
       [queueName('push', staging)]: { maxBatchSize: 1, maxBatchTimeout: 1 },
     },
   }), enableDevRegistry: false, resourcePersistencePath: join(temp, 'data'), logRequests: false });
-  function queueName(channel, staging) {
-    const name = 'scholars-broadcast-' + channel;
-    return staging ? name + '-staging' : name;
-  }
-  function stageKey(role) {
-    const claims = Buffer.from(JSON.stringify({ ref: 'aqhktriwaglvvrchxmtd', role })).toString('base64url');
-    return 'test.' + claims + '.test';
-  }
   worker = startWorker();
 
   insert(emailJob, 'email', 300);
