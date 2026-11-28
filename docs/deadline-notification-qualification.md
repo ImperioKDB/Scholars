@@ -4,12 +4,61 @@
 
 | Area | Confirmed findings and corrections |
 | --- | --- |
-| Migration | Reviewed the 142 migration files for the affected schema and consumers. The existing channel and status checks have the expected names. The replacement accepts every legacy value. The outbox already references profiles and scholarships, and the new opportunity FK uses cascade deletion. The existing inbox supports both listing IDs and the `deadline_reminder` enum. Applications have exactly one listing and include `not_applied` as a terminal state. Browser roles retain own-profile preferences and existing inbox RLS. Worker RPCs and internal objects are private. The migration preserves all legacy delivery rows, including pending and leased rows, so applying it first is safe for the previous Worker. |
+| Migration | Reviewed the 142 migration files for the affected schema and consumers. The existing channel and status checks have the expected names. The replacement accepts every legacy value. The outbox already references profiles and scholarships, and the new opportunity FK uses cascade deletion. The existing inbox supports both listing IDs and the `deadline_reminder` enum. Applications have exactly one listing and include `not_applied` as a terminal state. Browser roles retain own-profile preferences and existing inbox RLS. Worker RPCs and internal objects are private. The migration preserves all legacy delivery rows, including pending and leased rows, so applying it first is safe for the previous Worker. The deadline claim explicitly converts the Supabase auth email from `varchar(255)` to its declared `text` result type. |
 | Consumers | The existing GitHub deadline workflow is the only repository-declared scheduler. The legacy notification worker is manual and paused. Inngest deadline and nudge handlers skip their events. Reengagement only enrolls fixed campaign keys. Manual digest, profile nudges, admin push and new-match push use their own keys or IDs. The daily new-match campaign keeps its existing scope and default device count. The legacy claim RPC now rejects v2 IDs at the database boundary. Brevo and Resend files and routes are unchanged. |
 | Lease | Completion and failure compare delivery ID, leased state and exact lease timestamp. Both stale success and stale retry tests left the newer lease intact. Only push may reclaim an expired v2 lease. Interrupted email becomes `unknown` and remains ineligible for both claim RPCs. |
 | Release | V2 uses authenticated POST. The previous Worker returns 405 before it can run the old daily job. An unqualified legacy GET on the new Worker still runs daily new-match and admin maintenance. Both workflow revisions use the same GitHub concurrency group. |
 
 The repository history contains duplicate version prefixes and assumes pre-existing Supabase objects, including `opportunities`, `saved_opportunities` and `push_tokens`. The local upgrade fixture exercises the repository-defined constraints and RPCs against populated rows. The staging schema remains the authority for those baseline objects and their grants.
+
+## PR #51 migration compatibility
+
+Read-only production schema metadata confirmed `auth.users.email` is `varchar(255)`. The production-faithful PostgreSQL fixture reproduced SQLSTATE `42804` on the previous migration at return column 10. The corrected claim returns the confirmed address on email claims and a typed null on push claims. The other 11 result columns match their sources. The four IDs are `uuid`, both listing titles and the profile name are `text`, and application status is already cast from its enum to `text`. Deadline date is `date`, deadline stage is `text`, attempt count is `integer` and the lease expiry is `timestamptz`.
+
+The deadline SQL suite passed on disposable PostgreSQL 16. Both orders passed on disposable PostgreSQL 17 with the broadcast migration and database suite from PR #51 pinned to `bf27021d7a35f5fc032f78463e6bee6a22c2f37c`. The combined checks ran deadline preparation and claimed due email and push work as `service_role`. Full row snapshots matched before and after for the historical fixtures representing both broadcasts, the broadcast outbox, campaigns, submissions, targets, workflow jobs and provider state and allocation windows. The pinned suite also passed the simultaneous submission and shared provider quota races.
+
+Run the combined checks from the root of the deadline checkout. The appended SQL extends the pinned suite in a disposable checkout.
+
+```sh
+(
+  set -e
+  deadline_root=$(pwd)
+  scratch=$(mktemp -d)
+  git worktree add --detach "$scratch/pr51" bf27021d7a35f5fc032f78463e6bee6a22c2f37c
+  trap 'git worktree remove --force "$scratch/pr51" && rmdir "$scratch"' EXIT
+  cat supabase/tests/deadline_broadcast_compat.sql >> "$scratch/pr51/supabase/tests/admin_broadcast_deadline_compat.sql"
+  for order in deadline-first broadcast-first; do
+    bash "$scratch/pr51/scripts/test-broadcast-database.sh" \
+      "$deadline_root/supabase/migrations/20261127000000_complete_deadline_reminders.sql" "$order"
+  done
+)
+```
+
+## Codacy review
+
+Reviewed all 17 annotations on the original PR #50 head. The receipt URL annotation identified a validation gap at the helper boundary. The original caller already validated its configured account ID and the request used a fixed HTTPS origin with redirects disabled. The helper now also requires a numeric account ID before issuing a request. Mocked receipt tests cover invalid segments, the authorized endpoint and redirect handling. The remaining 16 annotations are false positives. [PR #50 Codacy check](https://github.com/ImperioKDB/Scholars/pull/50/checks?check_run_id=140785769981)
+
+| Original file and line | Disposition |
+| --- | --- |
+| `components/DeadlineNotificationSettings.tsx:17` | The property read for dirty state uses only the three keys defined in the local constant. |
+| `components/DeadlineNotificationSettings.tsx:46` | The checkbox update uses the same fixed keys. The event supplies only the boolean value. |
+| `lib/deadlines/mailtrapReceipts.ts:11` | The origin was fixed. Added account ID validation inside the request helper so both path segments are validated at the call boundary. |
+| `supabase/tests/deadline_staging_fixtures.sql:23` | `\if :cleanup` is a `psql` conditional. |
+| `supabase/tests/deadline_staging_fixtures.sql:30` | `\else` is part of the `psql` conditional. |
+| `supabase/tests/deadline_staging_fixtures.sql:36` | The reseed guard is a valid PL/pgSQL `end if` inside a `DO` block. |
+| `supabase/tests/deadline_staging_fixtures.sql:38` | The `DO` block's dollar quote is closed correctly. |
+| `supabase/tests/deadline_staging_fixtures.sql:46` | `psql` substitutes the wrapper's integer `fixture_count` in `generate_series`. |
+| `supabase/tests/deadline_staging_fixtures.sql:61` | The wrapper's `psql` variable selects the functional or load saved-list branch. |
+| `supabase/tests/deadline_staging_fixtures.sql:66` | The same substitution limits application inserts to the functional branch. |
+| `supabase/tests/deadline_staging_fixtures.sql:67` | `\endif` closes the `psql` conditional. |
+| `supabase/tests/deadline_staging_preflight.sql:33` | `\ir` includes the migration relative to the `psql` script's directory. |
+| `supabase/tests/deadline_staging_preflight.sql:47` | The privilege guard is a valid PL/pgSQL `end if` inside a `DO` block. |
+| `supabase/tests/deadline_staging_preflight.sql:49` | The privilege guard's dollar quote is closed correctly. |
+| `supabase/tests/deadline_staging_preflight.sql:55` | `\if :apply` is a `psql` conditional. |
+| `supabase/tests/deadline_staging_preflight.sql:60` | `\else` selects the preflight rollback. |
+| `supabase/tests/deadline_staging_preflight.sql:62` | `\endif` closes the `psql` conditional. |
+
+Executed both preflight branches and the functional (3 profiles) and load (501 profiles) seed and cleanup branches through `psql` against disposable PostgreSQL. This verified the flagged client syntax, rollback on preflight, scheduler marker removal on apply and fixture cleanup.
 
 ## Hourly capacity
 
@@ -62,7 +111,7 @@ For rollback, disable the workflow, wait for in-flight jobs, and set `DEADLINE_E
 
 ## Validation, changes and limitations
 
-TypeScript and all 297 Vitest tests passed. Disposable PostgreSQL passed populated-outbox upgrade, permission, concurrency, lease, quota and overflow checks. The workflow shell passed mocks for normal runs, unsupported POST on the old Worker, push failure, quota backlog and drain saturation. OpenNext, the Wrangler dry run and the local Worker HTTP check passed.
+The compatibility correction passed all 299 Vitest tests, `tsc --noEmit`, the Next.js production build and diff validation. The build used placeholder Supabase settings and exercised the homepage's static fallback. Disposable PostgreSQL passed populated-outbox upgrade, permission, concurrency, lease, quota and overflow checks, plus the two migration orders above. The preceding qualification also passed workflow shell mocks for normal runs, unsupported POST on the old Worker, push failure, quota backlog and drain saturation, along with OpenNext, the Wrangler dry run and the local Worker HTTP check.
 
 Qualification changes cover the [migration](../supabase/migrations/20261127000000_complete_deadline_reminders.sql), deadline cron route and tests, deadline engine and tests, the existing GitHub workflow, local SQL fixtures and runner, and these release notes. The original feature's complete file list and Mailtrap setup are in the [implementation report](deadline-notification-repair.md).
 

@@ -62,12 +62,15 @@ declare
   removed uuid := gen_random_uuid();
   generated integer;
   picked integer;
+  push_claim record;
+  email_matches boolean;
   stats jsonb;
   expired_lease timestamptz := now() - interval '1 minute';
 begin
   insert into public.profiles (id, deadline_in_app_enabled, deadline_push_enabled, deadline_email_enabled) values
     (tracked, true, true, true), (completed, true, true, true), (opted_out, false, false, false),
     (saved_only, true, false, false), (untouched, true, true, true), (declined, true, true, true);
+  update public.profiles set full_name = 'Tracked student' where id = tracked;
   insert into auth.users values
     (tracked, 'tracked@example.test', now()), (untouched, 'untouched@example.test', now());
   insert into public.web_push_subscriptions values (tracked, true), (opted_out, true), (completed, true);
@@ -116,8 +119,14 @@ begin
   select count(*) into picked from public.claim_deadline_reminders('push', 7, 3, false, 0, 0);
   perform pg_temp.check_that(picked = 0, 'preferences are rechecked after a row is queued');
   update public.profiles set deadline_push_enabled = true where id = tracked;
-  select count(*) into picked from public.claim_deadline_reminders('push', 7, 3, false, 0, 0);
-  perform pg_temp.check_that(picked = 1, 'push claim only includes the currently actionable opportunity');
+  select * into strict push_claim from public.claim_deadline_reminders('push', 7, 3, false, 0, 0);
+  perform pg_temp.check_that(
+    push_claim.profile_id = tracked and push_claim.scholarship_id is null and push_claim.opportunity_id = opp
+      and push_claim.title = 'Tracked opportunity' and push_claim.deadline_date = today + 3
+      and push_claim.deadline_stage = 'three_days' and push_claim.application_status = 'in_progress'
+      and push_claim.full_name = 'Tracked student' and push_claim.email is null
+      and push_claim.attempts = 1 and push_claim.lease_until > now(),
+    'push claims return the tracked opportunity without exposing the auth email');
   select count(*) into picked from public.claim_deadline_reminders('push', 7, 3, false, 0, 0);
   perform pg_temp.check_that(picked = 0, 'active push lease cannot be reclaimed');
   update public.notification_deliveries set lease_until = expired_lease
@@ -133,8 +142,13 @@ begin
   get diagnostics picked = row_count;
   perform pg_temp.check_that(picked = 0, 'the old push lease cannot record late failure');
 
-  select count(*) into picked from public.claim_deadline_reminders('email', 7, 3, false, 1, 4000);
+  select count(*), bool_and((c.profile_id = tracked and c.email = 'tracked@example.test'
+    and c.full_name = 'Tracked student' and c.opportunity_id is null and c.scholarship_id in (early, early_two, eligible_push)
+    and c.deadline_date = today + 7 and c.deadline_stage = 'seven_days'
+    and c.attempts = 1 and c.lease_until > now()) is true) into picked, email_matches
+  from public.claim_deadline_reminders('email', 7, 3, false, 1, 4000) c;
   perform pg_temp.check_that(picked = 3, 'same student and stage share a single Mailtrap request');
+  perform pg_temp.check_that(email_matches, 'email claims return the confirmed auth email and expected listings');
   perform pg_temp.check_that((select count(*) = 1 from public.deadline_email_attempts), 'quota counts sends, not listings');
 
   perform public.prepare_deadline_reminders(7, 3, true, true);

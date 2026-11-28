@@ -2,12 +2,13 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 const receiptBatchSize = 8
 const campaign = 'deadline_reminder_v2'
+const accountIdPattern = /^\d+$/
 
 type ReceiptStatus = 'delivered' | 'bounced' | 'failed' | 'suppressed'
 
 export async function readMailtrapReceipt(accountId: string, token: string, messageId: string): Promise<ReceiptStatus | null> {
-  // Message IDs are a path segment in the logs API.
-  if (!/^[\w-]+$/.test(messageId)) return null
+  // Validate both path segments before sending the log token to the fixed origin.
+  if (!accountIdPattern.test(accountId) || !/^[\w-]+$/.test(messageId)) return null
   const response = await fetch(`https://mailtrap.io/api/accounts/${accountId}/email_logs/${messageId}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(10_000),
@@ -35,7 +36,7 @@ export async function reconcileDeadlineEmails(service: SupabaseClient) {
   const summary = { checked: 0, confirmed: 0, failed: 0, pending: 0, unavailable: 0 }
   const accountId = process.env.MAILTRAP_ACCOUNT_ID?.trim() ?? ''
   const token = process.env.MAILTRAP_LOG_API_TOKEN?.trim()
-  if (!token || !/^\d+$/.test(accountId)) return summary
+  if (!token || !accountIdPattern.test(accountId)) return summary
 
   const now = Date.now()
   const iso = (time: number) => new Date(time).toISOString()

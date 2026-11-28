@@ -265,7 +265,7 @@ begin
 
   return query
   with ready as materialized (
-    select d.id, d.profile_id, d.deadline_stage, l.title, l.application_status, p.full_name, u.email::text,
+    select d.id, d.profile_id, d.deadline_stage, l.title, l.application_status, p.full_name, u.email::text as email,
       d.deadline_date, d.created_at
     from public.notification_deliveries d
     join public.profiles p on p.id = d.profile_id

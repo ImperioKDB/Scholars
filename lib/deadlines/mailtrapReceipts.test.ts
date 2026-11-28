@@ -17,7 +17,17 @@ describe('Mailtrap email receipt', () => {
     vi.stubGlobal('fetch', fetch)
     await expect(readMailtrapReceipt('123', 'log-test-token', 'msg-1')).resolves.toBe(status)
     expect(fetch).toHaveBeenCalledWith('https://mailtrap.io/api/accounts/123/email_logs/msg-1',
-      expect.objectContaining({ headers: { Authorization: 'Bearer log-test-token' } }))
+      expect.objectContaining({ headers: { Authorization: 'Bearer log-test-token' }, redirect: 'error' }))
+  })
+
+  it.each([
+    ['invalid-account', 'msg-1'],
+    ['123', 'invalid/message-id'],
+  ])('does not request logs with invalid path segments', async (accountId, messageId) => {
+    const fetch = vi.fn()
+    vi.stubGlobal('fetch', fetch)
+    await expect(readMailtrapReceipt(accountId, 'log-test-token', messageId)).resolves.toBeNull()
+    expect(fetch).not.toHaveBeenCalled()
   })
 
   it('allows a delayed log to remain accepted', async () => {
