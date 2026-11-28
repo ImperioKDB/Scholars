@@ -21,8 +21,12 @@ function emptyResult(): PushDeliverySummary {
   return { targets: 0, accepted: 0, failed: 0, retryable: 0, expired: 0 }
 }
 
-function isRetryable(status: number | undefined | null) {
-  return !status || [408, 425, 429].includes(status) || status >= 500
+function isTemporaryRejection(status: number) {
+  return status === 425 || status === 429 || status >= 500
+}
+
+function isUncertain(status: number | null) {
+  return status === null || status === 408
 }
 
 async function sendExpoPushForProfile(
@@ -48,35 +52,42 @@ async function sendExpoPushForProfile(
     data: message.data,
     channelId: 'scholarships',
     ttl,
-  }))).catch((error: unknown) => {
-    if (getSafeHttpStatusCode(error)) throw error
-    return null
-  })
-  if (!result) return { ...emptyResult(), targets: tokens.length, failed: tokens.length, retryable: tokens.length, uncertain: tokens.length }
+  }))).then((response) => ({ response }), (error: unknown) => ({ error }))
+  if ('error' in result) {
+    const status = getSafeHttpStatusCode(result.error)
+    const uncertain = isUncertain(status)
+    console.warn('[Push] Expo delivery failed', { statusCode: status, ...getSafePushErrorDiagnostic(result.error) })
+    return {
+      ...emptyResult(), targets: tokens.length, failed: tokens.length,
+      uncertain: uncertain ? tokens.length : 0,
+      retryable: uncertain || (status !== null && isTemporaryRejection(status)) ? tokens.length : 0,
+    }
+  }
+  const { tickets, invalidTokens } = result.response
 
-  if (result.invalidTokens.length > 0) {
+  if (invalidTokens.length > 0) {
     try {
       const { error: disableError } = await supabase
         .from('push_tokens')
         .update({ enabled: false })
         .eq('profile_id', profileId)
-        .in('expo_push_token', result.invalidTokens).retry(false)
+        .in('expo_push_token', invalidTokens).retry(false)
       if (disableError) throw disableError
     } catch {
       console.warn('[Push] Failed to disable expired Expo devices')
     }
   }
 
-  const accepted = result.tickets.filter((ticket) => ticket.status === 'ok').length
+  const accepted = tickets.filter((ticket) => ticket.status === 'ok').length
   const permanent = new Set(['DeviceNotRegistered', 'MessageTooBig', 'InvalidCredentials', 'MismatchSenderId'])
   const retryable = tokens.filter((_, index) => {
-    const ticket = result.tickets[index]
+    const ticket = tickets[index]
     return ticket?.status !== 'ok' && !permanent.has(ticket?.details?.error ?? '')
   }).length
   return {
     targets: tokens.length, accepted, failed: tokens.length - accepted, retryable,
-    expired: result.invalidTokens.length,
-    uncertain: Math.max(0, tokens.length - result.tickets.length),
+    expired: invalidTokens.length,
+    uncertain: Math.max(0, tokens.length - tickets.length),
   }
 }
 
@@ -132,8 +143,8 @@ async function sendWebPushForProfile(
         expired.push(row.id)
         return
       }
-      if (!statusCode) uncertain += 1
-      else if (isRetryable(statusCode)) retryable += 1
+      if (isUncertain(statusCode)) uncertain += 1
+      else if (statusCode !== null && isTemporaryRejection(statusCode)) retryable += 1
       // Push endpoints are private bearer URLs; never log the URL or keys.
       console.warn('[Push] Web Push delivery failed', {
         statusCode,
@@ -167,7 +178,8 @@ export async function sendPushForProfile(
   channels.forEach((result, index) => {
     if (result.status === 'rejected') {
       summary.failed += 1
-      if (isRetryable(getSafeHttpStatusCode(result.reason))) summary.retryable += 1
+      // Provider requests are classified inside the channel. This failure occurred before sending.
+      summary.retryable += 1
       console.warn('[Push] Delivery channel failed', {
         channel: index === 0 ? 'expo' : 'web',
         ...getSafePushErrorDiagnostic(result.reason),

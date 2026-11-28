@@ -196,6 +196,7 @@ returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
   v_lease timestamptz;
   v_result jsonb;
+  v_today date := (statement_timestamp() at time zone 'Africa/Lagos')::date;
 begin
   select lease_until into v_lease from public.new_match_worker
   where singleton and owner = p_owner and lease_until > clock_timestamp()
@@ -217,10 +218,12 @@ begin
       case
         when d.new_match_send_owner is not null then 'unknown'
         when s.verified is not true or s.last_verified_at is null or s.last_verified_at < now() - interval '7 days'
+          or s.deadline < v_today or s.opens_at > v_today or s.last_cycle_closed_at <= v_today
           then 'suppressed'
         when not exists (select 1 from public.push_tokens t where t.profile_id = r.profile_id and t.enabled)
           and not exists (select 1 from public.web_push_subscriptions w where w.profile_id = r.profile_id and w.enabled)
           then 'suppressed'
+        when d.attempts >= 3 then 'dead_letter'
         else 'leased'
       end as next_status
     from recipients r
@@ -241,6 +244,7 @@ begin
       last_error = case t.next_status
         when 'unknown' then '{"code":"push_interrupted"}'::jsonb
         when 'suppressed' then '{"code":"push_no_longer_eligible"}'::jsonb
+        when 'dead_letter' then '{"code":"push_attempt_limit"}'::jsonb
       end
     from targets t where d.id = t.id
     returning d.id, d.profile_id, d.scholarship_id, d.dedupe_key, d.status, d.attempts, t.title, t.deadline, t.web_enabled
@@ -261,7 +265,8 @@ begin
   select jsonb_build_object(
     'bundles', coalesce((select jsonb_agg(to_jsonb(b)) from bundles b), '[]'),
     'suppressedDeliveries', (select count(*) from claimed where status = 'suppressed'),
-    'unknownDeliveries', (select count(*) from claimed where status = 'unknown')
+    'unknownDeliveries', (select count(*) from claimed where status = 'unknown'),
+    'deadLetterDeliveries', (select count(*) from claimed where status = 'dead_letter')
   ) into v_result;
   return v_result;
 end;
@@ -275,6 +280,8 @@ declare
   v_suppressed integer;
   v_retryable integer;
   v_unknown integer;
+  v_failed integer;
+  v_dead_letter integer;
   v_accepted integer;
   v_retried integer;
 begin
@@ -286,13 +293,18 @@ begin
   with outcomes as (
     select unnest(r.ids) as id, r.status
     from jsonb_to_recordset(p_outcomes) as r(ids uuid[], status text)
-    where r.status in ('accepted', 'retryable', 'suppressed', 'unknown')
+    where r.status in ('accepted', 'retryable', 'suppressed', 'unknown', 'failed')
   ), recorded as (
-    update public.notification_deliveries d set status = o.status,
+    update public.notification_deliveries d set
+      status = case when o.status = 'retryable' and d.attempts >= 3 then 'dead_letter' else o.status end,
       lease_until = null, new_match_send_owner = null,
-      available_at = case when o.status = 'retryable' then now() + interval '10 minutes' else d.available_at end,
+      available_at = case when o.status = 'retryable' and d.attempts < 3 then now() + interval '10 minutes' else d.available_at end,
       sent_at = case when o.status = 'accepted' then now() else d.sent_at end,
-      last_error = case when o.status <> 'accepted' then jsonb_build_object('code', 'push_' || o.status) end
+      last_error = case
+        when o.status = 'retryable' and d.attempts >= 3 then '{"code":"push_attempt_limit"}'::jsonb
+        when o.status = 'failed' then '{"code":"push_permanent_rejection"}'::jsonb
+        when o.status <> 'accepted' then jsonb_build_object('code', 'push_' || o.status)
+      end
     from outcomes o where d.id = o.id and d.status = 'leased' and d.new_match_send_owner = p_owner
       and d.lease_until = v_worker.lease_until
     returning d.status, d.profile_id, d.attempts
@@ -301,9 +313,10 @@ begin
   )
   select count(*) filter (where status = 'suppressed'), count(*) filter (where status = 'retryable'),
     count(*) filter (where status = 'unknown'),
+    count(*) filter (where status = 'failed'), count(*) filter (where status = 'dead_letter'),
     (select count(*) from accepted_profiles where attempts = 1),
     (select count(*) from accepted_profiles where attempts > 1)
-  into v_suppressed, v_retryable, v_unknown, v_accepted, v_retried from recorded;
+  into v_suppressed, v_retryable, v_unknown, v_failed, v_dead_letter, v_accepted, v_retried from recorded;
   if exists (select 1 from public.notification_deliveries where new_match_send_owner = p_owner) then
     raise exception 'new_match batch outcome missing';
   end if;
@@ -320,6 +333,7 @@ begin
   update public.new_match_worker set owner = null, lease_until = null, phase = null where singleton;
   return jsonb_build_object('more', v_ready or exists (select 1 from public.new_match_windows where phase <> 'complete'),
     'suppressedDeliveries', v_suppressed, 'retryableDeliveries', v_retryable, 'unknownDeliveries', v_unknown,
+    'failedDeliveries', v_failed, 'deadLetterDeliveries', v_dead_letter,
     'newMatchPushesAccepted', v_accepted, 'retryPushesAccepted', v_retried);
 end;
 $$;

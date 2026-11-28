@@ -216,6 +216,59 @@ describe.skipIf(!container)('new-match campaign with disposable PostgreSQL', () 
     expect(sendPushForProfile).toHaveBeenCalledTimes(3)
   })
 
+  it('revalidates current listing availability before forming a push bundle', async () => {
+    await seed(1)
+    await db(`
+      insert into public.scholarships (id, title, verified, last_verified_at)
+      select ('10000000-0000-0000-0000-' || lpad(i::text, 12, '0'))::uuid,
+        'Scholarship ' || i, true, now() from generate_series(2, 5) i
+    `)
+    await expect(runDailyPushCampaign(client(), true)).resolves.toMatchObject({ queued: 5 })
+    await db(`
+      update public.scholarships set verified = false where id::text like '%0001';
+      update public.scholarships set deadline = (now() at time zone 'Africa/Lagos')::date - 1 where id::text like '%0002';
+      update public.scholarships set opens_at = (now() at time zone 'Africa/Lagos')::date + 1 where id::text like '%0003';
+      update public.scholarships set last_cycle_closed_at = (now() at time zone 'Africa/Lagos')::date where id::text like '%0004';
+      update public.scholarships set deadline = (now() at time zone 'Africa/Lagos')::date,
+        opens_at = (now() at time zone 'Africa/Lagos')::date where id::text like '%0005'
+    `)
+    await expect(runDailyPushCampaign(client())).resolves.toMatchObject({
+      suppressedDeliveries: 4, newMatchPushesAccepted: 1, more: false,
+    })
+    expect(sendPushForProfile).toHaveBeenCalledOnce()
+    expect(sendPushForProfile).toHaveBeenCalledWith(expect.anything(), id(1), {
+      title: 'A new scholarship match', body: expect.stringContaining('Scholarship 5'), data: expect.anything(),
+    }, { deviceLimit: 4 })
+    expect(await db("select count(*) from public.notification_deliveries where status='suppressed' and attempts=0")).toBe('4')
+  })
+
+  it('stops temporary failures after three attempts and does not replay permanent or ambiguous results', async () => {
+    await seed(4)
+    await runDailyPushCampaign(client(), true)
+    // A legacy retry that already spent its attempt allowance must never reach a provider.
+    await db(`update public.notification_deliveries set status = 'retryable', attempts = 3 where profile_id = '${id(4)}'`)
+    vi.mocked(sendPushForProfile).mockImplementation(async (_client, profileId) => ({
+      ...accepted, accepted: 0, failed: 1, retryable: profileId === id(1) ? 1 : 0,
+      uncertain: profileId === id(3) ? 1 : 0,
+    }))
+    await expect(runDailyPushCampaign(client())).resolves.toMatchObject({
+      failedDeliveries: 1, unknownDeliveries: 1, retryableDeliveries: 1, deadLetterDeliveries: 1, more: false,
+    })
+    expect(await db(`select (available_at > now())::text from public.notification_deliveries where profile_id = '${id(1)}'`)).toBe('true')
+    await runDailyPushCampaign(client())
+    expect(sendPushForProfile).toHaveBeenCalledTimes(3)
+    for (let attempt = 2; attempt <= 3; attempt += 1) {
+      await db("update public.notification_deliveries set available_at=now() where status='retryable'")
+      await expect(runDailyPushCampaign(client())).resolves.toMatchObject({
+        retryableDeliveries: attempt === 2 ? 1 : 0, deadLetterDeliveries: attempt === 3 ? 1 : 0,
+      })
+    }
+    await runDailyPushCampaign(client())
+    expect(sendPushForProfile).toHaveBeenCalledTimes(5)
+    expect(await db(`select string_agg(status || ':' || attempts, ',' order by profile_id)
+      from public.notification_deliveries`)).toBe('dead_letter:3,failed:1,unknown:1,dead_letter:3')
+  })
+
   it('reuses legacy dedupe and drains a future retry after the discovery window closes', async () => {
     await seed(2)
     await db(`

@@ -140,6 +140,26 @@ describe('push delivery diagnostics', () => {
     expect(result).toMatchObject({ targets: 8, accepted: 3, expired: 5 })
   })
 
+  it.each([
+    { statusCode: 403, retryable: 0, uncertain: undefined },
+    { statusCode: 429, retryable: 2, uncertain: undefined },
+    { statusCode: 503, retryable: 2, uncertain: undefined },
+    { statusCode: 408, retryable: 2, uncertain: 2 },
+    { statusCode: undefined, retryable: 2, uncertain: 2 },
+  ])('classifies HTTP $statusCode across Expo and Web Push', async ({ statusCode, retryable, uncertain }) => {
+    vi.stubEnv('NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY', 'public-test-key')
+    vi.stubEnv('WEB_PUSH_VAPID_PRIVATE_KEY', 'private-test-key')
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockedExpoSend.mockRejectedValue({ statusCode })
+    mockedWebPush.sendNotification.mockRejectedValue({ statusCode })
+    const result = await sendPushForProfile(makeSupabase({
+      expoTokens: [{ id: 'expo', expo_push_token: 'test' }],
+      webSubscriptions: [{ id: 'web', endpoint: 'https://example.test/push', p256dh: 'test', auth: 'test' }],
+    }), 'profile-test', { title: 'Test', body: 'Test body' })
+    expect(result).toMatchObject({ targets: 2, failed: 2, expired: 0, retryable })
+    expect(result.uncertain).toBe(uncertain)
+  })
+
   it('sanitizes Expo channel query failures', async () => {
     process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY = ''
     process.env.WEB_PUSH_VAPID_PRIVATE_KEY = ''

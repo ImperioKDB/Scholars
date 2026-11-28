@@ -6,7 +6,7 @@ vi.mock('./deliver', () => ({ sendPushForProfile: vi.fn() }))
 
 const item = { id: 'delivery', title: 'An award' }
 const noDevice = { targets: 0, accepted: 0, retryable: 0, failed: 0, expired: 0 }
-const finish = { more: false, suppressedDeliveries: 0, retryableDeliveries: 0, unknownDeliveries: 0 }
+const finish = { more: false, suppressedDeliveries: 0, retryableDeliveries: 0, unknownDeliveries: 0, deadLetterDeliveries: 0, failedDeliveries: 0 }
 
 function client(data: Record<string, unknown>) {
   const rpc = vi.fn((name: string, _args: Record<string, unknown>) => ({
@@ -61,14 +61,15 @@ describe('new-match campaign orchestration', () => {
 
   it.each([
     { summary: noDevice, web: false, status: 'suppressed' },
-    { summary: noDevice, web: true, status: 'retryable' },
-    { summary: { ...noDevice, failed: 1 }, web: false, status: 'retryable' },
-    { summary: { ...noDevice, failed: 1, uncertain: 1 }, web: false, status: 'unknown' },
+    { summary: noDevice, web: true, status: 'failed' },
+    { summary: { ...noDevice, failed: 1 }, web: false, status: 'failed' },
+    { summary: { ...noDevice, failed: 1, retryable: 1 }, web: false, status: 'retryable' },
+    { summary: { ...noDevice, failed: 1, uncertain: 1, retryable: 1 }, web: false, status: 'unknown' },
     { summary: { ...noDevice, accepted: 1, uncertain: 1 }, web: false, status: 'accepted' },
   ])('records $status for provider summary $summary and web opt-in $web', async ({ summary, web, status }) => {
     const { service, rpc } = client({
       begin_new_match_step: { phase: 'delivery' },
-      claim_new_match_batch: { bundles: [{ profile_id: 'profile', web_enabled: web, items: [item] }] },
+      claim_new_match_batch: { bundles: [{ profile_id: 'profile', web_enabled: web, items: [item] }], suppressedDeliveries: 0, unknownDeliveries: 0, deadLetterDeliveries: 0 },
       finish_new_match_batch: finish,
     })
     vi.stubEnv('WEB_PUSH_VAPID_PRIVATE_KEY', '')

@@ -22,14 +22,16 @@ type ClaimResult = {
   bundles: DeliveryBundle[]
   suppressedDeliveries: number
   unknownDeliveries: number
+  deadLetterDeliveries: number
 }
 type DeliveryResult = Omit<ClaimResult, 'bundles'> & {
   more: boolean
   retryableDeliveries: number
+  failedDeliveries: number
   newMatchPushesAccepted: number
   retryPushesAccepted: number
 }
-type Outcome = 'accepted' | 'retryable' | 'suppressed' | 'unknown'
+type Outcome = 'accepted' | 'retryable' | 'suppressed' | 'unknown' | 'failed'
 
 async function rpc<T>(service: SupabaseClient, name: string, args: Record<string, unknown>): Promise<T> {
   const { data, error } = await service.rpc(name, args).retry(false)
@@ -72,11 +74,12 @@ async function deliver(service: SupabaseClient, bundle: DeliveryBundle): Promise
 
     if (result.accepted > 0) return 'accepted'
     if (result.uncertain) return 'unknown'
+    if (result.retryable > 0) return 'retryable'
     if (bundle.web_enabled && !(process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY && process.env.WEB_PUSH_VAPID_PRIVATE_KEY)) {
-      return 'retryable'
+      return 'failed'
     }
     if (result.failed === result.expired && result.targets === result.expired) return 'suppressed'
-    return 'retryable'
+    return 'failed'
   } catch {
     // A thrown provider call may have been accepted before it lost its response.
     return 'unknown'
@@ -114,5 +117,6 @@ export async function runDailyPushCampaign(service: SupabaseClient, startWindow 
     phase: step.phase,
     suppressedDeliveries: batch.suppressedDeliveries + result.suppressedDeliveries,
     unknownDeliveries: batch.unknownDeliveries + result.unknownDeliveries,
+    deadLetterDeliveries: batch.deadLetterDeliveries + result.deadLetterDeliveries,
   }
 }
